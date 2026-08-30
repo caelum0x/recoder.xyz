@@ -406,10 +406,10 @@ async function maybeResumeOrphan(
 /**
  * Finalize a crashed orphan: its session is gone but the record is non-terminal.
  * Read the true substrate exit code and emit a terminal RunEvent: `completed` on a
- * clean finish (exit 0, or a session that ended leaving no exit sentinel — `null`),
- * `failed` on a non-zero exit (crash) OR an `undefined` exit code (the substrate
- * couldn't determine the outcome — e.g. an ACP session interrupted by the restart;
- * genuinely unknown, so NEVER booked as a fabricated success). Advance the run +
+ * clean finish (an observed numeric exit 0), `failed` on a non-zero exit (crash)
+ * OR an absent exit code (`null`/`undefined`: the substrate could not determine
+ * the outcome — e.g. a vanished tmux pane or an ACP session interrupted by the
+ * restart; genuinely unknown, so NEVER booked as a fabricated success). Advance the run +
  * workspace to a terminal state and release the write-lock. Best-effort and
  * idempotent: a partial failure logs and reports false rather than throwing.
  */
@@ -421,7 +421,7 @@ async function finalizeOrphanedWorkspace(
   const at = clock.now();
 
   // Read the true exit code from the substrate (distinguishes clean finish from
-  // a crash). A gone handle / unknown code is treated as a clean completion.
+  // a crash). A gone handle / unknown code cannot prove success.
   let exitCode: number | null | undefined;
   try {
     const substrate = registry.get(ws.substrate);
@@ -440,14 +440,12 @@ async function finalizeOrphanedWorkspace(
     exitCode = undefined;
   }
   const crashed = typeof exitCode === 'number' && exitCode !== 0;
-  // `undefined` = the substrate could not determine the outcome (an ACP session
-  // interrupted by the restart is not visible to the tmux-keyed liveness scan, so
-  // its exit is genuinely UNKNOWN) → finalize as failed, never a fabricated
-  // completed/exit-0. `null` = the session ended leaving no exit sentinel (the
-  // established clean-finish reading) → completed. A numeric non-zero is a crash.
-  const interrupted = exitCode === undefined;
-  const clean = !crashed && !interrupted;
-  const reportedExit = interrupted ? null : (exitCode ?? 0);
+  // Only numeric zero is positive evidence of success. Both `undefined` (unknown
+  // probe) and `null` (gone/terminated handle with no recoverable status) are
+  // interrupted outcomes and finalize failed rather than inventing exit 0.
+  const interrupted = exitCode == null;
+  const clean = exitCode === 0;
+  const reportedExit = interrupted ? null : exitCode;
 
   // Emit a terminal RunEvent into the audit log (truthful: what the substrate
   // reports, not a fabricated success).

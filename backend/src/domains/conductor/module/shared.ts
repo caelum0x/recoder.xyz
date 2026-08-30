@@ -51,10 +51,13 @@ import type { PrChecksService } from '../services/pr-checks.service.js';
 import type { MergeabilityService } from '../services/mergeability.service.js';
 import type { WorktreeStatusService } from '../services/worktree-status.service.js';
 import type { EnvironmentImportService } from '../services/environment-import.js';
+import type { CrystalMigrationService } from '../services/crystal-migration.service.js';
 import type { SessionTranscriptService } from '../services/session-transcript.service.js';
+import type { LspDiagnosticsService } from '../services/lsp-diagnostics.service.js';
 import type { ReadinessView } from '../services/readiness.service.js';
 import type { CompareView } from '../services/compare.service.js';
 import type { WorkspaceGridPort } from '../ports/workspace-grid.port.js';
+import type { ConvergenceFeedbackPort } from '../ports/convergence-feedback.port.js';
 // Same-domain type-only seam: the degrade-safe one-shot inference shape the
 // convergence ops (`ConvergeOpsDeps.inference`) run over. The VALUE is bound at
 // the composition root (bootstrap → `ConductorModuleDeps.infer`), never here.
@@ -91,7 +94,7 @@ export interface ConductorWriteResult<T> {
    * convergence that cannot be resolved as requested (`unresolved`) or has nothing
    * to converge (`empty`). Absent ⇒ the caller maps deny→403 / allow-fail→503 as usual.
    */
-  readonly code?: 'unresolved' | 'empty';
+  readonly code?: 'unresolved' | 'empty' | 'trust_blocked' | 'escalated';
 }
 
 /** The `GET …/run-config` read-model: how to run a workspace + its dev port. */
@@ -122,6 +125,12 @@ export interface ReviewCommentDelivery {
   readonly runId?: string;
   /** The workspace state after the follow-up run started (only when `delivery === 'run'`). */
   readonly state?: WorkspaceState;
+}
+
+/** A server-derived hard-blocker packet delivered through the review loop. */
+export interface BlockerFeedbackDelivery extends ReviewCommentDelivery {
+  /** The canonical blockers included in the prompt, from the fresh readiness probe. */
+  readonly blockers: readonly string[];
 }
 
 /**
@@ -158,6 +167,8 @@ export interface ConductorContext {
   readonly gate: ConductorModuleDeps['gate'];
   readonly registry: ConductorRegistry;
   readonly repository: WorkspaceRepositoryPort;
+  readonly deliveryEvidence?: ConductorModuleDeps['deliveryEvidence'];
+  readonly convergenceFeedback?: ConvergenceFeedbackPort;
   readonly tailer: ConductorRunTailer;
   readonly terminalService: TerminalStreamService;
   readonly engine: WorkspaceEngine;
@@ -170,7 +181,9 @@ export interface ConductorContext {
   readonly mergeability: MergeabilityService;
   readonly worktreeStatus: WorktreeStatusService;
   readonly environmentImportService: EnvironmentImportService;
+  readonly crystalMigrationService: CrystalMigrationService;
   readonly sessionTranscriptService: SessionTranscriptService;
+  readonly lspDiagnostics: LspDiagnosticsService;
   readonly brain?: ConductorBrainMemory;
   readonly codeIntel?: CodeIntelPort;
   /** Runs Recoder's OWN checks (tests/typecheck/lint) in a sandbox — recoder-fxee.

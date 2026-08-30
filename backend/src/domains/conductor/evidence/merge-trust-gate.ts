@@ -4,8 +4,8 @@
  * blocked BEFORE it becomes the customer-visible delivery. Pure + deterministic; a
  * deployment picks the posture via `RECODER_MERGE_TRUST_GATE`:
  *
- *   - `off`   (default) — never blocks/warns on trust (behaviour unchanged).
- *   - `warn`  — never blocks, but attaches a warning + the review flags whenever the
+ *   - `off`   — never blocks/warns on trust.
+ *   - `warn`  (default) — never blocks, but attaches a warning + the review flags whenever the
  *               merge is not HIGH trust (the reviewer proceeds informed).
  *   - `block` — REFUSES a LOW-trust merge (a real blocker: verification blocked,
  *               unverifiable, or a mostly-conflicted/LLM-written convergence); a

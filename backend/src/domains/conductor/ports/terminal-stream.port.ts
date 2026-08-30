@@ -43,6 +43,11 @@ export interface TerminalStreamPort {
   terminalBackends(): readonly WsBackend[];
   /** Publish a live event to every client attached to that workspace's `/sync`. */
   publishSync(event: WorkspaceSyncEvent): void;
+  /** Subscribe an in-process projection to one workspace's canonical sync feed. */
+  subscribeSync(
+    workspaceId: string,
+    listener: (event: WorkspaceSyncEvent) => void,
+  ): () => void;
   /**
    * Publish a FULL RunEvent to every client attached to that workspace's
    * `/workspaces/:id/stream`. The conductor's local run-event sink calls this for

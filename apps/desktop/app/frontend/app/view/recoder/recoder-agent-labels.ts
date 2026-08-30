@@ -18,7 +18,15 @@ const AGENT_LABELS: Record<string, string> = {
 };
 
 function agentLabel(runtimeId: string): string {
-    return AGENT_LABELS[runtimeId] ?? runtimeId;
+    const known = AGENT_LABELS[runtimeId];
+    if (known != null) return known;
+    const words = (runtimeId ?? "")
+        .trim()
+        .replace(/[_-]+/g, " ")
+        .split(/\s+/)
+        .filter(Boolean);
+    if (words.length == 0) return "Coding agent";
+    return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
 }
 
 export { AGENT_LABELS, agentLabel };

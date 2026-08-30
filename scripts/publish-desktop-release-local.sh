@@ -30,6 +30,7 @@
 #   OUT_DIR    (default dist/desktop-release)
 #   BASE_URL   (default https://dl.recoder.xyz/releases)
 #   ARCH       (default arm64)
+#   LICENSE_EVIDENCE (default apps/desktop/app/make/license-boundary-darwin-<arch>.json)
 #
 set -euo pipefail
 
@@ -42,6 +43,7 @@ APP_PATH="${APP_PATH:-apps/desktop/app/make/mac-arm64/Recoder.app}"
 OUT_DIR="${OUT_DIR:-dist/desktop-release}"
 BASE_URL="${BASE_URL:-https://dl.recoder.xyz/releases}"
 ARCH="${ARCH:-arm64}"
+LICENSE_EVIDENCE="${LICENSE_EVIDENCE:-apps/desktop/app/make/license-boundary-darwin-$ARCH.json}"
 PKG_JSON="apps/desktop/app/package.json"
 
 PASS=0; FAIL=0
@@ -74,6 +76,14 @@ VERSION="$(node -e "console.log(require('./$PKG_JSON').version)" 2>/dev/null || 
 # --- Artifact presence ------------------------------------------------------
 [[ -f "$DMG_PATH" ]] && pass "DMG present ($(bytes "$DMG_PATH") bytes)" || fail "DMG missing: $DMG_PATH"
 [[ -d "$APP_PATH" ]] && pass "signed .app present" || fail ".app missing: $APP_PATH"
+if [[ -f "$LICENSE_EVIDENCE" ]] && node -e '
+  const report = require(require("path").resolve(process.argv[1]));
+  if (report.status !== "pass" || !report.packagingInputs || report.packagingInputs.status !== "pass") process.exit(1);
+' "$LICENSE_EVIDENCE"; then
+  pass "license boundary evidence verified: $LICENSE_EVIDENCE"
+else
+  fail "license boundary evidence missing or invalid: $LICENSE_EVIDENCE"
+fi
 
 # --- Security: is it genuinely installable through Gatekeeper? ---------------
 if [[ -d "$APP_PATH" ]]; then
@@ -151,6 +161,7 @@ ZIP_SIZE="$(bytes "$ZIP_OUT")"
 
 # Copy the DMG under its versioned, published name.
 cp -f "$DMG_PATH" "$OUT_DIR/$DMG_NAME"
+cp -f "$LICENSE_EVIDENCE" "$OUT_DIR/license-boundary-${VERSION}-${ARCH}.json"
 
 # Regenerate the electron-updater manifest to MATCH the real artifacts.
 RELEASE_DATE="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"

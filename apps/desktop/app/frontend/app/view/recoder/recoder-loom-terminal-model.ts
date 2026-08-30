@@ -9,7 +9,7 @@ import { RecoderLoomTerminalView } from "./recoder-loom-terminal";
 class RecoderLoomTerminalViewModel implements ViewModel {
     viewType = "recoder-loom-terminal";
     viewIcon: Atom<string> = atom("terminal");
-    viewName: Atom<string> = atom("Loom Terminal");
+    viewName: Atom<string> = atom("Workspace Terminal");
     blockId: string;
     blockAtom: Atom<Block>;
 

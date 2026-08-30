@@ -143,6 +143,34 @@ describe('ad-hoc converge E2E (real git + deterministic substrate)', () => {
       expect([...c.workspaceIds].sort()).toEqual([wsA, wsB].sort());
     }
 
+    // Deep inspection uses the SAME explicit set (the synthetic group is not a
+    // persisted taskGroup): click-a-file N-up contents and the true A/B line diff.
+    const versions = await module.fileVersionsAdHoc(
+      [wsA, wsB],
+      'pick.ts',
+      PRINCIPAL,
+    );
+    expect(versions.ok).toBe(true);
+    if (!versions.ok) return;
+    expect(versions.fileVersions.base).toBe('base-pick\n');
+    expect(versions.fileVersions.versions.map(v => v.content).sort()).toEqual([
+      'pick-by-a\n',
+      'pick-by-b\n',
+    ]);
+
+    const pairwise = await module.pairwiseDiffAdHoc(
+      [wsA, wsB],
+      wsA,
+      wsB,
+      ['pick.ts'],
+      PRINCIPAL,
+    );
+    expect(pairwise.ok).toBe(true);
+    if (!pairwise.ok) return;
+    expect(pairwise.pairwise.files).toHaveLength(1);
+    expect(pairwise.pairwise.files[0].patch).toContain('pick-by-a');
+    expect(pairwise.pairwise.files[0].patch).toContain('pick-by-b');
+
     // ---- AD-HOC PLAN — pick B for pick.ts, synthesize synth.ts ----
     const selection = { 'pick.ts': wsB, 'synth.ts': SYNTHESIZE_SELECTION };
     const planned = await module.planConvergenceAdHoc([wsA, wsB], selection, undefined, PRINCIPAL);

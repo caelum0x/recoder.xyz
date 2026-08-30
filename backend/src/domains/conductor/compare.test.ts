@@ -291,6 +291,27 @@ describe('compare contested-file overlap', () => {
     expect(byId.C).toEqual(['c.ts']);
   });
 
+  it('keeps superseded recovery panes in history but removes them from the active converge set', async () => {
+    const superseded = {
+      ...wsA,
+      metadata: {
+        ...wsA.metadata,
+        fanoutSupersededBy: 'A-retry',
+      },
+    };
+    const replacement = fakeWorkspace('A-retry', 'grp', '2026-01-01T00:00:03Z');
+    const deps = fakeCompareDeps([superseded, wsB, replacement], {
+      A: { files: ['old.ts'] },
+      B: { files: ['b.ts'] },
+      'A-retry': { files: ['new.ts'] },
+    });
+
+    const view = await compareTaskGroupOp(deps, 'grp');
+
+    expect(view.siblings.map((s) => s.workspaceId)).toEqual(['B', 'A-retry']);
+    expect(view.siblings.flatMap((s) => s.changedFiles ?? [])).not.toContain('old.ts');
+  });
+
   it('degrade: an unreadable sibling contributes nothing (changedFilesReason set, no fabricated overlap)', async () => {
     const deps = fakeCompareDeps(members, {
       A: { files: ['shared.ts'] },

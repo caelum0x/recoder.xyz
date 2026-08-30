@@ -4,13 +4,12 @@ import { logger } from '@/lib/logger';
 import { findFallbackSessionByToken } from '@/lib/session-fallback';
 
 interface PlatformAccessRequest {
-  platform: 'web' | 'studio' | 'cli' | 'extension';
+  platform: 'studio' | 'cli' | 'extension';
   userId?: string;
   redirect?: string;
 }
 
 const PLATFORM_URLS: Record<string, string> = {
-  web: process.env.RECODER_WEB_URL || (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173'),
   studio: process.env.RECODER_STUDIO_URL || (process.env.NODE_ENV === 'production' ? 'https://studio.recoder.xyz' : 'http://localhost:3007'),
   cli: '/cli',
   extension: '/extension',
@@ -40,19 +39,6 @@ function extractSessionToken(cookieHeader: string): string {
   }
 
   return '';
-}
-
-function buildBridgeUrl(platform: PlatformAccessRequest['platform'], sessionToken: string, redirectUrl: string): string {
-  const accessUrl = PLATFORM_URLS[platform];
-
-  if (platform !== 'web') {
-    return redirectUrl;
-  }
-
-  const bridgeUrl = new URL('/auth/verify', accessUrl);
-  bridgeUrl.searchParams.set('token', sessionToken);
-  bridgeUrl.searchParams.set('redirect', redirectUrl);
-  return bridgeUrl.toString();
 }
 
 export async function POST(request: NextRequest) {
@@ -115,7 +101,7 @@ export async function POST(request: NextRequest) {
       accessUrl: PLATFORM_URLS[platform],
       token: sessionToken,
       redirectUrl,
-      bridgeUrl: buildBridgeUrl(platform, sessionToken, redirectUrl),
+      bridgeUrl: redirectUrl,
       message: `Access granted to Recoder ${platform.toUpperCase()}`,
       user: {
         id: session.user.id,

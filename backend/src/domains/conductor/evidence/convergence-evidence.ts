@@ -26,6 +26,7 @@ import { createHash } from 'node:crypto';
 import type { GovernanceEffect, RiskTier } from '../ports/index.js';
 import type { ReadinessSignal, ReadinessView } from '../services/readiness.service.js';
 import type { DiffStat } from '../services/compare.service.js';
+import type { RequiredRuleTrustMode } from '../ports/convergence-feedback.port.js';
 
 /**
  * Versioned schema tag — bump when the record shape changes (exportable-artifact
@@ -33,7 +34,7 @@ import type { DiffStat } from '../services/compare.service.js';
  * selections). v3 adds `mode` (`pick`|`synthesize`) + optional `contributors` to each
  * {@link EvidenceFileSelection} — line-level 3-way synthesis provenance.
  */
-export const CONVERGENCE_EVIDENCE_SCHEMA = 'recoder.convergence-evidence/v3' as const;
+export const CONVERGENCE_EVIDENCE_SCHEMA = 'recoder.convergence-evidence/v4' as const;
 
 /** One candidate run's contribution, as gathered from the compare/sibling read. */
 export interface EvidenceCandidateInput {
@@ -85,6 +86,21 @@ export interface EvidenceVerification {
   readonly blockers: readonly string[];
   /** Truthful reason verification is unavailable (never a fabricated pass). */
   readonly reason?: string;
+}
+
+export interface EvidenceRequiredRuleResult {
+  readonly id: string;
+  readonly text: string;
+  readonly check: string;
+  readonly status: 'pass' | 'fail' | 'error' | 'missing';
+  readonly detail?: string;
+}
+
+/** Operator-selected policy and the fresh named-check evidence it caused Recoder to run. */
+export interface EvidenceRequiredRules {
+  readonly mode: RequiredRuleTrustMode;
+  readonly results: readonly EvidenceRequiredRuleResult[];
+  readonly unavailableReason?: string;
 }
 
 /** One converged file's provenance: how (and from which sibling[s]) this path was resolved. */
@@ -140,6 +156,8 @@ export interface ConvergenceEvidence {
   readonly candidates: readonly EvidenceCandidate[];
   readonly governance: EvidenceGovernance;
   readonly verification: EvidenceVerification;
+  /** Absent on historical v1-v3 records; present on new merges, including mode `off`. */
+  readonly requiredRules?: EvidenceRequiredRules;
   /** Step-2 per-file convergence provenance — ABSENT for a plain single-agent merge. */
   readonly convergence?: EvidenceConvergence;
   readonly provenance: {
@@ -180,6 +198,7 @@ export interface EvidenceAssemblyInput {
   readonly governance: EvidenceGovernance;
   /** The folded readiness view, or `undefined`/`{reason}` when it could not be computed. */
   readonly verification?: { readonly view?: ReadinessView; readonly reason?: string };
+  readonly requiredRules?: EvidenceRequiredRules;
   /** Step-2 per-file convergence provenance (only for a composed convergence merge). */
   readonly convergence?: EvidenceConvergence;
   readonly actorId: string;
@@ -281,6 +300,7 @@ export function assembleConvergenceEvidence(input: EvidenceAssemblyInput): Conve
     candidates,
     governance: input.governance,
     verification,
+    ...(input.requiredRules ? { requiredRules: input.requiredRules } : {}),
     ...(input.convergence ? { convergence: input.convergence } : {}),
     provenance: {
       actorId: input.actorId,

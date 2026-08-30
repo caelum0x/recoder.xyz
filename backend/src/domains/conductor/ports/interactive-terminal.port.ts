@@ -25,6 +25,8 @@ export interface InteractiveTerminalSession extends AsyncIterable<InteractiveTer
 
 export interface InteractiveTerminalAttachInput {
   readonly paneId: string;
+  /** Canonical workspace substrate; lets one terminal edge render every backend. */
+  readonly substrate: string;
   readonly cols: number;
   readonly rows: number;
 }

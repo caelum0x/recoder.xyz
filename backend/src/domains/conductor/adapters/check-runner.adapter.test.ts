@@ -4,7 +4,7 @@
  * error; inert when no checks configured / no worktree; never throws.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { createWorktreeCheckRunner, runOneCheck, detailFrom, parseCheckSpecs, type CheckSpec } from './check-runner.adapter.js';
+import { autofixPromptFor, createWorktreeCheckRunner, runOneCheck, detailFrom, parseCheckSpecs, type CheckSpec } from './check-runner.adapter.js';
 import type { Workspace } from '@recoder/agent-os';
 
 const logger = { debug() {}, info() {}, warn() {}, error() {} } as never;
@@ -36,6 +36,19 @@ describe('runOneCheck', () => {
     const r = await runOneCheck(spec('lint'), '/wt', exec(async () => { throw new Error('spawn pnpm ENOENT'); }), 1000);
     expect(r.status).toBe('error');
     expect(r.detail).toMatch(/ENOENT/);
+  });
+
+  it('carries a bounded agent-remediation prompt only after explicit repo opt-in', async () => {
+    const optedIn = spec('types', 'pnpm', ['exec', 'tsc', '--noEmit']);
+    const r = await runOneCheck(
+      { ...optedIn, autofix: true, fixPrompt: 'Keep public contracts stable.' },
+      '/wt',
+      exec(async () => { throw Object.assign(new Error('failed'), { exitCode: 2 }); }),
+      1000,
+    );
+    expect(r.autofix?.prompt).toContain('"pnpm" "exec" "tsc" "--noEmit"');
+    expect(r.autofix?.prompt).toContain('Keep public contracts stable.');
+    expect(autofixPromptFor(optedIn)).toBeUndefined();
   });
 });
 
@@ -77,9 +90,51 @@ describe('createWorktreeCheckRunner', () => {
     expect(execFile).toHaveBeenCalledWith('pnpm', ['check-types'], expect.objectContaining({ cwd: '/wt' }));
   });
 
+  it('routes off-box checks to the remote executor without a silent local fallback', async () => {
+    const localExec = vi.fn(async () => ({ stdout: 'local', stderr: '' }));
+    const remoteRun = vi.fn(async (_workspace, checks) => checks.map((check: CheckSpec) => ({ name: check.name, status: 'pass' as const, detail: 'remote' })));
+    const runner = createWorktreeCheckRunner({
+      getWorkspace: async () => ws(), checks: [], logger, exec: { execFile: localExec },
+      offbox: { run: remoteRun },
+      readWorktreeChecks: async () => JSON.stringify({ checks: [{
+        name: 'types', command: 'pnpm', args: ['types'], execution: 'offbox',
+        prepare: { command: 'pnpm', args: ['install', '--frozen-lockfile'] },
+      }] }),
+    });
+    await expect(runner.runNamed('ws1', 'types')).resolves.toMatchObject({ status: 'pass', detail: 'remote' });
+    expect(remoteRun).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 'ws1' }), [expect.objectContaining({
+      execution: 'offbox', prepare: { command: 'pnpm', args: ['install', '--frozen-lockfile'] },
+    })], expect.any(Number));
+    expect(localExec).not.toHaveBeenCalled();
+  });
+
   it('degrades to [] when the workspace lookup throws (never propagates)', async () => {
     const runner = createWorktreeCheckRunner({ getWorkspace: async () => { throw new Error('db down'); }, checks: [spec('tests')], logger });
     await expect(runner.run('ws1')).resolves.toEqual([]);
+  });
+
+  it('shares one live execution across detailed and readiness consumers', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const execFile = vi.fn(async () => {
+      await held;
+      return { stdout: 'ok', stderr: '' };
+    });
+    const runner = createWorktreeCheckRunner({
+      getWorkspace: async () => ws(),
+      checks: [spec('tests')],
+      logger,
+      exec: { execFile },
+      readWorktreeChecks: async () => null,
+    });
+    const detailed = runner.run('ws1');
+    const readiness = runner.run('ws1');
+    release();
+    await expect(Promise.all([detailed, readiness])).resolves.toEqual([
+      [{ name: 'tests', status: 'pass', detail: 'ok' }],
+      [{ name: 'tests', status: 'pass', detail: 'ok' }],
+    ]);
+    expect(execFile).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -103,6 +158,26 @@ describe('parseCheckSpecs', () => {
     expect(parseCheckSpecs(JSON.stringify({ checks: [{ name: 'a', command: 'b', args: [] }] }))).toHaveLength(1);
     expect(parseCheckSpecs('not json')).toEqual([]);
     expect(parseCheckSpecs(null)).toEqual([]);
+  });
+
+  it('accepts autofix only as an explicit boolean and ignores fix instructions otherwise', () => {
+    expect(parseCheckSpecs(JSON.stringify({ checks: [
+      { name: 'agent', command: 'pnpm', args: ['test'], autofix: true, fixPrompt: 'Fix only sources.' },
+      { name: 'manual', command: 'pnpm', args: ['lint'], autofix: 'true', fixPrompt: 'Do not expose this.' },
+    ] }))).toEqual([
+      { name: 'agent', command: 'pnpm', args: ['test'], autofix: true, fixPrompt: 'Fix only sources.' },
+      { name: 'manual', command: 'pnpm', args: ['lint'] },
+    ]);
+  });
+
+  it('accepts only explicit off-box execution and exact preparation argv', () => {
+    expect(parseCheckSpecs(JSON.stringify({ checks: [{
+      name: 'types', command: 'pnpm', args: ['types'], execution: 'offbox',
+      prepare: { command: 'pnpm', args: ['install', 42] },
+    }] }))).toEqual([{
+      name: 'types', command: 'pnpm', args: ['types'], execution: 'offbox',
+      prepare: { command: 'pnpm', args: ['install'] },
+    }]);
   });
 });
 

@@ -298,7 +298,12 @@ function deriveOpenWork(openWork?: OpenWorkView): ReadinessSignal {
 
 /** Redacted secret findings the diff ADDS — always a hard blocker (recoder-tcn1). */
 function securityBlockers(input: ReadinessInput): readonly string[] {
-  return (input.security?.findings ?? []).map((f) => `secret added: ${f.evidence}${f.file ? ` (${f.file})` : ''}`);
+  return [
+    ...(input.security?.findings ?? []).map((f) => `secret added: ${f.evidence}${f.file ? ` (${f.file})` : ''}`),
+    ...(input.security?.dependencyRisks ?? [])
+      .filter((risk) => risk.level === 'blocker')
+      .map((risk) => `security risk: ${risk.evidence}${risk.file ? ` (${risk.file})` : ''}`),
+  ];
 }
 
 /**
@@ -368,13 +373,17 @@ export function foldReadiness(input: ReadinessInput): ReadinessView {
   // (criteria/TODOs/linked issues). Only present when a source was probed; an
   // unavailable probe carries none (never fabricated). Rides every verdict.
   const advisories: readonly string[] = (() => {
-    if (!input.openWork || !input.openWork.available) return [];
     const out: string[] = [];
-    const compliance = input.openWork.compliance;
-    if (compliance && (compliance.rating === 'partial' || compliance.rating === 'none')) {
-      out.push(compliance.summary);
+    if (input.openWork?.available) {
+      const compliance = input.openWork.compliance;
+      if (compliance && (compliance.rating === 'partial' || compliance.rating === 'none')) {
+        out.push(compliance.summary);
+      }
+      out.push(...input.openWork.items.map((i) => i.label));
     }
-    out.push(...input.openWork.items.map((i) => i.label));
+    out.push(...(input.security?.dependencyRisks ?? [])
+      .filter((risk) => risk.level === 'review')
+      .map((risk) => `dependency review: ${risk.evidence}${risk.file ? ` (${risk.file})` : ''}`));
     return out;
   })();
 

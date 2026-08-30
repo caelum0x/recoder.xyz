@@ -15,6 +15,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/self-host",
     "/pricing",
     "/changelog",
+    "/contact",
+    "/refund",
     "/privacy",
     "/terms",
   ];

@@ -76,12 +76,31 @@ function autopilot(overrides: Partial<SquadAutopilotDeps> = {}): SquadAutopilotS
     logger: silentLogger,
     intervalMs: 60_000,
     maxDispatchesPerTick: 3,
+    initialProfile: {
+      repoPath: '/repo',
+      spaceId: 'default',
+      projectId: 'repo',
+      runtimeId: 'claude_code',
+    },
     now,
     ...overrides,
   });
 }
 
 describe('SquadAutopilotService — tick', () => {
+  it('runs one immediate catch-up only while the restored loop is running', async () => {
+    const graph = fakeIssueGraph({ ready: () => [{ id: 'bd-catchup', title: 'Resume me' }] });
+    const conductor = fakeConductor();
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port });
+
+    await expect(svc.catchUpIfRunning()).resolves.toBeNull();
+    svc.start();
+    await expect(svc.catchUpIfRunning()).resolves.toMatchObject({ status: 'ok', dispatched: 1 });
+    expect(conductor.calls).toHaveLength(1);
+    svc.stop();
+    await expect(svc.catchUpIfRunning()).resolves.toBeNull();
+  });
+
   it('dispatches a ready issue as a conductor workspace (happy path)', async () => {
     const graph = fakeIssueGraph({
       ready: () => [{ id: 'bd-1', title: 'Fix login', description: 'Users cannot log in' }],
@@ -187,6 +206,24 @@ describe('SquadAutopilotService — tick', () => {
     expect(conductor.calls).toHaveLength(1);
   });
 
+  it('reports a canonical post-restart reuse as skipped, never as a new dispatch', async () => {
+    const graph = fakeIssueGraph({ ready: () => [{ id: 'bd-existing', title: 'Already launched' }] });
+    const svc = autopilot({
+      issueGraph: graph.port,
+      conductor: {
+        dispatch: async () => ({ ok: true, status: 'existing', workspaceId: 'ws-existing' }),
+      },
+    });
+
+    const result = await svc.tickOnce();
+    expect(result).toMatchObject({ status: 'ok', dispatched: 0, skipped: 1 });
+    expect((await svc.board()).entries[0]).toMatchObject({
+      issueId: 'bd-existing',
+      status: 'existing',
+      workspaceId: 'ws-existing',
+    });
+  });
+
   it('caps dispatches per tick and leaves the rest for the next pass', async () => {
     const graph = fakeIssueGraph({
       ready: () => [
@@ -227,6 +264,39 @@ describe('SquadAutopilotService — tick', () => {
 });
 
 describe('SquadAutopilotService — truthful degrade', () => {
+  it('refuses to guess a repository or runtime until Wave pins a launch profile', async () => {
+    const graph = fakeIssueGraph({ ready: () => [{ id: 'bd-1', title: 'Fix login' }] });
+    const conductor = fakeConductor();
+    const svc = new SquadAutopilotService({
+      issueGraph: graph.port,
+      conductor: conductor.port,
+      logger: silentLogger,
+      intervalMs: 60_000,
+      maxDispatchesPerTick: 3,
+      now,
+    });
+
+    const before = await svc.tickOnce();
+    expect(before.reason).toContain('choose a repository and agent');
+    expect(conductor.calls).toHaveLength(0);
+
+    svc.configure({
+      repoPath: '/repo-two',
+      spaceId: 'default',
+      projectId: 'repo-two',
+      runtimeId: 'codex',
+    });
+    const after = await svc.tickOnce();
+    expect(after.dispatched).toBe(1);
+    expect(conductor.calls[0].profile).toEqual({
+      repoPath: '/repo-two',
+      spaceId: 'default',
+      projectId: 'repo-two',
+      runtimeId: 'codex',
+    });
+    expect((await svc.board()).reviewOwner).toBe('human');
+  });
+
   it('degrades (dispatching nothing) when the issue-graph seam is not attached', async () => {
     const conductor = fakeConductor();
     const svc = autopilot({ conductor: conductor.port });

@@ -422,6 +422,24 @@ describe('foldReadiness — worktree open-work signal', () => {
     expect(view.verdict).toBe('ready');
   });
 
+  it('an added install hook hard-blocks while new dependencies remain explicit advisories', () => {
+    const view = foldReadiness({
+      ...base,
+      worktree: cleanWorktree(),
+      security: {
+        findings: [],
+        dependencyRisks: [
+          { rule: 'install-script', file: 'package.json', level: 'blocker', evidence: 'postinstall lifecycle script added' },
+          { rule: 'new-dependency', file: 'package.json', level: 'review', evidence: 'zod@^4.0.0 added' },
+        ],
+        summary: 'dependency risks found',
+      },
+    });
+    expect(view.verdict).toBe('blocked');
+    expect(view.blockers).toContain('security risk: postinstall lifecycle script added (package.json)');
+    expect(view.advisories).toContain('dependency review: zod@^4.0.0 added (package.json)');
+  });
+
   it('a hard blocker still wins over open work (blocked, advisories still itemized)', () => {
     const view = foldReadiness({
       state: 'awaiting_review' as WorkspaceState,
@@ -441,8 +459,29 @@ describe('foldReadiness — advisory review facet (NEVER a signal)', () => {
     diffTruncated: true,
     impact: {
       available: true,
-      symbolCount: 2,
-      topSymbols: [{ symbol: 'foldReadiness', references: 4 }],
+      source: 'recodergit',
+      scope: 'file',
+      risk: 'MEDIUM',
+      partial: false,
+      files: [{
+        path: 'src/readiness.ts',
+        isTest: false,
+        minDepth: 1,
+        directions: ['upstream'],
+        changedSymbols: ['foldReadiness'],
+        symbols: ['readiness.ts'],
+        relationTypes: ['IMPORTED_BY'],
+        processes: [],
+      }],
+      tests: [],
+      processes: [],
+      summary: {
+        impactedFiles: 1,
+        affectedTests: 0,
+        upstreamFiles: 1,
+        downstreamFiles: 0,
+        affectedProcesses: 0,
+      },
     },
   };
 

@@ -12,8 +12,8 @@
  *    only unblock a workspace it OWNS; an unowned named workspace is refused (403),
  *    not disclosed -- so this never becomes a cross-tenant attention/answer oracle.
  *    An `admin`/`internal` caller may act across tenants.
- *  - ESCALATE BY DEFAULT: `autoAnswer` defaults to `false`, so the tool escalates
- *    unless the caller EXPLICITLY opts into auto-answer AND the service's gates pass.
+ *  - ESCALATE BY DEFAULT: `autoAnswer` comes only from the durable workspace policy,
+ *    whose default is `false`; request arguments cannot widen that authority.
  *  - TRUTHFULNESS: the {@link SwarmUnblockResult} flows straight back -- an escalation
  *    carries the real `requestId`; an auto-answer only ever returns when the service
  *    actually delivered it (never a fabricated answer).
@@ -29,6 +29,7 @@ import type {
   ResolveBlockedInput,
   SwarmUnblockResult,
 } from './swarm-unblock.service.js';
+import { effectiveWorkspacePolicy } from '../policy/workspace-policy.js';
 
 /**
  * The narrow module seam this tool binds to: ownership resolution (`getWorkspace`)
@@ -90,14 +91,6 @@ function principalOf(caller: McpToolCaller): Principal {
   };
 }
 
-/** Read the optional confidence floor for an auto-answer (0..1), or `undefined`. */
-function parseMinConfidence(raw: unknown): number | undefined {
-  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
-    return undefined;
-  }
-  return Math.min(raw, 1);
-}
-
 /**
  * Build the governed `recoder_swarm_unblock` MCP tool bound to the swarm-unblock
  * surface. Kept SEPARATE from the other tool builders so its single registration is
@@ -110,7 +103,7 @@ export function buildConductorSwarmUnblockTools(
     {
       name: 'recoder_swarm_unblock',
       description:
-        'Resolve a BLOCKED fan-out (Loom) pane: read the blocking question, gather candidate answers from Recoder memory + a sibling pane that already passed the same decision, and -- by DEFAULT -- ESCALATE via the approval gate (returns { action:"escalated", requestId }). An auto-answer only fires when autoAnswer:true AND a high-confidence, low-risk, evidenced answer passes the policy gate (returns { action:"answered", answer, source }); every injected answer is recorded as an evidenced memory candidate. Args: workspaceId (required), taskGroup (optional, enables the sibling source), autoAnswer (optional, default false), minConfidence (optional). Scoped to workspaces the caller owns (admin/internal act across tenants). Truthful: no candidate or a deny/needs_approval verdict escalates -- never a fabricated answer.',
+        'Resolve a BLOCKED fan-out (Loom) pane under its durable workspace policy: read the blocking question, gather candidates from Recoder memory + a sibling pane that already passed the same decision, and escalate unless that profile enables auto-answer and a high-confidence, low-risk, evidenced answer passes its tool rule. Args: workspaceId (required), taskGroup (optional, enables the sibling source). Scoped to workspaces the caller owns (admin/internal act across tenants). Truthful: no candidate or a deny/needs_approval verdict escalates -- never a fabricated answer.',
       handler: async (raw: unknown, caller?: McpToolCaller) => {
         const authorized = requireCaller(caller);
         const body = asObject(raw);
@@ -132,14 +125,13 @@ export function buildConductorSwarmUnblockTools(
         }
 
         const taskGroup = str(body.taskGroup);
-        const minConfidence = parseMinConfidence(body.minConfidence);
+        const profile = effectiveWorkspacePolicy(workspace.policyProfile);
         const input: ResolveBlockedInput = {
           workspaceId,
           ...(taskGroup ? { taskGroup } : {}),
           policy: {
-            // ESCALATE BY DEFAULT: auto-answer is opt-in and still gated downstream.
-            autoAnswer: body.autoAnswer === true,
-            ...(minConfidence !== undefined ? { minConfidence } : {}),
+            autoAnswer: profile.swarm.autoAnswer,
+            minConfidence: profile.swarm.minConfidence,
           },
           actor: principalOf(authorized),
         };

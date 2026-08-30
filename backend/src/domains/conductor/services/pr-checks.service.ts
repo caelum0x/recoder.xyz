@@ -23,6 +23,8 @@ import type { ExecOptions, ExecResult } from '@recoder/substrate';
 import type { Workspace } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
 import { isNoPrError } from './pr-status.service.js';
+import type { CheckRemediationEvidence, LocalCheckRun } from './check-run.service.js';
+import type { LspDiagnosticsDelta } from './lsp-diagnostics.service.js';
 
 /** Local probe (`git remote get-url`) — short. */
 const REMOTE_PROBE_TIMEOUT_MS = 3_000;
@@ -38,6 +40,14 @@ export interface WorkspaceCheckRow {
   readonly name: string;
   readonly status: string;
   readonly conclusion: string;
+  readonly source?: 'github' | 'recoder';
+  readonly detail?: string;
+  /** Operator-triggered agent remediation, only for an explicit repo opt-in. */
+  readonly autofix?: {
+    readonly prompt: string;
+  };
+  /** Independent post-agent rerun evidence for the latest named attempt. */
+  readonly remediation?: CheckRemediationEvidence;
 }
 
 /** The `GET /workspaces/:id/checks` payload. */
@@ -49,6 +59,44 @@ export interface WorkspaceChecksView {
   readonly mergeable?: string;
   readonly reviewDecision?: string;
   readonly checks?: readonly WorkspaceCheckRow[];
+  /** Present when Recoder ran repo-owned checks alongside (or without) GitHub. */
+  readonly githubAvailable?: boolean;
+  readonly githubReason?: string;
+  readonly localRan?: boolean;
+  /** Base-vs-head LSP delta when `.recoder/lsp.json` is configured. */
+  readonly diagnostics?: LspDiagnosticsDelta;
+}
+
+/**
+ * Join GitHub's PR rows with Recoder's repo-owned command results. A real local
+ * run makes the view available even without a PR; an empty run preserves the
+ * legacy GitHub-only payload byte-for-byte.
+ */
+export function combineWorkspaceChecks(
+  github: WorkspaceChecksView,
+  localRuns: readonly LocalCheckRun[],
+  remediation?: CheckRemediationEvidence | null,
+): WorkspaceChecksView {
+  if (localRuns.length === 0) return github;
+  const githubRows = (github.checks ?? []).map((row) => ({ ...row, source: 'github' as const }));
+  const localRows: WorkspaceCheckRow[] = localRuns.map((run) => ({
+    name: run.name,
+    status: 'COMPLETED',
+    conclusion: run.status === 'pass' ? 'SUCCESS' : run.status === 'fail' ? 'FAILURE' : 'ERROR',
+    source: 'recoder',
+    ...(run.detail ? { detail: run.detail } : {}),
+    ...(run.autofix ? { autofix: run.autofix } : {}),
+    ...(remediation?.checkName === run.name ? { remediation } : {}),
+  }));
+  return {
+    available: true,
+    ...(github.mergeable ? { mergeable: github.mergeable } : {}),
+    ...(github.reviewDecision ? { reviewDecision: github.reviewDecision } : {}),
+    checks: [...githubRows, ...localRows],
+    githubAvailable: github.available,
+    ...(!github.available && github.reason ? { githubReason: github.reason } : {}),
+    localRan: true,
+  };
 }
 
 /** The exec surface the service probes with — injectable for tests. */

@@ -8,11 +8,6 @@ const steps = [
     env: {},
   },
   {
-    name: 'web',
-    cmd: ['node', 'scripts/e2e-web-ide-authenticated.mjs'],
-    env: {},
-  },
-  {
     name: 'pm',
     cmd: ['node', 'scripts/e2e-pm-authenticated.mjs'],
     env: {

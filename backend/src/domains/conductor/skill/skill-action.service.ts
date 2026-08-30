@@ -29,15 +29,26 @@
  * Every refusal carries the REAL reason; a `needs_approval` NEVER executes; policy
  * is consulted BEFORE execution on every path.
  */
+import { randomUUID } from 'node:crypto';
 import { createError, ErrorCode } from '../../../shared/errors.js';
 import type { Logger } from '../../../shared/logger.js';
 import type { PolicyDecision } from '@recoder/agent-os';
 import type { PolicyInput } from '@recoder/agent-policy';
+import type { WorkspacePolicyProfile } from '@recoder/agent-os';
 import { buildSkillPolicyInput, qualifiedSkillToolName } from './skill-actor.js';
 import { validateSkillParams } from './skill-params.js';
 import type { SkillRegistry } from './skill-registry.js';
 import type { SkillWorkspaceResolver } from './skill-workspace-resolver.js';
 import type { SkillActionExecutor, SkillActionOutcome } from './skill.types.js';
+import {
+  sealSkillInvocationEvidence,
+  verifySkillInvocationEvidence,
+  type SkillInvocationEvidenceOutcome,
+  type SkillInvocationEvidenceStore,
+  type SkillInvocationEvidenceView,
+  type SkillInvocationPhase,
+  type SkillPolicyEvidence,
+} from './skill-invocation-evidence.js';
 
 /** The pure policy-evaluation seam (bound to `@recoder/agent-policy`'s `evaluatePolicy`). */
 export type SkillPolicyEvaluator = (input: PolicyInput) => PolicyDecision;
@@ -76,6 +87,12 @@ export interface SkillActionServiceDeps {
   readonly logger: Logger;
   /** Optional decision clock (ISO-8601); defaults to wall clock. */
   readonly now?: () => string;
+  /** Durable append/update store for exact invocation evidence. */
+  readonly evidenceStore?: SkillInvocationEvidenceStore;
+  /** Injectable id source; defaults to a UUID. */
+  readonly newEvidenceId?: () => string;
+  /** Resolve the durable policy constitution for the canonical workspace id. */
+  readonly policyProfileForWorkspace?: (workspaceId: string) => Promise<WorkspacePolicyProfile>;
 }
 
 /** The tenant + target of an invocation (identity is resolved at the tool boundary). */
@@ -105,6 +122,9 @@ export class SkillActionService {
   private readonly executor?: SkillActionExecutor;
   private readonly log: Logger;
   private readonly now: () => string;
+  private readonly evidenceStore?: SkillInvocationEvidenceStore;
+  private readonly newEvidenceId: () => string;
+  private readonly policyProfileForWorkspace?: (workspaceId: string) => Promise<WorkspacePolicyProfile>;
 
   constructor(deps: SkillActionServiceDeps) {
     this.registry = deps.registry;
@@ -114,6 +134,26 @@ export class SkillActionService {
     if (deps.executor) this.executor = deps.executor;
     this.log = deps.logger;
     this.now = deps.now ?? (() => new Date().toISOString());
+    this.evidenceStore = deps.evidenceStore;
+    this.newEvidenceId = deps.newEvidenceId ?? randomUUID;
+    this.policyProfileForWorkspace = deps.policyProfileForWorkspace;
+  }
+
+  async evidenceForWorkspace(workspaceId: string, limit = 50): Promise<SkillInvocationEvidenceView> {
+    if (!this.evidenceStore) {
+      throw createError(ErrorCode.SERVICE_UNAVAILABLE, 'skill: invocation evidence is not configured');
+    }
+    const target = workspaceId.trim();
+    if (!target) throw createError(ErrorCode.VALIDATION_ERROR, 'workspace id is required');
+    const page = await this.evidenceStore.listByWorkspace(target, limit);
+    return {
+      durable: this.evidenceStore.isDurable(),
+      total: page.total,
+      invocations: page.invocations.map(record => ({
+        ...record,
+        integrity: verifySkillInvocationEvidence(record) ? 'verified' as const : 'invalid' as const,
+      })),
+    };
   }
 
   async invoke(input: InvokeSkillActionInput): Promise<InvokeSkillActionResult> {
@@ -121,28 +161,77 @@ export class SkillActionService {
     const actionId = typeof input.actionId === 'string' ? input.actionId.trim() : '';
     const actorId = typeof input.actorId === 'string' ? input.actorId.trim() : '';
     const workspace = typeof input.workspace === 'string' ? input.workspace.trim() : '';
+    const evidenceId = this.newEvidenceId();
+    const startedAt = this.now();
+    let trustedWorkspace: string | undefined;
+    let skillVersion: string | undefined;
+    let publisherKeyId: string | undefined;
+    let capabilities: readonly string[] = [];
+    const persist = async (
+      phase: SkillInvocationPhase,
+      policy: SkillPolicyEvidence,
+      outcome: SkillInvocationEvidenceOutcome,
+    ): Promise<void> => {
+      if (!this.evidenceStore) return;
+      const terminal = outcome.status !== 'executing';
+      const completedAt = terminal ? this.now() : undefined;
+      const startMs = Date.parse(startedAt);
+      const completedMs = completedAt ? Date.parse(completedAt) : Number.NaN;
+      await this.evidenceStore.put(sealSkillInvocationEvidence({
+        id: evidenceId,
+        startedAt,
+        ...(completedAt ? { completedAt } : {}),
+        ...(Number.isFinite(startMs) && Number.isFinite(completedMs)
+          ? { durationMs: Math.max(0, completedMs - startMs) }
+          : {}),
+        actorId,
+        target: { workspaceId: workspace, ...(trustedWorkspace ? { worktree: trustedWorkspace } : {}) },
+        skill: {
+          id: skillId,
+          actionId,
+          ...(skillVersion ? { version: skillVersion } : {}),
+          ...(publisherKeyId ? { publisherKeyId } : {}),
+          capabilities: [...capabilities],
+        },
+        params: input.params,
+        phase,
+        policy,
+        outcome,
+      }));
+    };
+    const refuseWithEvidence = async (
+      phase: SkillInvocationPhase,
+      reason: string,
+      policy: SkillPolicyEvidence = { effect: 'not_evaluated' },
+    ): Promise<InvokeSkillActionResult> => {
+      await persist(phase, policy, { status: 'refused', reason });
+      return refuse(reason);
+    };
 
     if (!skillId || !actionId) {
-      return refuse('skillId and actionId are required');
+      return refuseWithEvidence('request', 'skillId and actionId are required');
     }
     if (!actorId) {
-      return refuse('an authenticated actor identity is required');
+      return refuseWithEvidence('request', 'an authenticated actor identity is required');
     }
     if (!workspace) {
-      return refuse('a target workspace is required');
+      return refuseWithEvidence('request', 'a target workspace is required');
     }
 
     // 1) RESOLVE from the VERIFIED registry — unknown/unsigned/unpinned ⇒ refuse.
     const resolved = this.registry.resolveAction(skillId, actionId);
     if (!resolved) {
-      return refuse(`unknown or unverified skill action: ${skillId}/${actionId}`);
+      return refuseWithEvidence('resolution', `unknown or unverified skill action: ${skillId}/${actionId}`);
     }
-    const { action } = resolved;
+    const { action, manifest } = resolved;
+    skillVersion = manifest.version;
+    publisherKeyId = manifest.publisherKeyId;
+    capabilities = action.requiredCapabilities;
 
     // 2) VALIDATE params against the typed schema (no free-argv) — refuse BEFORE policy.
     const validation = validateSkillParams(action.paramsSchema, input.params);
     if (!validation.ok) {
-      return refuse(`invalid params: ${validation.reason}`);
+      return refuseWithEvidence('validation', `invalid params: ${validation.reason}`);
     }
 
     // 3) WORKSPACE (SECURITY) — resolve the UNTRUSTED, caller-supplied `workspace` to a
@@ -152,7 +241,7 @@ export class SkillActionService {
     // Unwired ⇒ refuse truthfully rather than fall back to trusting the raw path.
     if (!this.resolveWorkspace) {
       this.log.warn({ skillId, actionId, actorId }, 'skill invoke refused: workspace resolution not configured');
-      return refuse('workspace resolution is not configured on this deployment');
+      return refuseWithEvidence('workspace', 'workspace resolution is not configured on this deployment');
     }
     const resolvedWorkspace = await this.resolveWorkspace.resolve({ workspace, actorId });
     if (!resolvedWorkspace.ok) {
@@ -160,63 +249,109 @@ export class SkillActionService {
         { skillId, actionId, actorId, reason: resolvedWorkspace.reason },
         'skill invoke refused: workspace not resolvable to an owned worktree',
       );
-      return refuse(resolvedWorkspace.reason || 'workspace could not be resolved to an owned worktree');
+      return refuseWithEvidence(
+        'workspace',
+        resolvedWorkspace.reason || 'workspace could not be resolved to an owned worktree',
+      );
     }
     // The ONLY path that flows downstream — the trusted, server-side checkout path.
-    const trustedWorkspace = resolvedWorkspace.path;
+    trustedWorkspace = resolvedWorkspace.path;
 
     // 4) POLICY — build the canonical capability-typed input (over the RESOLVED,
     // trusted path — never the raw client string) and evaluate FIRST.
+    let profile: WorkspacePolicyProfile | undefined;
+    if (this.policyProfileForWorkspace) {
+      try {
+        profile = await this.policyProfileForWorkspace(workspace);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        await persist('policy', { effect: 'not_evaluated' }, { status: 'failed', reason });
+        throw error;
+      }
+    }
     const policyInput = buildSkillPolicyInput({
       actorId,
       skillId,
       action,
       workspace: trustedWorkspace,
       now: this.now(),
+      ...(profile ? { profile } : {}),
     });
     const decision = this.evaluate(policyInput);
+    const profileRevision = profile?.revision ?? 0;
 
     if (decision.effect === 'deny') {
       this.log.warn({ skillId, actionId, actorId, reason: decision.reason }, 'skill invoke denied by policy');
-      return refuse(decision.reason || 'denied by policy');
+      const reason = decision.reason || 'denied by policy';
+      return refuseWithEvidence('policy', reason, { effect: 'deny', profileRevision, ...(decision.reason ? { reason: decision.reason } : {}) });
     }
 
     if (decision.effect === 'needs_approval') {
-      const record = await this.approval.request({
-        action: qualifiedSkillToolName(skillId, actionId),
-        riskTier: 'high',
-        requestedBy: actorId,
-        reason: decision.reason ?? null,
-        taskId: input.taskId ?? null,
-        target: trustedWorkspace,
-      });
+      let record;
+      try {
+        record = await this.approval.request({
+          action: qualifiedSkillToolName(skillId, actionId),
+          riskTier: 'high',
+          requestedBy: actorId,
+          reason: decision.reason ?? null,
+          taskId: input.taskId ?? null,
+          target: trustedWorkspace,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        await persist('approval', { effect: 'needs_approval', profileRevision, ...(decision.reason ? { reason: decision.reason } : {}) }, { status: 'failed', reason });
+        throw error;
+      }
       this.log.info({ skillId, actionId, actorId, requestId: record.id }, 'skill invoke gated: approval requested');
-      return { status: 'needs_approval', requestId: record.id, reason: decision.reason || 'approval required' };
+      const reason = decision.reason || 'approval required';
+      await persist(
+        'approval',
+        { effect: 'needs_approval', profileRevision, ...(decision.reason ? { reason: decision.reason } : {}) },
+        { status: 'needs_approval', requestId: record.id, reason },
+      );
+      return { status: 'needs_approval', requestId: record.id, reason };
     }
 
     // 5) ALLOW — and ONLY allow. A security-critical execution path must never be
     // reached by exclusion: any effect that is not an explicit 'allow' refuses.
     if (decision.effect !== 'allow') {
-      return refuse(decision.reason || `refused by policy (${decision.effect})`);
+      const reason = decision.reason || `refused by policy (${decision.effect})`;
+      return refuseWithEvidence('policy', reason);
     }
 
     // Execute over the capability-scoped context (NO ambient env/secrets), in the
     // RESOLVED trusted worktree — never the raw client-supplied workspace string.
     if (!this.executor) {
+      const reason = 'skill: no action executor is configured on this deployment';
+      await persist('execution', { effect: 'allow', profileRevision, ...(decision.reason ? { reason: decision.reason } : {}) }, { status: 'failed', reason });
       throw createError(
         ErrorCode.SERVICE_UNAVAILABLE,
-        'skill: no action executor is configured on this deployment',
+        reason,
       );
     }
-    const result = await this.executor.execute({
-      skillId,
-      actionId,
-      // A fresh, typed copy — exactly the validated params, nothing ambient.
-      params: { ...validation.value },
-      capabilities: [...action.requiredCapabilities],
-      workspace: trustedWorkspace,
-    });
+    const policyEvidence: SkillPolicyEvidence = {
+      effect: 'allow',
+      profileRevision,
+      ...(decision.reason ? { reason: decision.reason } : {}),
+    };
+    await persist('execution', policyEvidence, { status: 'executing' });
+    let result: SkillActionOutcome;
+    try {
+      result = await this.executor.execute({
+        skillId,
+        actionId,
+        // A fresh, typed copy — exactly the validated params, nothing ambient.
+        params: { ...validation.value },
+        capabilities: [...action.requiredCapabilities],
+        workspace: trustedWorkspace,
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      await persist('execution', policyEvidence, { status: 'failed', reason });
+      throw error;
+    }
     this.log.info({ skillId, actionId, actorId, ok: result.ok }, 'skill action executed');
+    await persist('execution', policyEvidence, { status: 'executed', result });
     return { status: 'executed', result };
   }
 }

@@ -27,7 +27,13 @@ const PLAN_DEBOUNCE_MS = 250;
 // Per-path synthesizability from the one-shot probe: `null` for a path the probe
 // never covered (unprobed/old backend) so the row degrades to pick-only. An
 // 'overlap' may carry the parsed conflict regions (WHERE the agents collided).
-type SynthInfo = { synthesizable: boolean; reason: string; regions?: ConvergeConflictRegion[] };
+type SynthInfo = {
+    synthesizable: boolean;
+    reason: string;
+    regions?: ConvergeConflictRegion[];
+    symbols?: { workspaceId: string; names: string[] }[];
+    sharedSymbols?: string[];
+};
 
 type ConvergePanelProps = {
     taskGroup: string;
@@ -205,6 +211,20 @@ function ContestedPickRow({
                     )}
                 </div>
             )}
+            {synth?.sharedSymbols != null && synth.sharedSymbols.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1">
+                    <span className={META}>same symbols:</span>
+                    {synth.sharedSymbols.map((symbol) => (
+                        <span
+                            key={symbol}
+                            className="rounded border border-error/30 px-1.5 py-0.5 font-mono text-xs text-secondary"
+                            title={`${candidates.length} agents changed ${symbol} in ${path}`}
+                        >
+                            {symbol}
+                        </span>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -309,6 +329,8 @@ function ConvergePanel({
                     synthesizable: c.synthesizable,
                     reason: c.reason ?? "",
                     ...(c.regions != null ? { regions: c.regions } : {}),
+                    ...(c.symbols != null ? { symbols: c.symbols } : {}),
+                    ...(c.sharedSymbols != null ? { sharedSymbols: c.sharedSymbols } : {}),
                 };
             }
             setSynthMap(map);

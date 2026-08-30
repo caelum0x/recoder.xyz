@@ -8,6 +8,11 @@ SALT_PREFIX="/__site"
 SERVER="${RECODER_SERVER:-root@77.42.23.19}"
 KEY="${RECODER_SSH_KEY:-$HOME/.ssh/id_ed25519_hetzner}"
 cd "$(dirname "$0")/../site"
+# site/ is a STANDALONE package (its own pnpm-lock, next@15/webpack). Without
+# --ignore-workspace, npx would resolve the monorepo's next@16 (Turbopack) and the
+# build fails with a "workspace root" error. Materialize site/node_modules here.
+echo "installing standalone site deps (not workspace) ..."
+pnpm install --ignore-workspace --frozen-lockfile
 echo "building site with assetPrefix=$SALT_PREFIX ..."
 SITE_ASSET_PREFIX="$SALT_PREFIX" npx next build
 # fail if any built HTML references a bare /_next (would 404 behind the app)

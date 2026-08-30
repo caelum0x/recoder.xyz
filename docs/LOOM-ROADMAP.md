@@ -32,13 +32,13 @@ dependencies.
 |---|---|---|
 | Default Loom launch and teardown | Source-wired | Signed clean-machine artifact proof (`recoder-1ejn`). |
 | Live status and user steer | Source-wired | Source-current Electron/restart proof; no tmux misrouting. |
-| Interactive terminal attachment | Missing | Current output is polled `agent.read` capture into RunEvents; add a bounded bidirectional adapter (`recoder-wtlm`). |
-| Fanout -> compare -> governed converge | Source-wired | Live representative-repository proof and failure recovery. |
-| Instant converge-ready push | Partial | Drive readiness from the final sibling status event without poll-only lag. |
+| Interactive terminal attachment | Source-wired | Authenticated substrate-routed terminal renders Loom or tmux panes and keeps input on governed steering; retain installed/restart proof as release work. |
+| Fanout -> compare -> governed converge | Source-wired; isolated failure path exercised | Native fan-out and separately launched ad-hoc groups share compare, N-up file versions, true A/B diffs, plan, and governed compose. Partial fan-out now has same-group replacement panes, superseded-attempt history, actionable Session/Review rows, and cockpit composition over only the active attempts. Isolated worktree diagnostics closed false `completed(0)`, false-zero tmux launch, and stranded-`running` defects; they are not cross-product acceptance evidence. Real-git source proof ships, while the successful authenticated multi-agent pass against a Recoder-owned target remains. |
+| Instant converge-ready push | Source-wired | Terminal completion settles the workspace, publishes replayable `/sync` state, and invalidates stale mid-run Compare snapshots by settled-group revision before deriving readiness. |
 | Needs You queue/status board | Source-wired | Keep contextual/terminal-plain; do not add an engine dashboard. |
-| Swarm auto-unblock | Unsafe for broad enablement | Replace synthetic permissive profile with deny-capable workspace-agent policy (`recoder-trk0`, `recoder-vbg2`). |
-| Governed skills | Dormant/partial | Concrete executor, pinned registry, publisher keys, and canonical worktree containment (`recoder-ne6o`, `recoder-ubyg`). |
-| Remote/mobile attach | Local backend seam only | Authenticated remote transport and durable shared session store (`recoder-n5pc`). |
+| Swarm auto-unblock | Source-wired governed automation | Durable workspace-owned opt-in/confidence settings and the exact `swarm.unblock` allow/approval/deny rule are authoritative; caller arguments cannot widen them. Keep escalation as the default and prove representative live recovery. |
+| Governed skills | Source-wired governed ecosystem | Signed+pinned registry, four-action first-party catalog, typed desktop invoke UI, bounded capability executor, durable operator publisher/manifest onboarding, runtime revocation, canonical worktree containment, a revisioned workspace policy editor, and content-hashed per-invocation policy/outcome evidence in the Trust ledger ship. |
+| Remote/mobile attach | Source-wired second client | Authenticated HTTP mint/describe/monitor/stream/steer/revoke, durable TTL sessions, desktop deep-link handoff, signed-in mobile-first receiver, native Loom status/lifecycle SSE, and owner-wide revocation before canonical sign-out ship. Remaining work is provisioned host-to-host Loom transport (`recoder-n5pc`). |
 | Loom plugin marketplace | Intentionally not inherited | Owner chose full Recoder rebrand and a separate governed skill model (`recoder-klhy`). |
 | Loom layout/TUI/graphics/SSH installer | Not a Recoder surface | Adopt only a bounded capability that closes measured product pain. |
 
@@ -57,27 +57,36 @@ or second layout system.
 
 ### Wave B: harden parallel convergence
 
-1. Make sibling completion event-driven and derive converge-ready from authoritative
-   Recoder workspace attribution plus Loom native state.
+1. Keep sibling completion event-driven from authoritative Recoder settlement plus
+   Loom native state; preserve settled-group Compare revision invalidation.
 2. Keep fanout attempts isolated, show contested/mergeable files, and produce one
    governed output branch.
-3. Re-fan only after verification failure with provenance from the previous attempt.
-4. Enable swarm auto-unblock only after `recoder-trk0`/`recoder-vbg2` is deny-capable.
+3. Recover pre-convergence failures by replacing only incomplete panes inside the
+   original owned group; keep superseded attempts as history but exclude them from
+   active compare/compose. Re-fan remains post-convergence iteration only.
+4. Keep swarm auto-unblock workspace-opt-in, confidence-bounded, and subject to its
+   exact durable allow/approval/deny rule; validate it in representative recovery.
 
 ### Wave C: governed extension model
 
-1. Finish the signed `recoder.skill.json` registry and explicit publisher trust.
-2. Resolve user input to an owned canonical worktree and execute through a bounded
-   executor with no ambient backend secrets.
-3. Run policy before execution; persist exact action/target/verdict/evidence.
+1. Keep the shipped signed `recoder.skill.json` registry and operator-managed
+   publisher/manifest trust ledger free of private signing keys and arbitrary argv.
+2. Keep the shipped read/list/search/diff capability inputs bounded to an owned
+   canonical worktree with no ambient secrets.
+3. Keep the shipped policy-before-execution path, durable exact action/target/
+   verdict/evidence ledger, and revisioned per-workspace policy profile as one authority.
 4. Do not route inherited Loom `plugin.action.invoke` directly into the product.
 
 ### Wave D: remote continuity
 
-1. Define hosted identity -> workspace ownership for remote sessions.
-2. Replace the process-local session store with durable shared state.
-3. Add authenticated transport for snapshot/monitor/steer with exact-target policy.
-4. Revalidate ownership and policy on every call; revoke on sign-out/session expiry.
+1. Keep the shipped hosted identity -> workspace ownership binding authoritative.
+2. Keep the shipped TTL session store durable through the canonical KvStore.
+3. Keep the shipped mobile/web receiver on the authenticated, scope-filtered
+   native status/lifecycle stream; its slow poll is recovery-only.
+4. Keep ownership and policy revalidation on every call and owner-wide remote
+   revocation before canonical sign-out.
+5. Provision host-to-host Loom transport only when remote-runner deployment is
+   brought back into scope; it must not fork the client governance model.
 
 ## 4. Adoption rule
 

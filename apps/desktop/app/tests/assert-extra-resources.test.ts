@@ -10,7 +10,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
 const AppRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const { assertExtraResourcesExist } = require(path.join(AppRoot, "build/assert-extra-resources.cjs"));
+const { assertExtraResourcesExist, buildExtraResourcesGateOptions } = require(
+    path.join(AppRoot, "build/assert-extra-resources.cjs")
+);
 
 describe("extraResources fail-loud gate", () => {
     let fixtureRoot: string;
@@ -51,6 +53,31 @@ describe("extraResources fail-loud gate", () => {
 
     it("rejects a non-array extraResources value", () => {
         expect(() => assertExtraResourcesExist(undefined, fixtureRoot)).toThrowError(/expected an array/);
+    });
+
+    it("keeps existence enforcement but disables Mach-O arch reads off Darwin", () => {
+        const optional = new Set(["optional.node"]);
+        const sensitive = new Set(["native.node"]);
+        const opts = buildExtraResourcesGateOptions("linux", "x64", optional, sensitive);
+        expect(opts).toEqual({ targetArch: null, optional, archSensitive: new Set() });
+        expect(() => assertExtraResourcesExist([{ from: "missing.node" }], fixtureRoot, opts)).toThrowError(
+            /1 REQUIRED source\(s\) missing/
+        );
+    });
+
+    it("enables CPU-header validation for a concrete Darwin target but not universal", () => {
+        const optional = new Set<string>();
+        const sensitive = new Set(["native.node"]);
+        expect(buildExtraResourcesGateOptions("darwin", "arm64", optional, sensitive)).toEqual({
+            targetArch: "arm64",
+            optional,
+            archSensitive: sensitive,
+        });
+        expect(buildExtraResourcesGateOptions("darwin", "universal", optional, sensitive)).toEqual({
+            targetArch: null,
+            optional,
+            archSensitive: sensitive,
+        });
     });
 
     describe("electron-builder config wiring", () => {

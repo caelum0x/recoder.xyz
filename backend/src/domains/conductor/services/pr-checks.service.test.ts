@@ -15,6 +15,7 @@ import { describe, it, expect } from 'vitest';
 import { ExecError } from '@recoder/substrate';
 import type { Workspace } from '@recoder/agent-os';
 import {
+  combineWorkspaceChecks,
   PrChecksService,
   parseGhChecks,
   type PrChecksExec,
@@ -90,6 +91,48 @@ describe('parseGhChecks', () => {
 
   it('an empty rollup is an empty checks list', () => {
     expect(parseGhChecks('{}')).toEqual({ checks: [] });
+  });
+});
+
+describe('combineWorkspaceChecks', () => {
+  it('shows Recoder-owned rows even when the branch has no GitHub PR', () => {
+    expect(combineWorkspaceChecks(
+      { available: false, reason: 'no pull request for the current branch' },
+      [
+        { name: 'typecheck', status: 'pass', detail: 'Found 0 errors' },
+        { name: 'tests', status: 'fail', detail: '2 tests failed', autofix: { prompt: 'Fix tests.' } },
+      ],
+    )).toEqual({
+      available: true,
+      checks: [
+        { name: 'typecheck', status: 'COMPLETED', conclusion: 'SUCCESS', source: 'recoder', detail: 'Found 0 errors' },
+        { name: 'tests', status: 'COMPLETED', conclusion: 'FAILURE', source: 'recoder', detail: '2 tests failed', autofix: { prompt: 'Fix tests.' } },
+      ],
+      githubAvailable: false,
+      githubReason: 'no pull request for the current branch',
+      localRan: true,
+    });
+  });
+
+  it('retains GitHub rows and labels both evidence sources', () => {
+    expect(combineWorkspaceChecks(
+      { available: true, mergeable: 'MERGEABLE', checks: [{ name: 'CI', status: 'COMPLETED', conclusion: 'SUCCESS' }] },
+      [{ name: 'lint', status: 'error', detail: 'spawn eslint ENOENT' }],
+    )).toMatchObject({
+      available: true,
+      mergeable: 'MERGEABLE',
+      githubAvailable: true,
+      localRan: true,
+      checks: [
+        { name: 'CI', source: 'github', conclusion: 'SUCCESS' },
+        { name: 'lint', source: 'recoder', conclusion: 'ERROR', detail: 'spawn eslint ENOENT' },
+      ],
+    });
+  });
+
+  it('preserves the GitHub-only view when no local command ran', () => {
+    const github = { available: false, reason: 'gh CLI not found' } as const;
+    expect(combineWorkspaceChecks(github, [])).toBe(github);
   });
 });
 

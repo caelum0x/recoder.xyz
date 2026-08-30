@@ -24,7 +24,7 @@ export class SubstrateError extends Error {
   readonly substrateId?: WorkspaceSubstrate;
   readonly retryable: boolean;
   readonly detail?: Record<string, unknown>;
-  override readonly cause?: unknown;
+  readonly cause?: unknown;
 
   constructor(code: SubstrateErrorCode, message: string, options: SubstrateErrorOptions = {}) {
     super(message);

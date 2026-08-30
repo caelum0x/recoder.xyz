@@ -537,9 +537,8 @@ function PlanTeaser() {
             Pay for orchestration, never for tokens.
           </h2>
           <p className="mt-3 text-muted">
-            Free to start on one machine. Paid plans add limits, retention,
-            seats, and governance — and they&apos;re framed honestly until
-            they&apos;re purchasable.
+            Free to start on one machine. Pro, Team, and Enterprise add limits,
+            retention, seats, and governance — pick a plan and subscribe today.
           </p>
         </div>
         <Link
@@ -591,8 +590,8 @@ const FAQ: QA[] = [
     a: "No. Nobody codes on the web — Recoder is a desktop app. This site is the marketing page and the place to get the build. The app is a 3-pane console: workspaces, agent conversation, and diffs/terminal/PR status.",
   },
   {
-    q: "Can I download it today?",
-    a: "Public desktop builds aren't open to everyone yet. The Download button takes you to request access and get notified the moment a build lands — we won't pretend a build is ready when it isn't.",
+    q: "How do I get started?",
+    a: "Pick a plan on the pricing page — Free to run locally, or Pro and Team for more headroom, seats, and governance. You create your account, subscribe, and connect the coding agents you already pay for; Recoder is the console that runs them in parallel. The desktop app is macOS-first (Apple Silicon), with Windows and Linux on the way.",
   },
 ];
 

@@ -238,7 +238,6 @@ rsync -az --timeout=120 --progress \
   --exclude='backend/data' --exclude='backend/data/***' \
   --exclude='apps/mobile' \
   --include='packages/*/dist/***' --include='shared/dist/***' \
-  --exclude='recoder-web/dist' \
   --exclude='app/dist' \
   -e "ssh ${SSH_OPTS}" \
   ./ "${SERVER}:${REMOTE_DIR}/"

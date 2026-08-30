@@ -2,30 +2,58 @@
  * GithubPrReviewAdapter tests — the bounded, degrade-truthful projection of the
  * engines GithubModule `reviewPR` result into the readiness `review` facet:
  *
- *  - an ok InvokeResult projects PR number + truncation flag + a CAPPED
- *    top-symbols blast radius (the raw diff NEVER rides the projection);
+ *  - an ok InvokeResult projects PR number + truncation flag + the shared
+ *    bounded impact ledger (the raw diff NEVER rides the projection);
  *  - a failed InvokeResult (gh missing/unauthenticated) ⇒ `available:false`
  *    with the truthful reason — never a fabricated review;
  *  - a THROWING facet degrades to `available:false` (never throws upward);
- *  - an oversized impact symbol list is truncated to the cap, highest-reference
- *    symbols first.
+ *  - file/test/direction/depth/risk evidence survives unchanged.
  */
 import { describe, it, expect } from 'vitest';
 import {
-  countReferences,
   createGithubPrReviewAdapter,
-  MAX_TOP_SYMBOLS,
   type GithubReviewFacet,
   type GithubReviewValue,
 } from './github-review.adapter.js';
 import { makeLogger } from '../__fixtures__/harness.js';
+
+function impactLedger(overrides: Partial<GithubReviewValue['impact']> = {}): GithubReviewValue['impact'] {
+  const files = [{
+    path: 'src/caller.ts',
+    isTest: false,
+    minDepth: 1,
+    directions: ['upstream'] as const,
+    changedSymbols: ['a'],
+    symbols: ['caller.ts'],
+    relationTypes: ['IMPORTED_BY'],
+    processes: [],
+  }];
+  return {
+    available: true,
+    source: 'recodergit',
+    scope: 'file',
+    risk: 'LOW',
+    partial: false,
+    files,
+    tests: [],
+    processes: [],
+    summary: {
+      impactedFiles: 1,
+      affectedTests: 0,
+      upstreamFiles: 1,
+      downstreamFiles: 0,
+      affectedProcesses: 0,
+    },
+    ...overrides,
+  };
+}
 
 function reviewValue(overrides: Partial<GithubReviewValue> = {}): GithubReviewValue {
   return {
     pr: { number: 7, title: 'feat: x' },
     diff: 'diff --git a/x b/x',
     diffTruncated: false,
-    impact: { available: true, changedSymbols: ['a'], symbols: [{ symbol: 'a', references: [1], callGraph: null }] },
+    impact: impactLedger(),
     ...overrides,
   };
 }
@@ -50,11 +78,7 @@ describe('createGithubPrReviewAdapter', () => {
     expect(view.available).toBe(true);
     expect(view.pr).toBe(7);
     expect(view.diffTruncated).toBe(true);
-    expect(view.impact).toEqual({
-      available: true,
-      symbolCount: 1,
-      topSymbols: [{ symbol: 'a', references: 1 }],
-    });
+    expect(view.impact).toEqual(impactLedger());
     // The raw diff must NOT ride the readiness payload.
     expect(JSON.stringify(view)).not.toContain('diff --git');
   });
@@ -91,30 +115,40 @@ describe('createGithubPrReviewAdapter', () => {
     expect(view.reason).toBe('gh pr diff failed');
   });
 
-  it('an OVERSIZED impact symbol list is truncated to the cap, highest references first', async () => {
-    const symbols = Array.from({ length: MAX_TOP_SYMBOLS + 7 }, (_, i) => ({
-      symbol: `sym_${i}`,
-      references: Array.from({ length: i }, () => 'ref'),
-      callGraph: null,
-    }));
+  it('passes the shared file/test/direction/depth/risk ledger without a second interpretation', async () => {
+    const testFile = {
+      path: 'src/caller.test.ts',
+      isTest: true,
+      minDepth: 2,
+      directions: ['upstream', 'downstream'] as const,
+      changedSymbols: ['a'],
+      symbols: ['caller.test.ts'],
+      relationTypes: ['IMPORTED_BY', 'IMPORTS'],
+      processes: ['checkout'],
+    };
+    const impact = impactLedger({
+      scope: 'mixed',
+      risk: 'HIGH',
+      partial: true,
+      files: [impactLedger().files[0]!, testFile],
+      tests: [testFile],
+      processes: [{ id: 'checkout', label: 'Checkout', processType: 'request' }],
+      summary: {
+        impactedFiles: 2,
+        affectedTests: 1,
+        upstreamFiles: 2,
+        downstreamFiles: 1,
+        affectedProcesses: 1,
+      },
+    });
     const adapter = adapterOver({
       reviewPR: async () => ({
         ok: true,
-        value: reviewValue({
-          impact: { available: true, changedSymbols: symbols.map((s) => s.symbol), symbols },
-        }),
+        value: reviewValue({ impact }),
       }),
     });
     const view = await adapter.review(INPUT);
-    expect(view.impact?.symbolCount).toBe(MAX_TOP_SYMBOLS + 7);
-    expect(view.impact?.topSymbols).toHaveLength(MAX_TOP_SYMBOLS);
-    // Highest-reference symbol leads; every kept entry outranks the dropped ones.
-    expect(view.impact?.topSymbols[0]).toEqual({
-      symbol: `sym_${MAX_TOP_SYMBOLS + 6}`,
-      references: MAX_TOP_SYMBOLS + 6,
-    });
-    const kept = view.impact?.topSymbols.map((s) => s.references) ?? [];
-    expect(Math.min(...kept)).toBeGreaterThanOrEqual(7);
+    expect(view.impact).toEqual(impact);
   });
 
   it('an unavailable impact projects its truthful reason (never fabricated)', async () => {
@@ -122,12 +156,22 @@ describe('createGithubPrReviewAdapter', () => {
       reviewPR: async () => ({
         ok: true,
         value: reviewValue({
-          impact: {
+          impact: impactLedger({
             available: false,
             reason: 'recodergit code-graph disabled',
-            changedSymbols: [],
-            symbols: [],
-          },
+            scope: 'unavailable',
+            risk: 'UNKNOWN',
+            files: [],
+            tests: [],
+            processes: [],
+            summary: {
+              impactedFiles: 0,
+              affectedTests: 0,
+              upstreamFiles: 0,
+              downstreamFiles: 0,
+              affectedProcesses: 0,
+            },
+          }),
         }),
       }),
     });
@@ -135,23 +179,20 @@ describe('createGithubPrReviewAdapter', () => {
     expect(view.impact).toEqual({
       available: false,
       reason: 'recodergit code-graph disabled',
-      symbolCount: 0,
-      topSymbols: [],
+      source: 'recodergit',
+      scope: 'unavailable',
+      risk: 'UNKNOWN',
+      partial: false,
+      files: [],
+      tests: [],
+      processes: [],
+      summary: {
+        impactedFiles: 0,
+        affectedTests: 0,
+        upstreamFiles: 0,
+        downstreamFiles: 0,
+        affectedProcesses: 0,
+      },
     });
-  });
-});
-
-describe('countReferences (unknown-shaped engine readings, truthful floor 0)', () => {
-  it('counts arrays, nested arrays, and numeric counts; everything else is 0', () => {
-    expect(countReferences([1, 2, 3])).toBe(3);
-    expect(countReferences({ references: ['a', 'b'] })).toBe(2);
-    expect(countReferences({ results: [1] })).toBe(1);
-    expect(countReferences({ items: [] })).toBe(0);
-    expect(countReferences({ count: 5 })).toBe(5);
-    expect(countReferences({ total: 9 })).toBe(9);
-    expect(countReferences({ count: -1 })).toBe(0);
-    expect(countReferences(null)).toBe(0);
-    expect(countReferences(undefined)).toBe(0);
-    expect(countReferences('nonsense')).toBe(0);
   });
 });

@@ -295,7 +295,7 @@ section 1 "ALL SERVICES LIVENESS"
 for pair in \
   "https://recoder.xyz:200" \
   "https://agents.recoder.xyz:200" \
-  "https://web.recoder.xyz:200:302" \
+  "https://web.recoder.xyz:301:302:307:308" \
   "https://pm.recoder.xyz:200:307" \
   "https://agency.recoder.xyz:200:307" \
   "https://api.recoder.xyz/v1/health:200" \
@@ -674,9 +674,9 @@ fi
 MAIN_BODY=$(http_get "https://recoder.xyz")
 check_contains "recoder.xyz returns HTML" "$MAIN_BODY" "<html"
 
-# Verify web.recoder.xyz is reachable (may redirect)
+# Verify the retired browser host remains redirect-only.
 WEB_STATUS=$(http_status "https://web.recoder.xyz")
-check_status_any "web.recoder.xyz reachable" "$WEB_STATUS" "200" "302" "307"
+check_status_any "web.recoder.xyz redirect-only" "$WEB_STATUS" "301" "302" "307" "308"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 17: AUTH-GATED API SURFACE (requires TOKEN)

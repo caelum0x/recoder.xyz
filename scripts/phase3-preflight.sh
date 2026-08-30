@@ -7,7 +7,6 @@ PHASE3_MODE="${PHASE3_MODE:-production}"
 SKIP_ENV_GATES="${SKIP_ENV_GATES:-false}"
 DRY_RUN="${DRY_RUN:-false}"
 ENABLE_A2A_INTEROP_SMOKE="${ENABLE_A2A_INTEROP_SMOKE:-true}"
-RECODER_WEB_URL="${RECODER_WEB_URL:-https://web.recoder.xyz}"
 BACKEND_URL="${BACKEND_URL:-https://docker.recoder.xyz}"
 BASE_URL="${BASE_URL:-https://recoder.xyz}"
 WORKER_ENV_FILE="${A2A_WORKER_ENV_FILE:-$REPO_ROOT/.env.a2a.workers}"
@@ -77,7 +76,7 @@ fi
 if [[ "$DRY_RUN" == "false" ]]; then
   echo ""
   echo "[2/3] Network reachability precheck"
-  for url in "$RECODER_WEB_URL" "$BACKEND_URL" "$BASE_URL"; do
+  for url in "$BACKEND_URL" "$BASE_URL"; do
     code="$(curl -s --connect-timeout 5 --max-time 15 -o /tmp/phase3_preflight.out -w "%{http_code}" "$url" || true)"
     [[ -z "$code" ]] && code="000"
     echo "- $url -> $code"

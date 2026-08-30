@@ -9,22 +9,22 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { Logger } from '../../../shared/logger.js';
-import type { CliResult } from '../adapters/cli/cli-exec.js';
+import type { CliResult, RunCliOptions } from '../adapters/cli/cli-exec.js';
 import type { RecoderGitService } from '../recodergit-service.js';
-import { GithubModule, type GithubCliRunner, extractChangedSymbols } from './github-module.js';
+import { GithubModule, type GithubCliRunner, extractChangedSymbolLocations, extractChangedSymbols, extractLinkedIssueNumbers } from './github-module.js';
 
 const log = { warn() {}, info() {}, debug() {}, error() {}, child: () => log } as unknown as Logger;
 
-type RecordedCall = { bin: string; args: readonly string[] };
+type RecordedCall = { bin: string; args: readonly string[]; options?: RunCliOptions };
 
 /** Fake bounded runner: handler returns a partial result, undefined = ENOENT. */
 function fakeRun(
-  handler: (bin: string, args: readonly string[]) => Partial<CliResult> | undefined,
+  handler: (bin: string, args: readonly string[], options?: RunCliOptions) => Partial<CliResult> | undefined,
   calls: RecordedCall[] = [],
 ): GithubCliRunner {
-  return async (bin, args) => {
-    calls.push({ bin, args });
-    const partial = handler(bin, args);
+  return async (bin, args, options) => {
+    calls.push({ bin, args, options });
+    const partial = handler(bin, args, options);
     if (!partial) {
       return { ok: false, code: null, stdout: '', stderr: '', reason: `spawn ${bin} ENOENT` };
     }
@@ -34,13 +34,13 @@ function fakeRun(
 
 /** gh runner where --version and auth status succeed; other calls delegated. */
 function ghUpRun(
-  handler: (bin: string, args: readonly string[]) => Partial<CliResult> | undefined = () => ({}),
+  handler: (bin: string, args: readonly string[], options?: RunCliOptions) => Partial<CliResult> | undefined = () => ({}),
   calls: RecordedCall[] = [],
 ): GithubCliRunner {
-  return fakeRun((bin, args) => {
+  return fakeRun((bin, args, options) => {
     if (args[0] === '--version') return { stdout: 'gh version 2.60.0 (2026-01-01)\n' };
     if (args[0] === 'auth' && args[1] === 'status') return { stdout: 'Logged in' };
-    return handler(bin, args);
+    return handler(bin, args, options);
   }, calls);
 }
 
@@ -88,7 +88,48 @@ function recodergitImpactStub(opts: {
     codeIntel: async (op: string, repoId: string, params: Record<string, unknown>) => {
       opts.calls?.push({ op, repoId, params });
       if (!opts.enabled) return { enabled: false };
-      const r = opts.respond?.(op) ?? { available: true, result: { op, target: params.symbol } };
+      const r = opts.respond?.(op) ?? {
+        available: true,
+        result: {
+          target: { name: params.symbol, filePath: 'src/pay.ts' },
+          direction: op === 'find_references' ? 'upstream' : 'downstream',
+          impactedCount: 2,
+          risk: op === 'find_references' ? 'HIGH' : 'MEDIUM',
+          partial: false,
+          affected_processes: [
+            { id: 'checkout', label: 'Checkout settlement', processType: 'business' },
+          ],
+          coChanges: [{
+            filePath: 'src/config.ts',
+            relationType: 'CO_CHANGED_WITH',
+            commits: 4,
+            confidence: 0.8,
+            processes: [],
+          }],
+          crossRepository: [{
+            repoId: 'acme__checkout',
+            filePath: 'src/checkout.ts',
+            ecosystem: 'npm',
+            packageName: '@acme/payments',
+            importSpecifier: '@acme/payments/charge',
+            relationType: 'CONSUMED_BY',
+            confidence: 1,
+          }],
+          byDepth: {
+            1: op === 'find_references'
+              ? [{
+                  name: 'settleAll',
+                  filePath: 'src/jobs/settle.ts',
+                  relationType: 'CALLS',
+                  processes: [{ id: 'checkout', label: 'Checkout settlement' }],
+                }]
+              : [
+                  { name: 'charge', filePath: 'src/billing/charge.ts', relationType: 'CALLS' },
+                  { name: 'charges payout', filePath: 'src/pay.test.ts', relationType: 'TESTS' },
+                ],
+          },
+        },
+      };
       return { enabled: true, op, repoId, ...r };
     },
   } as unknown as RecoderGitService;
@@ -196,6 +237,44 @@ describe('GithubModule.search', () => {
 });
 
 describe('GithubModule.openPR / comment / reviewPR', () => {
+  it('lists open pull requests with the head SHA revision cursor', async () => {
+    const calls: RecordedCall[] = [];
+    const module = build({
+      runCli: ghUpRun((_bin, args) => {
+        if (args[1] === 'list') {
+          return {
+            stdout: JSON.stringify([{
+              number: 17,
+              title: 'Fix race',
+              url: 'https://github.com/a/b/pull/17',
+              headRefOid: 'abc123',
+              baseRefName: 'main',
+              headRefName: 'fix/race',
+              isDraft: false,
+              updatedAt: '2026-08-30T12:00:00Z',
+              author: { login: 'dev' },
+            }]),
+          };
+        }
+        return {};
+      }, calls),
+    });
+
+    const result = await module.listOpenPullRequests({ repoRoot: '/repo', limit: 20 });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.pullRequests[0]).toMatchObject({
+        number: 17,
+        headSha: 'abc123',
+        author: 'dev',
+      });
+    }
+    expect(calls.find((call) => call.args[1] === 'list')?.args).toContainEqual(
+      expect.stringContaining('headRefOid,baseRefName,headRefName,isDraft,updatedAt,author'),
+    );
+  });
+
   it('openPR requires a title and a repoRoot', async () => {
     const noTitle = await build().openPR({ title: '' });
     expect(noTitle.ok).toBe(false);
@@ -222,6 +301,94 @@ describe('GithubModule.openPR / comment / reviewPR', () => {
 
     const missing = await build().comment({ pr: 7, body: 'x' });
     expect(missing.ok).toBe(false);
+  });
+
+  it('submits the human-selected native review event', async () => {
+    const calls: RecordedCall[] = [];
+    const module = build({ runCli: ghUpRun(() => ({ stdout: '' }), calls) });
+
+    const result = await module.submitReview({
+      pr: 17,
+      event: 'request_changes',
+      body: 'The settlement can run twice.',
+    });
+
+    expect(result).toEqual({ ok: true, value: { pr: '17', event: 'request_changes', inlineCount: 0 } });
+    expect(calls.find((call) => call.args[1] === 'review')?.args).toEqual([
+      'pr',
+      'review',
+      '17',
+      '--request-changes',
+      '--body',
+      'The settlement can run twice.',
+    ]);
+  });
+
+  it('submits selected findings as one head-bound native inline review', async () => {
+    const calls: RecordedCall[] = [];
+    const module = build({ runCli: ghUpRun(() => ({ stdout: '{"id":1}' }), calls) });
+
+    const result = await module.submitReview({
+      pr: 17,
+      event: 'request_changes',
+      body: 'Two reviewers found this race.',
+      commitId: 'abc123',
+      comments: [{ path: 'src/pay.ts', line: 42, body: 'The check and write are not atomic.' }],
+    });
+
+    expect(result).toEqual({ ok: true, value: { pr: '17', event: 'request_changes', inlineCount: 1 } });
+    const call = calls.find((candidate) => candidate.args[0] === 'api');
+    expect(call?.args).toEqual([
+      'api',
+      'repos/{owner}/{repo}/pulls/17/reviews',
+      '--method',
+      'POST',
+      '--input',
+      '-',
+    ]);
+    expect(JSON.parse(call?.options?.stdin ?? '{}')).toEqual({
+      commit_id: 'abc123',
+      body: 'Two reviewers found this race.',
+      event: 'REQUEST_CHANGES',
+      comments: [{ path: 'src/pay.ts', line: 42, side: 'RIGHT', body: 'The check and write are not atomic.' }],
+    });
+  });
+
+  it('reads paginated resolved and outdated review-thread state', async () => {
+    const payload = [{
+      data: {
+        repository: {
+          pullRequest: {
+            reviewThreads: {
+              nodes: [{
+                id: 'PRRT_1',
+                path: 'src/pay.ts',
+                line: null,
+                originalLine: 42,
+                isResolved: true,
+                isOutdated: true,
+                resolvedBy: { login: 'maintainer' },
+                comments: { nodes: [{ body: 'Fixed.\n\n<!-- recoder-finding:src%2Fpay.ts%3A42%3Asettlement-race -->', url: 'https://github.com/a/b/pull/17#discussion_r1' }] },
+              }],
+            },
+          },
+        },
+      },
+    }];
+    const module = build({ runCli: ghUpRun((_bin, args) => args[0] === 'api' ? { stdout: JSON.stringify(payload) } : {}) });
+
+    const result = await module.listReviewThreads({ pr: 17 });
+
+    expect(result).toEqual({ ok: true, value: { threads: [{
+      id: 'PRRT_1',
+      path: 'src/pay.ts',
+      line: 42,
+      isResolved: true,
+      isOutdated: true,
+      rootBody: 'Fixed.\n\n<!-- recoder-finding:src%2Fpay.ts%3A42%3Asettlement-race -->',
+      url: 'https://github.com/a/b/pull/17#discussion_r1',
+      resolvedBy: 'maintainer',
+    }] } });
   });
 
   it('reviewPR returns pr view JSON + diff, degrading the diff truthfully', async () => {
@@ -252,6 +419,102 @@ describe('GithubModule.openPR / comment / reviewPR', () => {
       expect(degraded.value.diffUnavailable).toBeTruthy();
     }
   });
+
+  it('resolves bounded same-repository issue requirements without failing the review', async () => {
+    const calls: RecordedCall[] = [];
+    const module = build({
+      readTextFile: async (filePath) => filePath.endsWith('.recoder/review-rules.json')
+        ? JSON.stringify({
+            version: 1,
+            rules: [{ id: 'migration-safety', level: 'required', text: 'Schema changes require a migration.', check: 'Backend types' }],
+          })
+        : null,
+      runCli: ghUpRun((_bin, args) => {
+        if (args[0] === 'pr' && args[1] === 'view') return { stdout: JSON.stringify({
+          number: 7,
+          title: 'Fix settlement',
+          url: 'https://github.com/acme/repo/pull/7',
+          body: [
+            'Fixes #11 and #12',
+            'Related issue: #13',
+            'Casual mention #99',
+            'https://github.com/acme/repo/issues/14',
+            'https://github.com/other/repo/issues/15',
+          ].join('\n'),
+        }) };
+        if (args[0] === 'pr' && args[1] === 'diff') return { stdout: 'diff --git a/src/pay.ts b/src/pay.ts' };
+        if (args[0] === 'issue' && args[1] === 'view') {
+          const number = Number(args[2]);
+          if (number === 12) return undefined;
+          return { stdout: JSON.stringify({
+            number,
+            title: `Requirement ${number}`,
+            body: `Acceptance criteria for ${number}`,
+            state: number === 13 ? 'CLOSED' : 'OPEN',
+            url: `https://github.com/acme/repo/issues/${number}`,
+            labels: [{ name: 'product' }],
+          }) };
+        }
+        return {};
+      }, calls),
+    });
+
+    const result = await module.reviewPR({ pr: 7 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.requirements.issues).toEqual([
+      expect.objectContaining({ number: 11, state: 'OPEN', labels: ['product'] }),
+      expect.objectContaining({ number: 13, state: 'CLOSED' }),
+      expect.objectContaining({ number: 14, state: 'OPEN' }),
+    ]);
+    expect(result.value.requirements.unavailable).toEqual([
+      expect.objectContaining({ number: 12 }),
+    ]);
+    expect(result.value.reviewRules).toEqual({
+      source: '.recoder/review-rules.json',
+      rules: [{
+        id: 'migration-safety',
+        level: 'required',
+        text: 'Schema changes require a migration.',
+        source: '.recoder/review-rules.json',
+        check: 'Backend types',
+      }],
+    });
+    expect(calls.filter((call) => call.args[0] === 'issue').map((call) => call.args[2])).toEqual(['11', '12', '13', '14']);
+  });
+
+  it('surfaces an invalid explicit rule file instead of silently falling through', async () => {
+    const module = build({
+      readTextFile: async (filePath) => filePath.endsWith('.json')
+        ? '{not-json'
+        : '- [required] This fallback must not hide the invalid primary file.',
+      runCli: ghUpRun((_bin, args) => {
+        if (args[0] === 'pr' && args[1] === 'view') return { stdout: JSON.stringify({ number: 7, body: '' }) };
+        if (args[0] === 'pr' && args[1] === 'diff') return { stdout: '' };
+        return {};
+      }),
+    });
+    const result = await module.reviewPR({ pr: 7 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.reviewRules).toEqual({
+      source: '.recoder/review-rules.json',
+      rules: [],
+      unavailable: '.recoder/review-rules.json contains no valid required/advisory review rules',
+    });
+  });
+});
+
+describe('extractLinkedIssueNumbers', () => {
+  it('ignores casual and cross-repository references', () => {
+    expect(extractLinkedIssueNumbers([
+      'Fixes #2 and acme/repo#3',
+      'Fixes other/repo#4',
+      'Casual #5',
+      'https://github.com/acme/repo/issues/6',
+      'https://github.com/other/repo/issues/7',
+    ].join('\n'), 'https://github.com/acme/repo/pull/1')).toEqual([2, 3, 6]);
+  });
 });
 
 describe('GithubModule.reviewPR — recodergit blast-radius fusion', () => {
@@ -268,7 +531,13 @@ describe('GithubModule.reviewPR — recodergit blast-radius fusion', () => {
 
   function ghWithDiff(calls: RecordedCall[] = []): GithubCliRunner {
     return ghUpRun((_bin, args) => {
-      if (args[1] === 'view') return { stdout: JSON.stringify({ number: 7, title: 't' }) };
+      if (args[1] === 'view') return {
+        stdout: JSON.stringify({
+          number: 7,
+          title: 't',
+          url: 'https://github.com/Acme/Widget/pull/7',
+        }),
+      };
       if (args[1] === 'diff') return { stdout: PR_DIFF };
       return {};
     }, calls);
@@ -298,11 +567,97 @@ describe('GithubModule.reviewPR — recodergit blast-radius fusion', () => {
     const payoutCalls = intel.filter((c) => c.params.symbol === 'computePayout');
     expect(payoutCalls.map((c) => c.op).sort()).toEqual(['call_graph', 'find_references']);
     expect(payoutCalls.every((c) => c.params.repo === '/repo')).toBe(true);
+    expect(payoutCalls.every((c) => c.repoId === 'acme__widget')).toBe(true);
+    expect(payoutCalls.every((c) =>
+      Array.isArray(c.params.repoAliases) && c.params.repoAliases.includes('repo')
+    )).toBe(true);
+    expect(payoutCalls.every((c) => c.params.filePath === 'src/pay.ts')).toBe(true);
+    expect(payoutCalls.every((c) => c.params.includeTests === true)).toBe(true);
+    expect(payoutCalls.every((c) => c.params.limit === 20 && c.params.maxDepth === 3)).toBe(true);
 
     // The per-symbol annotation carries both real readings (never fabricated).
     const payout = impact.symbols.find((s) => s.symbol === 'computePayout');
-    expect(payout?.references).toEqual({ op: 'find_references', target: 'computePayout' });
-    expect(payout?.callGraph).toEqual({ op: 'call_graph', target: 'computePayout' });
+    expect(payout?.references).toMatchObject({ direction: 'upstream', risk: 'HIGH' });
+    expect(payout?.callGraph).toMatchObject({ direction: 'downstream', risk: 'MEDIUM' });
+    expect(impact.source).toBe('recodergit');
+    expect(impact.scope).toBe('symbol');
+    expect(impact.risk).toBe('HIGH');
+    expect(impact.partial).toBe(false);
+    expect(impact.files.map((file) => file.path)).toEqual([
+      'src/billing/charge.ts',
+      'src/config.ts',
+      'src/jobs/settle.ts',
+      'src/pay.test.ts',
+    ]);
+    expect(impact.files.find((file) => file.path === 'src/config.ts')).toMatchObject({
+      relationTypes: ['CO_CHANGED_WITH'],
+      directions: [],
+      coChange: { commits: 4, confidence: 0.8 },
+    });
+    expect(impact.tests).toHaveLength(1);
+    expect(impact.tests[0]).toMatchObject({ path: 'src/pay.test.ts', isTest: true });
+    expect(impact.processes).toEqual([
+      { id: 'checkout', label: 'Checkout settlement', processType: 'business' },
+    ]);
+    expect(impact.consumers).toEqual([{
+      repoId: 'acme__checkout',
+      path: 'src/checkout.ts',
+      ecosystem: 'npm',
+      packageName: '@acme/payments',
+      importSpecifier: '@acme/payments/charge',
+      relationType: 'CONSUMED_BY',
+    }]);
+    expect(impact.summary).toEqual({
+      impactedFiles: 4,
+      affectedTests: 1,
+      upstreamFiles: 1,
+      downstreamFiles: 2,
+      affectedProcesses: 1,
+      coChangedFiles: 1,
+      crossRepositoryFiles: 1,
+      consumerRepositories: 1,
+    });
+  });
+
+  it('preserves exact cross-repository totals when the returned consumer rows are bounded', async () => {
+    const module = build({
+      runCli: ghWithDiff(),
+      recodergit: recodergitImpactStub({
+        enabled: true,
+        respond: (op) => ({
+          available: true,
+          result: {
+            scope: 'file-import-graph',
+            direction: op === 'find_references' ? 'upstream' : 'downstream',
+            risk: 'CRITICAL',
+            partial: true,
+            summary: { cross_repository_files: 177, consumer_repositories: 1 },
+            affected_processes: [],
+            byDepth: {},
+            coChanges: [],
+            crossRepository: [{
+              repoId: 'recoder__backend',
+              filePath: 'src/bootstrap/index.ts',
+              ecosystem: 'npm',
+              packageName: '@recoder/agent-os',
+              importSpecifier: '@recoder/agent-os',
+              relationType: 'CONSUMED_BY',
+              confidence: 1,
+            }],
+          },
+        }),
+      }),
+    });
+
+    const result = await module.reviewPR({ pr: 7 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.impact).toMatchObject({
+      available: true,
+      partial: true,
+      consumers: [{ repoId: 'recoder__backend', path: 'src/bootstrap/index.ts' }],
+      summary: { crossRepositoryFiles: 177, consumerRepositories: 1 },
+    });
   });
 
   it('degrades TRUTHFULLY when the code-graph is disabled — review still returns, no engine calls', async () => {
@@ -383,6 +738,48 @@ describe('extractChangedSymbols', () => {
 
   it('de-duplicates and returns [] for a diff with no declarations', () => {
     expect(extractChangedSymbols('@@ -1 +1 @@\n+  x = x + 1\n-  y = 2')).toEqual([]);
+  });
+
+  it('keeps destination file provenance for same-named declarations in separate files', () => {
+    const diff = [
+      'diff --git a/src/a.ts b/src/a.ts',
+      '--- a/src/a.ts',
+      '+++ b/src/a.ts',
+      '@@ -1 +1 @@',
+      '+export function settle() {}',
+      'diff --git a/src/b.ts b/src/b.ts',
+      '--- a/src/b.ts',
+      '+++ b/src/b.ts',
+      '@@ -1 +1 @@',
+      '+export function settle() {}',
+    ].join('\n');
+    expect(extractChangedSymbolLocations(diff)).toEqual([
+      { symbol: 'settle', filePath: 'src/a.ts' },
+      { symbol: 'settle', filePath: 'src/b.ts' },
+    ]);
+    expect(extractChangedSymbols(diff)).toEqual(['settle']);
+  });
+
+  it('keeps Python, Go, and Rust destination paths for the packaged file graph', () => {
+    const diff = [
+      'diff --git a/python/pay.py b/python/pay.py',
+      '+++ b/python/pay.py',
+      '@@ -1 +1 @@',
+      '+def settle_invoice():',
+      'diff --git a/go/pay.go b/go/pay.go',
+      '+++ b/go/pay.go',
+      '@@ -1 +1 @@',
+      '+func SettleInvoice() error { return nil }',
+      'diff --git a/rust/pay.rs b/rust/pay.rs',
+      '+++ b/rust/pay.rs',
+      '@@ -1 +1 @@',
+      '+pub fn settle_invoice() {}',
+    ].join('\n');
+    expect(extractChangedSymbolLocations(diff)).toEqual([
+      { symbol: 'settle_invoice', filePath: 'python/pay.py' },
+      { symbol: 'SettleInvoice', filePath: 'go/pay.go' },
+      { symbol: 'settle_invoice', filePath: 'rust/pay.rs' },
+    ]);
   });
 });
 

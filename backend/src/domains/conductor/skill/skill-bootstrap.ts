@@ -39,6 +39,13 @@ import {
   type OwnedWorkspaceLookup,
 } from './skill-workspace-resolver.js';
 import type { SkillLoadOutcome, SkillManifest } from './skill.types.js';
+import {
+  SkillTrustService,
+  type SkillTrustStore,
+  type TrustedPublisherRecord,
+} from './skill-trust.service.js';
+import type { SkillInvocationEvidenceStore } from './skill-invocation-evidence.js';
+import { effectiveWorkspacePolicy } from '../policy/workspace-policy.js';
 
 export interface GovernedSkillModelDeps {
   /** Trust allow-list: publisher keyId → ed25519 PUBLIC key (hex/base64/PEM). Empty ⇒ OFF. */
@@ -61,6 +68,10 @@ export interface GovernedSkillModelDeps {
   /** The governance approval port (opens an approval on a `needs_approval` verdict). */
   readonly approval: SkillApprovalPort;
   readonly logger: Logger;
+  /** Durable operator-managed publishers + explicitly admitted manifests. */
+  readonly trustStore?: SkillTrustStore;
+  /** Durable per-workspace invocation evidence. */
+  readonly evidenceStore?: SkillInvocationEvidenceStore;
 }
 
 export interface GovernedSkillModel {
@@ -68,6 +79,7 @@ export interface GovernedSkillModel {
   readonly service: SkillActionService;
   /** The per-manifest load report (truthful audit of what was admitted/rejected). */
   readonly loadReport: readonly SkillLoadOutcome[];
+  readonly trust?: SkillTrustService;
 }
 
 /**
@@ -82,13 +94,30 @@ export async function createGovernedSkillModel(
   // read-only, sandboxed `recoder.workspace` skill is batteries-included; a
   // deployment's own SKILL_PUBLISHER_KEYS / SKILL_MANIFESTS add to it.
   const firstParty = deps.includeFirstParty !== false;
-  const publisherKeys: Record<string, string> = {
-    ...(firstParty ? { [RECODER_BUILTIN_PUBLISHER_KEY_ID]: RECODER_BUILTIN_PUBLIC_KEY_HEX } : {}),
-    ...deps.publisherKeys,
-  };
-  const manifests = firstParty
-    ? [recoderWorkspaceSignedManifest(), ...deps.manifests]
-    : deps.manifests;
+  const storedPublishers = deps.trustStore
+    ? await deps.trustStore.listPublishers()
+    : [];
+  const storedManifests = deps.trustStore
+    ? await deps.trustStore.listManifests()
+    : [];
+  const publisherKeys: Record<string, string> = {};
+  const publisherRecords = new Map<string, TrustedPublisherRecord>();
+  for (const publisher of storedPublishers) {
+    publisherKeys[publisher.keyId] = publisher.publicKey;
+    publisherRecords.set(publisher.keyId, { ...publisher, source: 'operator' });
+  }
+  for (const [keyId, publicKey] of Object.entries(deps.publisherKeys)) {
+    publisherKeys[keyId] = publicKey;
+    publisherRecords.set(keyId, { keyId, publicKey, source: 'environment' });
+  }
+  if (firstParty) {
+    publisherKeys[RECODER_BUILTIN_PUBLISHER_KEY_ID] = RECODER_BUILTIN_PUBLIC_KEY_HEX;
+    publisherRecords.set(RECODER_BUILTIN_PUBLISHER_KEY_ID, {
+      keyId: RECODER_BUILTIN_PUBLISHER_KEY_ID,
+      publicKey: RECODER_BUILTIN_PUBLIC_KEY_HEX,
+      source: 'first_party',
+    });
+  }
 
   const keyIds = Object.keys(publisherKeys);
   if (keyIds.length === 0) {
@@ -100,7 +129,21 @@ export async function createGovernedSkillModel(
     resolveKey: (id) =>
       Object.prototype.hasOwnProperty.call(publisherKeys, id) ? publisherKeys[id] : null,
   });
-  const pinned = { ...recoderWorkspaceSkillPin(), ...(deps.extraPins ?? {}) };
+  const pinned: Record<string, string> = {
+    ...(firstParty ? recoderWorkspaceSkillPin() : {}),
+    ...(deps.extraPins ?? {}),
+  };
+  const manifestsById = new Map<string, SkillManifest>();
+  for (const stored of storedManifests) {
+    manifestsById.set(stored.manifest.id, stored.manifest);
+    pinned[stored.manifest.id] = stored.manifest.version;
+  }
+  for (const manifest of deps.manifests) manifestsById.set(manifest.id, manifest);
+  if (firstParty) {
+    const builtin = recoderWorkspaceSignedManifest();
+    manifestsById.set(builtin.id, builtin);
+  }
+  const manifests = [...manifestsById.values()];
   const registry = createSkillRegistry({ verifier, pinned, logger: deps.logger });
   const loadReport = await registry.load(manifests);
 
@@ -117,6 +160,11 @@ export async function createGovernedSkillModel(
     resolveWorkspace,
     executor,
     logger: deps.logger,
+    ...(deps.evidenceStore ? { evidenceStore: deps.evidenceStore } : {}),
+    policyProfileForWorkspace: async workspaceId => {
+      const workspace = await deps.getWorkspace(workspaceId);
+      return effectiveWorkspacePolicy(workspace?.policyProfile);
+    },
   });
 
   const admitted = loadReport.filter((r) => r.ok).length;
@@ -124,5 +172,15 @@ export async function createGovernedSkillModel(
     { publishers: keyIds.length, manifests: manifests.length, admitted, firstParty },
     'governed skill model ON',
   );
-  return { registry, service, loadReport };
+  const trust = deps.trustStore
+    ? new SkillTrustService({
+        registry,
+        publisherKeys,
+        pins: pinned,
+        publishers: [...publisherRecords.values()],
+        loadReport,
+        store: deps.trustStore,
+      })
+    : undefined;
+  return { registry, service, loadReport, ...(trust ? { trust } : {}) };
 }

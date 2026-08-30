@@ -120,11 +120,9 @@ impl Agent {
         Self::Crush,
     ];
 
-    // recoder_code/qwen_code/crush are launchable native agent kinds but have NO
-    // screen-detection manifest yet — status detection for them requires evidence
-    // captured from live panes (see engine CLAUDE.md), which we do not fabricate.
-    // They therefore stay out of SCREEN_MANIFEST_AGENTS, exactly like Omp/Mastracode.
-    pub const SCREEN_MANIFEST_AGENTS: [Self; 19] = [
+    // recoder_code/crush are launchable native agent kinds without screen-detection
+    // manifests. They stay out of SCREEN_MANIFEST_AGENTS, like Omp/Mastracode.
+    pub const SCREEN_MANIFEST_AGENTS: [Self; 20] = [
         Self::Pi,
         Self::Claude,
         Self::Codex,
@@ -143,6 +141,7 @@ impl Agent {
         Self::Hermes,
         Self::Kilo,
         Self::Qodercli,
+        Self::QwenCode,
         Self::Maki,
     ];
 }
@@ -348,7 +347,7 @@ pub(crate) fn full_lifecycle_hook_authority(source: &str, agent_label: &str) -> 
 pub(crate) fn session_identity_only_integration(source: &str, agent_label: &str) -> bool {
     matches!(
         (source, agent_label),
-        ("loom:hermes", "hermes") | ("loom:antigravity_cli", "agy")
+        ("loom:hermes", "hermes") | ("loom:qwen", "qwen_code") | ("loom:antigravity_cli", "agy")
     )
 }
 
@@ -390,6 +389,21 @@ fn normalized_process_name(process: &crate::platform::ForegroundProcess) -> Stri
 
     if identify_agent(effective).is_some() {
         return effective.to_string();
+    }
+
+    // npm launches Qwen Code through node and some platforms expose the thread
+    // name rather than `node` as the process name. Inspect argv in that case too.
+    if let Some(runtime) = process.argv.as_deref().and_then(|argv| argv.first()) {
+        let runtime_name = normalized_agent_lookup_name(path_basename(runtime));
+        if matches!(runtime_name.as_str(), "node" | "bun") {
+            if let Some(wrapped_agent) =
+                wrapped_agent_name_from_runtime_argv(runtime, process.argv.as_deref())
+            {
+                if identify_agent(&wrapped_agent) == Some(Agent::QwenCode) {
+                    return wrapped_agent;
+                }
+            }
+        }
     }
 
     if let Some(wrapped_agent) = argv0_agent_name(process.argv.as_deref())
@@ -597,6 +611,9 @@ fn agent_name_from_known_package_path(path: &str) -> Option<String> {
         {
             return Some(agent_label(Agent::Pi).to_string());
         }
+        if window == ["node_modules", "@qwen-code", "qwen-code", "dist", "index"] {
+            return Some(agent_label(Agent::QwenCode).to_string());
+        }
     }
     for window in components.windows(4) {
         if window == ["node_modules", "mastracode", "dist", "cli"] {
@@ -795,12 +812,11 @@ mod tests {
     }
 
     #[test]
-    fn recoder_native_agent_kinds_are_launchable_without_a_screen_manifest() {
+    fn recoder_native_agent_kinds_are_launchable() {
         // These three are accepted by agent.start (no UnsupportedKind) so the
         // conductor fan-out launches them as managed native panes instead of raw
-        // pane input. They intentionally carry NO screen-detection manifest yet:
-        // status detection requires evidence captured from live panes, which we do
-        // not fabricate (see engine CLAUDE.md). They behave like Omp/Mastracode.
+        // pane input. Qwen has an evidence-backed screen manifest; Recoder Code and
+        // Crush still rely on lifecycle hooks/process state like Omp/Mastracode.
         for (label, exec, agent) in [
             ("recoder_code", "recoder-code", Agent::RecoderCode),
             ("qwen_code", "qwen", Agent::QwenCode),
@@ -811,8 +827,10 @@ mod tests {
             assert_eq!(agent_label(agent), label);
             assert_eq!(interactive_agent_executable(agent), exec);
             assert!(Agent::ALL.contains(&agent));
-            assert!(!Agent::SCREEN_MANIFEST_AGENTS.contains(&agent));
         }
+        assert!(!Agent::SCREEN_MANIFEST_AGENTS.contains(&Agent::RecoderCode));
+        assert!(Agent::SCREEN_MANIFEST_AGENTS.contains(&Agent::QwenCode));
+        assert!(!Agent::SCREEN_MANIFEST_AGENTS.contains(&Agent::Crush));
         assert_eq!(parse_agent_label("recoder-code"), Some(Agent::RecoderCode));
         assert_eq!(parse_agent_label("recoder"), Some(Agent::RecoderCode));
         assert_eq!(parse_agent_label("qwen"), Some(Agent::QwenCode));
@@ -890,6 +908,7 @@ mod tests {
     fn session_identity_integrations_leave_state_to_screen_detection() {
         for (source, label, agent) in [
             ("loom:hermes", "hermes", Agent::Hermes),
+            ("loom:qwen", "qwen_code", Agent::QwenCode),
             ("loom:antigravity_cli", "agy", Agent::Antigravity),
         ] {
             assert!(!full_lifecycle_hook_authority(source, label));
@@ -928,6 +947,26 @@ mod tests {
             identify_agent_in_job(&job),
             Some((Agent::Codex, "codex".to_string()))
         );
+    }
+
+    #[test]
+    fn identify_agent_in_job_detects_node_wrapped_qwen() {
+        for argv in [
+            vec!["node", "/home/user/.fnm/bin/qwen"],
+            vec![
+                "node.exe",
+                r"C:\Users\user\AppData\Roaming\npm\node_modules\@qwen-code\qwen-code\dist\index.js",
+            ],
+        ] {
+            let job = crate::platform::ForegroundJob {
+                process_group_id: 123,
+                processes: vec![foreground_process(123, "MainThread", &argv)],
+            };
+            assert_eq!(
+                identify_agent_in_job(&job),
+                Some((Agent::QwenCode, "qwen_code".to_string()))
+            );
+        }
     }
 
     #[test]

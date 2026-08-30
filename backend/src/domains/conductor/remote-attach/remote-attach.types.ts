@@ -48,6 +48,8 @@ export interface RemoteAttachSession {
   readonly issuedAt: string;
   /** ISO-8601 hard expiry — a call at/after this is refused (short TTL). */
   readonly expiresAt: string;
+  /** Whether this session survives a backend restart on this deployment. */
+  readonly durable?: boolean;
 }
 
 /** The truthful outcome of a governed steer — policy is consulted on every path. */

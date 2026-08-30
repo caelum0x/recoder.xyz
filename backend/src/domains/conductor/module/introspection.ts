@@ -13,8 +13,10 @@ import type {
   CloneRepoInput,
   CloneRepoOutcome,
 } from '../services/repo-clone.service.js';
-import type { WorkspaceChecksView } from '../services/pr-checks.service.js';
+import { combineWorkspaceChecks, type WorkspaceChecksView } from '../services/pr-checks.service.js';
+import { parseCheckRemediationEvidence } from '../services/check-run.service.js';
 import type { ConductorContext } from './shared.js';
+import type { LspDiagnosticsDelta } from '../services/lsp-diagnostics.service.js';
 
 export class ConductorIntrospection {
   constructor(private readonly ctx: ConductorContext) {}
@@ -64,6 +66,27 @@ export class ConductorIntrospection {
   ): Promise<WorkspaceChecksView | null> {
     const workspace = await this.ctx.getWorkspace(workspaceId);
     if (!workspace) return null;
-    return this.ctx.prChecks.checks(workspace);
+    const [github, local, diagnostics] = await Promise.allSettled([
+      this.ctx.prChecks.checks(workspace),
+      this.ctx.checkRunner?.run(workspaceId) ?? Promise.resolve([]),
+      this.ctx.lspDiagnostics.compare(workspace),
+    ]);
+    const githubView = github.status === 'fulfilled'
+      ? github.value
+      : { available: false, reason: 'GitHub checks probe failed' };
+    const localRuns = local.status === 'fulfilled' ? local.value : [];
+    const combined = combineWorkspaceChecks(
+      githubView,
+      localRuns,
+      parseCheckRemediationEvidence(workspace.metadata?.checkRemediation),
+    );
+    return diagnostics.status === 'fulfilled'
+      ? { ...combined, diagnostics: diagnostics.value }
+      : combined;
+  }
+
+  async workspaceDiagnostics(workspaceId: string): Promise<LspDiagnosticsDelta | null> {
+    const workspace = await this.ctx.getWorkspace(workspaceId);
+    return workspace ? this.ctx.lspDiagnostics.compare(workspace) : null;
   }
 }

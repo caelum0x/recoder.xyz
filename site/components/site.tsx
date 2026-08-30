@@ -10,28 +10,37 @@ import { releasesArePublic } from "@/lib/releases";
 export const PUBLIC_GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL?.trim();
 
 /**
- * The single primary action on every page. One CTA discipline (Cursor). The
- * label is honest about availability: a real "Download" only once public builds
- * exist, otherwise "Get early access" — the /download page is a request-access
- * flow until then, so we never tell a visitor they can download a build that
- * isn't public yet.
+ * The single primary action on every page. One CTA discipline (Cursor).
+ *
+ * Recoder is a live, subscribable product: anyone can pick a plan and start
+ * today. So the default CTA is "Get started", routing to /pricing where a
+ * visitor can sign up and subscribe. Once public desktop builds exist
+ * (releasesArePublic()), the default flips to a real "Download" pointing at the
+ * /download page. Callers can override `label`/`href` (e.g. a page that
+ * specifically links to the download page). We never label a button "Download"
+ * for a build that isn't public — but the product itself is always purchasable.
  */
 export function DownloadButton({
   className = "",
-  label = releasesArePublic() ? "Download" : "Get early access",
+  label,
+  href,
 }: {
   className?: string;
   label?: string;
+  href?: string;
 }) {
+  const live = releasesArePublic();
+  const resolvedHref = href ?? (live ? "/download" : "/pricing");
+  const resolvedLabel = label ?? (live ? "Download" : "Get started");
   return (
     <Link
-      href="/download"
+      href={resolvedHref}
       className={
         "inline-flex items-center justify-center rounded-lg bg-fg px-5 py-2.5 text-sm font-medium text-bg transition-opacity hover:opacity-90 " +
         className
       }
     >
-      {label}
+      {resolvedLabel}
     </Link>
   );
 }
@@ -87,7 +96,6 @@ const NAV_LINKS = [
   { href: "/how-it-works", label: "How it works" },
   { href: "/docs", label: "Docs" },
   { href: "/enterprise", label: "Enterprise" },
-  { href: "/design-partners", label: "Pilot" },
   { href: "/proof", label: "Proof" },
   { href: "/pricing", label: "Pricing" },
   { href: "/changelog", label: "Changelog" },
@@ -135,7 +143,7 @@ export function Footer() {
         <FooterCol
           title="Product"
           links={[
-            { href: "/download", label: releasesArePublic() ? "Download" : "Get early access" },
+            { href: "/download", label: "Download" },
             { href: "/features", label: "Features" },
             { href: "/how-it-works", label: "How it works" },
             { href: "/docs", label: "Docs" },
@@ -148,6 +156,8 @@ export function Footer() {
           links={[
             { href: "/enterprise", label: "Enterprise" },
             { href: "/pricing", label: "Pricing" },
+            { href: "/contact", label: "Contact" },
+            { href: "/refund", label: "Refunds" },
             { href: "/privacy", label: "Privacy" },
             { href: "/terms", label: "Terms" },
           ]}

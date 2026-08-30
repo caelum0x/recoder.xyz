@@ -12,6 +12,18 @@
  * `degraded` result and dispatches nothing — never a faked launch.
  */
 
+/**
+ * The explicit unattended-launch contract selected in Wave. It is pinned on the
+ * scheduler and repeated on every dispatch; background work never guesses a repo
+ * from the backend process cwd or silently chooses an agent.
+ */
+export interface SquadAutopilotLaunchProfile {
+  readonly repoPath: string;
+  readonly spaceId: string;
+  readonly projectId: string;
+  readonly runtimeId: string;
+}
+
 /** One unit of ready work (a bd issue) the autopilot asks the conductor to run. */
 export interface SquadDispatchRequest {
   /** The bd issue id backing this work (becomes the workspace `taskId`). */
@@ -22,12 +34,16 @@ export interface SquadDispatchRequest {
   readonly prompt: string;
   /** The squad-routed agent, when a squad routed this dispatch. */
   readonly routedAgentId?: string;
+  /** The operator-pinned repo/agent contract for this unattended dispatch. */
+  readonly profile: SquadAutopilotLaunchProfile;
 }
 
 /** The truthful outcome of one conductor dispatch. */
 export interface SquadDispatchResult {
   readonly ok: boolean;
-  /** Set ONLY when the conductor genuinely launched a workspace. */
+  /** New launch vs a canonical workspace reused after restart. */
+  readonly status?: 'launched' | 'existing';
+  /** The launched or canonically reused workspace. */
   readonly workspaceId?: string;
   /** Set when the launch also produced a run. */
   readonly runId?: string;

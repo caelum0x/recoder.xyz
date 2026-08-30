@@ -37,7 +37,6 @@ import { piCommand } from '../commands/pi.js';
 import { authCommand } from '../commands/auth.js';
 import { extensionsCommand } from '../commands/extensions.js';
 import { mcpCommand } from '../commands/mcp.js';
-import { webCommand } from '../commands/web.js';
 import { initCommand } from '../commands/init.js';
 import { planCommand } from '../commands/plan.js';
 import { providersCommand } from '../commands/providers.js';
@@ -374,8 +373,6 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
     .command(aiCommand)
     // Register pi agent runtime command (owned @recoder/pi-coding-agent)
     .command(piCommand)
-    // Register web project management commands
-    .command(webCommand)
     // Register init command for .recoder folder
     .command(initCommand)
     // Register plan command for project planning

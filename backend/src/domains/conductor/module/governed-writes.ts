@@ -5,6 +5,9 @@
  * message path. Every write clears the SAME governance gate + audit seal it did
  * on the composer; method bodies moved VERBATIM.
  */
+import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   execFileSafe,
   reconcile as substrateReconcile,
@@ -66,18 +69,39 @@ import {
   parseReviewComments,
   type ReviewComment,
 } from '../review/review-comments.js';
+import {
+  canonicalBlockers,
+  composeBlockerFeedbackPrompt,
+} from '../review/blocker-feedback.js';
 import { repoKeyFor } from '../services/repo-setup.service.js';
+import { attachPullRequestEvidence } from '../services/pr-delivery-evidence.service.js';
 import { computeWorkspacePort } from '../services/workspace-port.js';
 import type { ReadinessView } from '../services/readiness.service.js';
+import type { CrystalImportResult } from '../services/crystal-migration.service.js';
+import type { CheckRemediationResult } from '../services/check-run.service.js';
 import { taskGroupOf } from '../services/compare.service.js';
+import type {
+  ConvergenceDecisionProfile,
+  ConvergenceFlagFeedbackAction,
+  RequiredRuleTrustMode,
+} from '../ports/convergence-feedback.port.js';
+import {
+  canonicalRepositoryIdentity,
+  type CanonicalRepositoryIdentity,
+} from '../../../shared/repo-identity.js';
 import {
   assembleConvergenceEvidence,
   type ConvergenceEvidenceRecord,
   type EvidenceCandidateInput,
   type EvidenceConvergence,
   type EvidenceGovernance,
+  type EvidenceRequiredRules,
 } from '../evidence/convergence-evidence.js';
-import { computeConvergenceTrust } from '../evidence/convergence-trust.js';
+import { parseRepositoryReviewRulesJson } from '../../../shared/repository-review-rules.js';
+import {
+  calibrateConvergenceTrust,
+  computeConvergenceTrust,
+} from '../evidence/convergence-trust.js';
 import type { CandidateVote } from '../evidence/finding-vote.js';
 import { evaluateMergeTrustGate } from '../evidence/merge-trust-gate.js';
 import {
@@ -88,6 +112,7 @@ import {
   type ConductorWriteResult,
   type CreateConductorWorkspaceInput,
   type ReviewCommentDelivery,
+  type BlockerFeedbackDelivery,
 } from './shared.js';
 
 /** States a `stop` may act on — exactly those with a legal `→ cancelled` transition. */
@@ -100,7 +125,81 @@ const STOPPABLE_STATES: readonly WorkspaceState[] = [
 ];
 
 export class ConductorGovernedWrites {
+  private readonly originByRepoPath = new Map<string, Promise<string | undefined>>();
+
   constructor(private readonly ctx: ConductorContext) {}
+
+  /**
+   * Resolve a repository's stable identity once per source checkout. Git remotes
+   * are the authority when present; ghq layout, project id, and finally a hashed
+   * local path keep non-remote workspaces deterministic and collision-safe.
+   */
+  private async repositoryIdentity(
+    input: CreateConductorWorkspaceInput,
+  ): Promise<CanonicalRepositoryIdentity> {
+    const repoPath = input.repoPath?.trim();
+    let remote: Promise<string | undefined> | undefined;
+    if (repoPath) {
+      remote = this.originByRepoPath.get(repoPath);
+      if (!remote) {
+        remote = execFileSafe('git', ['remote', 'get-url', 'origin'], {
+          cwd: repoPath,
+          timeoutMs: 2_000,
+          maxBuffer: 64 * 1024,
+        })
+          .then(result => result.stdout.trim() || undefined)
+          .catch(() => undefined);
+        this.originByRepoPath.set(repoPath, remote);
+      }
+    }
+    return canonicalRepositoryIdentity({
+      ...(repoPath ? { repoPath } : {}),
+      projectId: input.projectId,
+      ...(remote ? { remoteUrl: await remote } : {}),
+    });
+  }
+
+  /**
+   * Bring selected Crystal worktrees under Recoder ownership. This is governed as
+   * workspace creation because it adds canonical workspace records, but launches
+   * no process and mutates neither Crystal's database nor its worktrees.
+   */
+  async importCrystalSessions(
+    sessionIds: readonly string[],
+    principal: Principal,
+  ): Promise<ConductorWriteResult<CrystalImportResult>> {
+    const action = 'workspace.create';
+    const { allowed, verdict } = await guardConductorWrite(
+      this.ctx.gate,
+      action,
+      principal,
+      {
+        target: conductorTarget('global', 'crystal-import'),
+        metadata: { source: 'crystal', sessionCount: sessionIds.length },
+      },
+    );
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+
+    try {
+      const result = await this.ctx.crystalMigrationService.importSessions(
+        sessionIds,
+        principal.userId,
+      );
+      await recordConductorAudit(
+        this.ctx.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          source: 'crystal',
+          importedWorkspaceIds: result.imported.map(workspace => workspace.workspaceId),
+          skippedCount: result.skipped.length,
+        }),
+      );
+      return { ok: true, verdict, value: result };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'Crystal import failed';
+      this.ctx.log.error({ err }, 'conductor Crystal import failed');
+      return { ok: false, verdict, reason };
+    }
+  }
 
   /**
    * Path (b) prompt enrichment: fold two capability blocks into the prompt the
@@ -120,7 +219,8 @@ export class ConductorGovernedWrites {
    */
   private async enrichOpenfangCommand(
     input: CreateConductorWorkspaceInput,
-    principal: Principal
+    principal: Principal,
+    repoId: string,
   ): Promise<string | undefined> {
     const raw = (input.prompt ?? '').trim();
     if (!raw) return undefined;
@@ -143,7 +243,7 @@ export class ConductorGovernedWrites {
           // that was never built (absent ⇒ retrieval falls back to its default).
           ...(input.repoPath
             ? {
-                repoCollection: `repo_${repoIdFromRepoRef(input.projectId || input.repoPath)}`,
+                repoCollection: `repo_${repoId}`,
               }
             : {}),
         });
@@ -159,14 +259,13 @@ export class ConductorGovernedWrites {
     // 2) CODE-MAP (recodergit code-graph), degrade-truthful. Probe the OPTIONAL
     //    port method before calling (older impls omit it). Gated on `repoPath`
     //    (the only case a `repo_<id>` index exists) and derived with the SAME
-    //    `repoIdFromRepoRef(projectId || repoPath)` `startCodeIntel` indexes under,
-    //    so we only query an index that was, or will be, built for this repo.
+    //    the canonical `repoId` `startCodeIntel` indexes under, so we only query
+    //    an index that was, or will be, built for this repo.
     //    `queryContext` returns a rendered block OR a truthful `null` (disabled /
     //    not-indexed / no seed match) ⇒ the prompt is left memory-only. Bounded +
     //    non-blocking: a fault is logged and skipped, never crashing a launch.
     if (input.repoPath && this.ctx.codeIntel?.queryContext) {
       try {
-        const repoId = repoIdFromRepoRef(input.projectId || input.repoPath);
         const seeds = deriveSeedTerms(input.prompt ?? '');
         const block = await this.ctx.codeIntel.queryContext(repoId, seeds);
         if (block) prompt = `${prompt}\n\n${block}`;
@@ -189,9 +288,9 @@ export class ConductorGovernedWrites {
    */
   private startCodeIntel(
     input: CreateConductorWorkspaceInput,
-    workspace: Workspace
+    workspace: Workspace,
+    repoId: string,
   ): void {
-    const repoId = repoIdFromRepoRef(input.projectId || input.repoPath);
     // ColBERT per-repo late-interaction index: chunk the repo's text files and
     // build/refresh the PLAID collection so retrieval can surface passages the
     // single-vector Qdrant top-K misses. Degrade-truthful: no daemon configured, an
@@ -215,14 +314,16 @@ export class ConductorGovernedWrites {
     }
     if (!this.ctx.codeIntel) return;
     const codeIntel = this.ctx.codeIntel;
-    void codeIntel
-      .indexRepo(input.repoPath, repoId)
-      .catch(err =>
-        this.ctx.log.warn(
-          { err, repoId },
-          'conductor recodergit index hook faulted'
-        )
-      );
+    if (input.repoPath) {
+      void codeIntel
+        .indexRepo(input.repoPath, repoId)
+        .catch(err =>
+          this.ctx.log.warn(
+            { err, repoId },
+            'conductor recodergit index hook faulted'
+          )
+        );
+    }
     if (input.taskId) {
       void codeIntel
         .trackWork(input.taskId, workspace.workspaceId)
@@ -313,7 +414,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: conductorTarget('repository', input.repoPath),
+        target: conductorTarget('repository', input.repoPath || input.projectId || 'workspace'),
         ...(input.taskId ? { taskId: input.taskId } : {}),
         metadata: {
           projectId: input.projectId,
@@ -391,7 +492,7 @@ export class ConductorGovernedWrites {
                   'coordination.reroute',
                   principal,
                   {
-                    target: conductorTarget('repository', input.repoPath),
+                    target: conductorTarget('repository', input.repoPath || input.projectId || 'workspace'),
                     taskId: issueId,
                     metadata: { issueId },
                   }
@@ -427,6 +528,9 @@ export class ConductorGovernedWrites {
     }
 
     try {
+      const repoIdentity = await this.repositoryIdentity(input);
+      const repoId = repoIdentity.repoId;
+
       // Execution-path selection (the ONE seam that splits path a/b). openfang →
       // the native in-process substrate; every CLI runtime → tmux+worktree (or the
       // caller's explicitly requested, registered substrate). Both paths converge on
@@ -449,7 +553,7 @@ export class ConductorGovernedWrites {
       // undefined so WorkspaceEngine enriches (engineDeps.brain) + resolves the CLI.
       let command = input.command;
       if (openfang && !command) {
-        command = await this.enrichOpenfangCommand(input, principal);
+        command = await this.enrichOpenfangCommand(input, principal, repoId);
       }
 
       // Resolve the repo's REAL integration base ONCE at launch so the workspace
@@ -478,10 +582,16 @@ export class ConductorGovernedWrites {
       // byte-identical) so the completion-time hook can check it. The domain-only
       // `siblingAwareness` field is stripped before the engine input.
       const { siblingAwareness, ...engineInput } = input;
-      const metadata = stampSiblingAwareness(input.metadata, siblingAwareness);
+      const siblingMetadata = stampSiblingAwareness(input.metadata, siblingAwareness);
+      const metadata: Record<string, unknown> = {
+        ...(siblingMetadata ?? {}),
+        repoId,
+        repoAliases: [...repoIdentity.aliases],
+        ...(input.repoPath ? { repoPath: input.repoPath } : {}),
+      };
       const workspace = await this.ctx.engine.createWorkspace({
         ...engineInput,
-        ...(metadata ? { metadata } : {}),
+        metadata,
         ...(baseRef !== undefined ? { baseRef } : {}),
         substrate,
         ...(command !== undefined ? { command } : {}),
@@ -492,7 +602,7 @@ export class ConductorGovernedWrites {
       // Code-intel on create (a + b), fire-and-forget + degrade-safe: recodergit
       // INDEXES the repo (live code-knowledge-graph) and beads TRACKS the workspace
       // as an issue-graph node. A slow/absent engine never blocks the launch.
-      this.startCodeIntel(input, workspace);
+      this.startCodeIntel(input, workspace, repoId);
 
       // Point the launched agent at the GOVERNED backend MCP host: write a
       // secret-free `.mcp.json` into its worktree (merge-safe + idempotent +
@@ -641,9 +751,50 @@ export class ConductorGovernedWrites {
     principal: Principal
   ): Promise<ConductorWriteResult<ReviewCommentDelivery>> {
     const prompt = composeReviewPrompt(parseReviewComments(input.comments));
+    return this.deliverReviewPrompt(input.workspaceId, prompt, principal);
+  }
+
+  /**
+   * Re-probe Recoder's canonical readiness gates and send every hard blocker back
+   * to the responsible agent. The browser supplies no blocker prose: conflicts,
+   * failed local/PR checks, and secret findings all come from the server-side
+   * readiness view immediately before this governed delivery.
+   */
+  async sendBlockerFeedback(
+    workspaceId: string,
+    principal: Principal
+  ): Promise<ConductorWriteResult<BlockerFeedbackDelivery>> {
+    const readiness = await this.ctx.workspaceReadiness(workspaceId);
+    const blockers = canonicalBlockers(readiness);
+    const delivered = await this.deliverReviewPrompt(
+      workspaceId,
+      composeBlockerFeedbackPrompt(readiness),
+      principal
+    );
+    if (!delivered.ok) {
+      return {
+        ok: false,
+        verdict: delivered.verdict,
+        ...(delivered.reason != null ? { reason: delivered.reason } : {}),
+        ...(delivered.code != null ? { code: delivered.code } : {}),
+      };
+    }
+    return {
+      ok: true,
+      verdict: delivered.verdict,
+      value: { ...delivered.value!, blockers },
+    };
+  }
+
+  /** Route one server/composer-authored review prompt through the canonical write. */
+  private async deliverReviewPrompt(
+    workspaceId: string,
+    prompt: string,
+    principal: Principal
+  ): Promise<ConductorWriteResult<ReviewCommentDelivery>> {
     // Read the state ONLY to pick the delivery path; the actual write is gated
     // (and ownership-guarded at the route) by whichever branch we delegate to.
-    const workspace = await this.ctx.engine.getWorkspace(input.workspaceId);
+    const workspace = await this.ctx.engine.getWorkspace(workspaceId);
 
     // Re-type a failure passthrough onto the delivery result (no value present).
     const asFailure = (
@@ -657,7 +808,7 @@ export class ConductorGovernedWrites {
 
     if (workspace?.state === 'running') {
       const steered = await this.steerWorkspace(
-        { workspaceId: input.workspaceId, keys: prompt, submit: true },
+        { workspaceId, keys: prompt, submit: true },
         principal
       );
       if (!steered.ok) return asFailure(steered);
@@ -669,7 +820,7 @@ export class ConductorGovernedWrites {
     }
 
     const run = await this.sendWorkspaceMessage(
-      input.workspaceId,
+      workspaceId,
       { text: prompt, createdBy: principal.userId },
       principal
     );
@@ -1092,11 +1243,43 @@ export class ConductorGovernedWrites {
     try {
       const deps: PublishOpsDeps = buildReviewDeps(this.ctx);
       const result = await createWorkspacePrOp(deps, workspaceId, input);
+      const evidence =
+        workspace && this.ctx.deliveryEvidence
+          ? await attachPullRequestEvidence({
+              store: this.ctx.deliveryEvidence,
+              workspace,
+              url: result.url,
+              base: result.base,
+              title: input.title,
+              createdBy: principal.userId,
+            })
+          : {
+              attached: false,
+              reason: workspace
+                ? 'delivery evidence store unavailable'
+                : 'workspace unavailable after PR creation',
+            };
+      if (!evidence.attached) {
+        this.ctx.log.warn(
+          { workspaceId, reason: evidence.reason },
+          'pull request delivered without canonical run evidence'
+        );
+      }
+      Object.assign(result, {
+        evidenceAttached: evidence.attached,
+        ...(evidence.reason ? { evidenceReason: evidence.reason } : {}),
+        ...(evidence.artifactId ? { artifactId: evidence.artifactId } : {}),
+        ...(evidence.linkId ? { deliveryLinkId: evidence.linkId } : {}),
+      });
       await recordConductorAudit(
         this.ctx.gate,
         conductorAuditEntry(action, principal, verdict, {
           workspaceId,
           url: result.url,
+          evidenceAttached: result.evidenceAttached,
+          evidenceReason: result.evidenceReason,
+          artifactId: result.artifactId,
+          deliveryLinkId: result.deliveryLinkId,
         })
       );
       return { ok: true, verdict, value: result };
@@ -1141,19 +1324,46 @@ export class ConductorGovernedWrites {
         principal
       );
 
+      // The required-rule policy is OPERATOR-OWNED and repository-scoped. The
+      // committed rule file supplies definitions only; it cannot activate trust
+      // influence. When enabled, execute each exact linked named check now and
+      // carry the fresh results into both the pre-merge fold and sealed evidence.
+      let decisionProfile: ConvergenceDecisionProfile | undefined;
+      if (workspace && this.ctx.convergenceFeedback) {
+        try {
+          const metadata = workspace.metadata as Record<string, unknown> | undefined;
+          const repoId = typeof metadata?.repoId === 'string' && metadata.repoId.trim()
+            ? metadata.repoId.trim()
+            : workspace.projectId;
+          decisionProfile = await this.ctx.convergenceFeedback.read(repoId);
+        } catch (err) {
+          this.ctx.log.warn({ err, workspaceId }, 'convergence policy read unavailable — required rules stay off');
+        }
+      }
+      const requiredRules = await this.gatherRequiredRuleEvidence(
+        workspaceId,
+        workspace,
+        decisionProfile?.requiredRulePolicy?.mode ?? 'off',
+      );
+
       // MERGE TRUST GATE (product): fold the pre-merge signals (readiness verdict +
       // blockers, the merge verdict, breadth) into the convergence trust score and
-      // enforce the deployment posture. `off` (default) never interferes; `block`
-      // REFUSES a low-trust merge BEFORE it mutates; `warn` proceeds with an
-      // advisory. Degrade-truthful: the trust only ever downgrades allowed→warned/
+      // enforce the deployment posture. `warn` (default) proceeds with an advisory;
+      // `block` REFUSES a low-trust merge BEFORE it mutates; `off` never interferes.
+      // Degrade-truthful: the trust only ever downgrades allowed→warned/
       // blocked, and every block carries the score's own reasons.
       let trustAdvisory:
         | { warning?: string; tier: 'high' | 'medium' | 'low'; score: number; flags: readonly string[]; vote: CandidateVote }
         | undefined;
+      const convergence = this.readConvergenceProvenance(workspace);
       const trustMode = this.ctx.cfg.mergeTrustGate;
       if (trustMode !== 'off') {
         const view = preMerge.verification?.view;
-        const trust = computeConvergenceTrust({
+        // A composed workspace is a new singleton record, but its metadata carries
+        // the immutable N-source, per-file convergence decisions. Feed that evidence
+        // into the PRE-MERGE gate; omitting it would surface contested/model-assisted
+        // risk only after delivery, when it is too late to affect the decision.
+        const rawTrust = computeConvergenceTrust({
           verification: view
             ? {
                 ...(view.verdict ? { verdict: view.verdict } : {}),
@@ -1173,7 +1383,11 @@ export class ConductorGovernedWrites {
             ...(verdict.approvalId ? { approvalId: verdict.approvalId } : {}),
           },
           candidateCount: preMerge.candidates.length,
+          ...(convergence ? { convergence } : {}),
+          requiredRules,
         });
+        let trust = rawTrust;
+        if (decisionProfile) trust = calibrateConvergenceTrust(rawTrust, decisionProfile.flagDispositions);
         const gate = evaluateMergeTrustGate(trust, trustMode);
         if (!gate.allow) {
           await recordConductorAudit(
@@ -1185,7 +1399,12 @@ export class ConductorGovernedWrites {
               trustScore: gate.score,
             })
           );
-          return { ok: false, verdict, reason: gate.reason };
+          return {
+            ok: false,
+            verdict,
+            reason: gate.reason,
+            code: gate.escalated ? 'escalated' : 'trust_blocked',
+          };
         }
         trustAdvisory = {
           ...(gate.warning ? { warning: gate.warning } : {}),
@@ -1220,6 +1439,7 @@ export class ConductorGovernedWrites {
           workspace,
           result,
           preMerge,
+          requiredRules,
         });
       } catch (err) {
         this.ctx.log.warn(
@@ -1228,12 +1448,59 @@ export class ConductorGovernedWrites {
         );
       }
 
+      // A successful composed delivery is the authoritative evidence that the
+      // operator actually shipped these contested picks and proceeded with these
+      // trust flags. Record it in the repository-scoped durable history. This is
+      // observational only: it never auto-picks or suppresses a future warning.
+      let convergenceFeedback: MergeResultView['convergenceFeedback'];
+      if (result.merged && convergence && workspace && this.ctx.convergenceFeedback) {
+        try {
+          const metadata = workspace.metadata as Record<string, unknown> | undefined;
+          const repoId = typeof metadata?.repoId === 'string' && metadata.repoId.trim()
+            ? metadata.repoId.trim()
+            : workspace.projectId;
+          const picked = convergence.selections
+            .filter(selection => selection.contested && selection.mode === 'pick' && !!selection.sourceWorkspaceId)
+            .slice(0, 100);
+          const sourceIds = [...new Set(picked.flatMap(selection => selection.sourceWorkspaceId ? [selection.sourceWorkspaceId] : []))];
+          const sourceRows = await Promise.all(sourceIds.map(async id => [id, await this.ctx.engine.getWorkspace(id)] as const));
+          const runtimes = new Map(sourceRows.flatMap(([id, row]) => row ? [[id, row.runtimeId] as const] : []));
+          const profile = await this.ctx.convergenceFeedback.record(repoId, {
+            workspaceId,
+            actorId: principal.userId,
+            taskGroup: convergence.fromTaskGroup,
+            mergedAt: emitted.record?.evidence.provenance.mergedAt ?? new Date().toISOString(),
+            ...(emitted.record?.evidence.contentHash ? { evidenceHash: emitted.record.evidence.contentHash } : {}),
+            picks: picked.map(selection => ({
+              path: selection.path,
+              sourceWorkspaceId: selection.sourceWorkspaceId!,
+              ...(runtimes.get(selection.sourceWorkspaceId!) ? { sourceRuntime: runtimes.get(selection.sourceWorkspaceId!)! } : {}),
+            })),
+            ...(trustAdvisory ? { trustTier: trustAdvisory.tier, trustScore: trustAdvisory.score } : {}),
+            proceededWithFlags: trustAdvisory?.flags ?? [],
+          });
+          convergenceFeedback = {
+            durable: profile.durable,
+            totalDeliveries: profile.totalDeliveries,
+            contestedPickDecisions: profile.contestedPickDecisions,
+            proceededWithFlagDecisions: profile.proceededWithFlagDecisions,
+            totalFlagFeedbackDecisions: profile.totalFlagFeedbackDecisions,
+            acceptedFlagRules: profile.acceptedFlagRules,
+            dismissedFlagRules: profile.dismissedFlagRules,
+            ...(profile.updatedAt ? { updatedAt: profile.updatedAt } : {}),
+          };
+        } catch (err) {
+          this.ctx.log.warn({ err, workspaceId }, 'convergence feedback persist failed (merge unaffected)');
+        }
+      }
+
       const value: MergeResultView = {
         ...result,
         auditId: emitted.sealed?.id ?? null,
         auditSeq: emitted.sealed?.seq ?? null,
         auditEntryHash: emitted.sealed?.entryHash ?? null,
         evidenceHash: emitted.record?.evidence.contentHash ?? null,
+        ...(convergenceFeedback ? { convergenceFeedback } : {}),
         ...(trustAdvisory
           ? {
               ...(trustAdvisory.warning ? { trustWarning: trustAdvisory.warning } : {}),
@@ -1259,12 +1526,128 @@ export class ConductorGovernedWrites {
           this.ctx.onDeliveryFeedback(inferenceId, principal.userId, true);
         }
       }
+      // A backing Beads issue represents delivered work, not any one sibling
+      // agent finishing. Close it only after the governed merge has succeeded.
+      // The merge is already durable here, so graph-write faults are advisory.
+      if (result.merged && workspace?.taskId && this.ctx.codeIntel?.deliverWork) {
+        try {
+          await this.ctx.codeIntel.deliverWork(workspace.taskId, workspaceId);
+        } catch (err) {
+          this.ctx.log.warn(
+            { err, workspaceId, taskId: workspace.taskId },
+            'conductor beads delivery hook faulted (merge succeeded)'
+          );
+        }
+      }
       return { ok: true, verdict, value };
     } catch (err) {
       return {
         ok: false,
         verdict,
         reason: err instanceof Error ? err.message : 'merge failed',
+      };
+    }
+  }
+
+  /** Persist an explicit human disposition for one flag on a delivered convergence. */
+  async setConvergenceFlagFeedback(
+    workspaceId: string,
+    input: { readonly flag: string; readonly disposition: ConvergenceFlagFeedbackAction },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ConvergenceDecisionProfile>> {
+    const action = 'workspace.convergence-feedback';
+    const workspace = await this.ctx.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(
+      this.ctx.gate,
+      action,
+      principal,
+      {
+        target: conductorTarget('workspace', workspaceId),
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId, disposition: input.disposition },
+      },
+    );
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    if (!workspace) return { ok: false, verdict, reason: 'workspace not found' };
+    if (!this.ctx.convergenceFeedback) {
+      return { ok: false, verdict, reason: 'convergence feedback store unavailable' };
+    }
+    const flag = input.flag.trim().replace(/\s+/g, ' ');
+    if (!flag) return { ok: false, verdict, reason: 'flag must be non-empty' };
+    try {
+      const metadata = workspace.metadata as Record<string, unknown> | undefined;
+      const repoId = typeof metadata?.repoId === 'string' && metadata.repoId.trim()
+        ? metadata.repoId.trim()
+        : workspace.projectId;
+      const profile = await this.ctx.convergenceFeedback.setFlagDisposition(repoId, {
+        flag,
+        disposition: input.disposition,
+        actorId: principal.userId,
+        workspaceId,
+        decidedAt: new Date().toISOString(),
+      });
+      await recordConductorAudit(
+        this.ctx.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          disposition: input.disposition,
+          flag,
+        }),
+      );
+      return { ok: true, verdict, value: profile };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'convergence feedback write failed';
+      return { ok: false, verdict, reason };
+    }
+  }
+
+  /** Persist the repository's explicit operator-owned required-rule trust mode. */
+  async setConvergenceRequiredRulePolicy(
+    workspaceId: string,
+    input: { readonly mode: RequiredRuleTrustMode },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ConvergenceDecisionProfile>> {
+    const action = 'workspace.convergence-policy';
+    const workspace = await this.ctx.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(
+      this.ctx.gate,
+      action,
+      principal,
+      {
+        target: conductorTarget('workspace', workspaceId),
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId, requiredRuleTrustMode: input.mode },
+      },
+    );
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    if (!workspace) return { ok: false, verdict, reason: 'workspace not found' };
+    if (!this.ctx.convergenceFeedback) {
+      return { ok: false, verdict, reason: 'convergence feedback store unavailable' };
+    }
+    try {
+      const metadata = workspace.metadata as Record<string, unknown> | undefined;
+      const repoId = typeof metadata?.repoId === 'string' && metadata.repoId.trim()
+        ? metadata.repoId.trim()
+        : workspace.projectId;
+      const updatedAt = new Date().toISOString();
+      const profile = await this.ctx.convergenceFeedback.setRequiredRulePolicy(repoId, {
+        mode: input.mode,
+        actorId: principal.userId,
+        updatedAt,
+      });
+      await recordConductorAudit(
+        this.ctx.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          requiredRuleTrustMode: input.mode,
+        }),
+      );
+      return { ok: true, verdict, value: profile };
+    } catch (err) {
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'convergence policy write failed',
       };
     }
   }
@@ -1330,6 +1713,86 @@ export class ConductorGovernedWrites {
   }
 
   /**
+   * Resolve and execute the check-backed REQUIRED rules for the operator-selected
+   * trust mode. `off` is deliberately inert. Missing named checks are explicit
+   * evidence, never silently treated as passing.
+   */
+  private async gatherRequiredRuleEvidence(
+    workspaceId: string,
+    workspace: Workspace | null,
+    mode: RequiredRuleTrustMode,
+  ): Promise<EvidenceRequiredRules> {
+    if (mode === 'off') return { mode, results: [] };
+    if (!workspace?.worktreePath) {
+      return { mode, results: [], unavailableReason: 'workspace worktree unavailable' };
+    }
+    if (!this.ctx.checkRunner) {
+      return { mode, results: [], unavailableReason: 'check runner unavailable' };
+    }
+    const source = '.recoder/review-rules.json';
+    let content: string;
+    try {
+      content = await readFile(join(workspace.worktreePath, source), 'utf8');
+    } catch (err) {
+      const code = (err as { code?: unknown }).code;
+      return code === 'ENOENT'
+        ? { mode, results: [] }
+        : { mode, results: [], unavailableReason: `${source} could not be read` };
+    }
+    const rules = parseRepositoryReviewRulesJson(content.slice(0, 64_000), source)
+      .filter(rule => rule.level === 'required' && !!rule.check);
+    if (rules.length === 0) {
+      let validDocument = false;
+      try {
+        const parsed = JSON.parse(content) as { version?: unknown; rules?: unknown };
+        validDocument = parsed?.version === 1 && Array.isArray(parsed.rules);
+      } catch {
+        // Invalid JSON remains truthful unavailability below.
+      }
+      return validDocument
+        ? { mode, results: [] }
+        : { mode, results: [], unavailableReason: `${source} is not a valid version 1 rule document` };
+    }
+    const seenChecks = new Set<string>();
+    const unique = rules.filter(rule => {
+      const check = rule.check!;
+      if (seenChecks.has(check)) return false;
+      seenChecks.add(check);
+      return true;
+    }).slice(0, 20);
+    const results = [] as Array<EvidenceRequiredRules['results'][number]>;
+    for (const rule of unique) {
+      try {
+        const run = await this.ctx.checkRunner.runNamed(workspaceId, rule.check!);
+        results.push(run
+          ? {
+              id: rule.id,
+              text: rule.text,
+              check: rule.check!,
+              status: run.status,
+              ...(run.detail ? { detail: run.detail } : {}),
+            }
+          : {
+              id: rule.id,
+              text: rule.text,
+              check: rule.check!,
+              status: 'missing',
+              detail: 'named check is absent, duplicated, or unavailable',
+            });
+      } catch (err) {
+        results.push({
+          id: rule.id,
+          text: rule.text,
+          check: rule.check!,
+          status: 'error',
+          detail: err instanceof Error ? err.message.slice(0, 200) : 'check execution failed',
+        });
+      }
+    }
+    return { mode, results };
+  }
+
+  /**
    * Assemble + seal + persist the exportable convergence evidence record for a
    * merge. The evidence `contentHash` is sealed INTO the durable Merkle chain
    * payload (so the tamper-evident audit leaf commits to the exact evidence), then
@@ -1347,11 +1810,12 @@ export class ConductorGovernedWrites {
       candidates: readonly EvidenceCandidateInput[];
       verification?: { view?: ReadinessView; reason?: string };
     };
+    requiredRules: EvidenceRequiredRules;
   }): Promise<{
     record: ConvergenceEvidenceRecord | null;
     sealed: AuditRecord | null;
   }> {
-    const { action, principal, verdict, workspace, result, preMerge } = args;
+    const { action, principal, verdict, workspace, result, preMerge, requiredRules } = args;
     const governance: EvidenceGovernance = {
       action,
       effect: verdict.effect,
@@ -1376,6 +1840,7 @@ export class ConductorGovernedWrites {
       candidates: preMerge.candidates,
       governance,
       ...(preMerge.verification ? { verification: preMerge.verification } : {}),
+      requiredRules,
       ...(convergence ? { convergence } : {}),
       actorId: principal.userId,
       mergedAt:
@@ -1553,18 +2018,97 @@ export class ConductorGovernedWrites {
       };
     }
   }
-}
 
-/**
- * Derive a deterministic, path-safe repo id for the recodergit index from a repo
- * full-name or absolute path (lowercase; every non `[a-z0-9_-]` run → `__`). Kept
- * local so the conductor never imports an engines-domain internal.
- */
-function repoIdFromRepoRef(ref: string): string {
-  return ref
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '__');
+  /**
+   * Reproduce one explicitly agent-fixable repo check, then continue the same
+   * isolated workspace with Recoder's argv-backed prompt. The attempt identity
+   * and before-state are stamped atomically onto the running workspace so the
+   * terminal completion hook can independently rerun and attest the exact check.
+   */
+  async remediateWorkspaceCheck(
+    workspaceId: string,
+    checkName: string,
+    principal: Principal
+  ): Promise<ConductorWriteResult<CheckRemediationResult>> {
+    const action = 'workspace.check-remediate';
+    const name = checkName.trim();
+    const workspace = await this.ctx.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(
+      this.ctx.gate,
+      action,
+      principal,
+      {
+        target: conductorTarget('workspace', workspaceId),
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId, checkName: name },
+      }
+    );
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    if (!workspace) return { ok: false, verdict, reason: `workspace not found: ${workspaceId}` };
+    if (!name) return { ok: false, verdict, reason: 'check name is required' };
+    if (!this.ctx.checkRunner) {
+      return { ok: false, verdict, reason: 'Recoder check runner is unavailable' };
+    }
+
+    try {
+      const before = await this.ctx.checkRunner.runNamed(workspaceId, name);
+      if (!before) {
+        return { ok: false, verdict, reason: `named check is unavailable or ambiguous: ${name}` };
+      }
+      if (!before.autofix?.prompt) {
+        return { ok: false, verdict, reason: `check is manual/advisory and did not opt into agent remediation: ${name}` };
+      }
+      if (before.status === 'pass') {
+        return { ok: false, verdict, reason: `check already passes: ${name}` };
+      }
+
+      const attemptId = `checkfix_${randomUUID()}`;
+      const requestedAt = new Date().toISOString();
+      const deps: ContinueOpsDeps = {
+        getWorkspace: id => this.ctx.engine.getWorkspace(id),
+        advanceWorkspace: (id, to, patch, metadata) =>
+          this.ctx.engine.advanceWorkspace(id, to, patch, metadata),
+        getSubstrate: (id: WorkspaceSubstrate) => this.ctx.registry.getFull(id),
+        repository: this.ctx.repository,
+        tailer: this.ctx.tailer,
+        logger: this.ctx.log,
+        ...(this.ctx.brain ? { brain: this.ctx.brain } : {}),
+      };
+      const continued = await continueWorkspaceOp(deps, workspaceId, {
+        text: before.autofix.prompt,
+        createdBy: principal.userId,
+        continuationMetadata: {
+          checkRemediation: {
+            attemptId,
+            checkName: name,
+            state: 'running',
+            requestedAt,
+            beforeStatus: before.status,
+            ...(before.detail ? { beforeDetail: before.detail } : {}),
+          },
+        },
+      });
+      const result: CheckRemediationResult = {
+        workspaceId,
+        runId: continued.runId,
+        checkName: name,
+        attemptId,
+        state: 'running',
+        beforeStatus: before.status,
+      };
+      await recordConductorAudit(
+        this.ctx.gate,
+        conductorAuditEntry(action, principal, verdict, { ...result })
+      );
+      return { ok: true, verdict, value: result };
+    } catch (err) {
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'check remediation failed',
+      };
+    }
+  }
 }
 
 /**

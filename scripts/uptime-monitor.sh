@@ -30,15 +30,6 @@ if [ "$status" != "true" ]; then
   echo "$(date -Iseconds) DOWN $mandatory_container docker-stopped" >> "$LOG"
 fi
 
-optional_retired_container="recoder-web"
-if docker inspect "$optional_retired_container" >/dev/null 2>&1; then
-  status=$(docker inspect --format='{{.State.Running}}' "$optional_retired_container" 2>/dev/null)
-  if [ "$status" != "true" ]; then
-    DOWN_SERVICES="$DOWN_SERVICES $optional_retired_container(stopped)"
-    echo "$(date -Iseconds) DOWN $optional_retired_container docker-stopped" >> "$LOG"
-  fi
-fi
-
 # Daytona
 daytona_healthy=$(docker ps --filter name=daytona-api --format '{{.Status}}' 2>/dev/null | grep -c healthy)
 if [ "$daytona_healthy" != "1" ]; then

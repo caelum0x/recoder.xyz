@@ -48,6 +48,7 @@ import {
   type RemoteAttachAuditPort,
   type RemoteAttachDeliverPort,
   type RemoteAttachExternalDeps,
+  type RemoteAttachSessionStore,
 } from '../remote-attach/remote-attach.service.js';
 
 const NOOP_LOGGER: LoggerPort = { info() {}, warn() {}, error() {} };
@@ -67,6 +68,8 @@ export interface RemoteAttachWiringDeps {
   readonly approvals: ApprovalService;
   /** The durable, hash-chained audit sink (seals a delivered steer). */
   readonly audit: AuditChainService;
+  /** Restart-survivable session persistence (KvStore adapter at bootstrap). */
+  readonly sessionStore?: RemoteAttachSessionStore;
   /** Structured logger; defaults to a no-op. */
   readonly logger?: LoggerPort;
 }
@@ -152,6 +155,7 @@ export function createRemoteAttachDeps(
     approval,
     deliver,
     audit,
+    ...(deps.sessionStore ? { sessionStore: deps.sessionStore } : {}),
     async listWorkspaceIdsForTaskGroup(
       taskGroup: string,
       principal: Principal

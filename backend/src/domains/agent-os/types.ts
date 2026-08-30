@@ -15,11 +15,20 @@ import type { InstructionCompilerPort } from './ports/instruction-compiler.port.
 import type { OutboxPublisherPort } from './ports/outbox-publisher.port.js';
 import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
+import type {
+  PullRequestReviewConductorPort,
+  PullRequestReviewApprovalPort,
+  PullRequestReviewFeedbackPort,
+  PullRequestReviewPublisherPort,
+  PullRequestSourcePort,
+} from './ports/pr-review-agent.port.js';
 import type { CoordinationEnginePort } from './ports/coordination-engine.port.js';
 import type { EngineClientPort } from '../engines/ports/engine-client.port.js';
 import type { BrowserVerifyRunner } from './ports/browser-verify.port.js';
 import type { WorkflowDriver, WorkflowEnginePort } from '@recoder/agent-workflows';
 import type { AgentOsConfigOverrides } from './config.js';
+import type { AgentAutomationStatePort } from './ports/automation-state.port.js';
+import type { JiraRequirementPort } from './ports/jira-requirement.port.js';
 
 /**
  * Dependencies injected by bootstrap AFTER persistence + identity + governance
@@ -69,6 +78,20 @@ export interface AgentOsDeps {
    * attached late via `attachSquadAutopilotConductor` instead.
    */
   readonly conductorDispatch?: SquadConductorPort | null;
+  /** Read-only GitHub source for the installed-app PR review watcher. */
+  readonly pullRequestSource?: PullRequestSourcePort | null;
+  /** Optional pre-bound PR-review Conductor seam; bootstrap normally attaches it late. */
+  readonly pullRequestReviewConductor?: PullRequestReviewConductorPort | null;
+  /** Human-triggered GitHub native-review writer; never used by the watcher scan. */
+  readonly pullRequestReviewPublisher?: PullRequestReviewPublisherPort | null;
+  /** Existing governance approval lifecycle, narrowed for review publication. */
+  readonly pullRequestReviewApprovals?: PullRequestReviewApprovalPort | null;
+  /** Durable repo-scoped accept/dismiss rules for evidence-backed PR findings. */
+  readonly pullRequestReviewFeedback?: PullRequestReviewFeedbackPort | null;
+  /** Canonical read-only Jira issue resolver for linked PR requirements. */
+  readonly jiraRequirements?: JiraRequirementPort | null;
+  /** Durable installed-app posture for background issue agents and the PR watcher. */
+  readonly automationState?: AgentAutomationStatePort | null;
   /**
    * The workflow dispatch seam — the frozen `@recoder/agent-workflows`
    * `WorkflowDriver`. Absent ⇒ workflow CRUD still works over the in-memory

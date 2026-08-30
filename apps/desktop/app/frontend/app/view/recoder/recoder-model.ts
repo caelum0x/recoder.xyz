@@ -20,6 +20,7 @@ import {
     groupByTaskGroup,
     isSettledSiblingState,
     clusterConvergeReadyMap,
+    convergeCompareFetchKey,
     detectConvergeReadyTransitions,
     isTerminalWorkspaceState,
     mergeArchivedHistory,
@@ -68,6 +69,7 @@ import { fetchWorkspaceUsage } from "./recoder-usage-strip";
 import { fetchFileVersions, fileVersionsKey, mergeFileVersions, type FileVersionsFetchResult } from "./recoder-compare-logic";
 import { RecoderConnectionModel } from "./recoder-connection-model";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
+import { RecoderBoardLive } from "./recoder-board-live";
 import {
     fetchWorkspacePrStatus,
     prStatusFetchKey,
@@ -75,7 +77,7 @@ import {
     type PrFetchMeta,
     type RecoderPrChip,
 } from "./recoder-pr-status";
-import { readErrorReason } from "./recoder-errors";
+import { readErrorOutcome, readErrorReason } from "./recoder-errors";
 import { RecoderConductorView } from "./recoder";
 
 // First-run readiness surfaced by the conductor /health + /runtimes endpoints —
@@ -94,6 +96,19 @@ type RecoderSetup = {
     // substrate health; "" when unknown. Used so "Open terminal" attaches with
     // the SAME tmux server the conductor's sessions live on.
     tmuxBin: string;
+    codeNetwork: {
+        status: "idle" | "indexing" | "ready" | "partial" | "unavailable";
+        discoveredRepositories: number;
+        indexedRepositories: number;
+        unavailableRepositories: number;
+    };
+};
+
+const EMPTY_CODE_NETWORK: RecoderSetup["codeNetwork"] = {
+    status: "idle",
+    discoveredRepositories: 0,
+    indexedRepositories: 0,
+    unavailableRepositories: 0,
 };
 
 // First-run environment import (GET /api/conductor/environment) — what the host
@@ -104,6 +119,102 @@ type RecoderEnvironment = {
     ghAuthenticated: boolean | null;
     shell: string;
 };
+
+type RecoderCrystalCandidate = {
+    sessionId: string;
+    projectName: string;
+    projectPath: string;
+    name: string;
+    prompt: string;
+    worktreePath: string;
+    branch: string;
+    runtimeId: string;
+    originalStatus: string;
+    archived: boolean;
+    importable: boolean;
+    imported: boolean;
+    reason?: string;
+};
+
+type RecoderCrystalMigration = {
+    available: boolean;
+    candidates: RecoderCrystalCandidate[];
+    importableCount: number;
+    importedCount: number;
+    reason?: string;
+};
+
+type RecoderCrystalImportStatus = { kind: "success" | "error"; message: string };
+
+type RecoderIssueCreateStatus =
+    | { kind: "success"; message: string; issueId: string }
+    | { kind: "error"; message: string };
+
+type RecoderReadyIssue = {
+    id: string;
+    title: string;
+    description: string;
+    status: string;
+    labels: string[];
+    priority?: number;
+    issueType?: string;
+};
+
+function parseReadyIssues(data: unknown): RecoderReadyIssue[] {
+    if (!Array.isArray(data)) return [];
+    return data.flatMap((value): RecoderReadyIssue[] => {
+        if (value == null || typeof value != "object") return [];
+        const issue = value as Record<string, unknown>;
+        if (typeof issue.id != "string" || typeof issue.title != "string") return [];
+        return [{
+            id: issue.id,
+            title: issue.title,
+            description: typeof issue.description == "string" ? issue.description : "",
+            status: typeof issue.status == "string" ? issue.status : "open",
+            labels: Array.isArray(issue.labels)
+                ? issue.labels.filter((label): label is string => typeof label == "string")
+                : [],
+            ...(typeof issue.priority == "number" ? { priority: issue.priority } : {}),
+            ...(typeof issue.issueType == "string" ? { issueType: issue.issueType } : {}),
+        }];
+    });
+}
+
+function parseCrystalMigration(data: unknown): RecoderCrystalMigration {
+    if (data == null || typeof data != "object") {
+        return { available: false, candidates: [], importableCount: 0, importedCount: 0 };
+    }
+    const d = data as Record<string, unknown>;
+    const candidates = Array.isArray(d.candidates)
+        ? d.candidates.flatMap((value): RecoderCrystalCandidate[] => {
+              if (value == null || typeof value != "object") return [];
+              const row = value as Record<string, unknown>;
+              if (typeof row.sessionId != "string") return [];
+              return [{
+                  sessionId: row.sessionId,
+                  projectName: typeof row.projectName == "string" ? row.projectName : "Crystal project",
+                  projectPath: typeof row.projectPath == "string" ? row.projectPath : "",
+                  name: typeof row.name == "string" ? row.name : row.sessionId,
+                  prompt: typeof row.prompt == "string" ? row.prompt : "",
+                  worktreePath: typeof row.worktreePath == "string" ? row.worktreePath : "",
+                  branch: typeof row.branch == "string" ? row.branch : "",
+                  runtimeId: typeof row.runtimeId == "string" ? row.runtimeId : "claude_code",
+                  originalStatus: typeof row.originalStatus == "string" ? row.originalStatus : "unknown",
+                  archived: Boolean(row.archived),
+                  importable: Boolean(row.importable),
+                  imported: Boolean(row.imported),
+                  ...(typeof row.reason == "string" ? { reason: row.reason } : {}),
+              }];
+          })
+        : [];
+    return {
+        available: Boolean(d.available),
+        candidates,
+        importableCount: typeof d.importableCount == "number" ? d.importableCount : candidates.filter((c) => c.importable && !c.imported).length,
+        importedCount: typeof d.importedCount == "number" ? d.importedCount : candidates.filter((c) => c.imported).length,
+        ...(typeof d.reason == "string" ? { reason: d.reason } : {}),
+    };
+}
 
 // Coerce the untrusted /environment payload into the view shape. Anything that
 // isn't the documented shape degrades to a safe default (null identity, no
@@ -148,6 +259,7 @@ type RecoderLaunchResult = {
     sessionName?: string;
     worktreePath?: string;
     runtimeId?: string;
+    substrate?: string;
     interactive?: boolean;
     parallelCount?: number;
 };
@@ -308,6 +420,10 @@ class RecoderViewModel implements ViewModel {
     agentAuthAtom: PrimitiveAtom<Record<string, AgentAuthState>>;
     // First-run environment import (git identity, agent configs, gh, shell); null until probed.
     environmentAtom: PrimitiveAtom<RecoderEnvironment>;
+    // Crystal donor adoption: discovered local sessions plus explicit import UI state.
+    crystalMigrationAtom: PrimitiveAtom<RecoderCrystalMigration>;
+    crystalImportingAtom: PrimitiveAtom<boolean>;
+    crystalImportStatusAtom: PrimitiveAtom<RecoderCrystalImportStatus>;
     // Detected GitHub identity (token-free GET /github/status); null until a
     // successful probe — "unknown", never a fabricated not-connected.
     githubStatusAtom: PrimitiveAtom<RecoderGithubStatus>;
@@ -319,6 +435,7 @@ class RecoderViewModel implements ViewModel {
     // GitHub API call) on the backend, so it must not ride the 6s poll. A
     // failed/unreachable probe leaves this false so the next poll retries.
     githubLoaded: boolean;
+    crystalLoaded: boolean;
     diffSummariesAtom: PrimitiveAtom<Record<string, RecoderDiffSummary>>;
     // Per-workspace PR chip from GET /workspaces/:id/pr-status (gh-backed). A
     // missing entry means gh couldn't be consulted, the branch has no PR, or the
@@ -334,10 +451,20 @@ class RecoderViewModel implements ViewModel {
     launchRepoIsGitAtom: PrimitiveAtom<boolean>;
     recentReposAtom: PrimitiveAtom<string[]>;
     launchPromptAtom: PrimitiveAtom<string>;
+    readyIssuesAtom: PrimitiveAtom<RecoderReadyIssue[]>;
+    readyIssuesLoadingAtom: PrimitiveAtom<boolean>;
+    launchIssueIdAtom: PrimitiveAtom<string>;
+    issueComposerOpenAtom: PrimitiveAtom<boolean>;
+    issueTitleAtom: PrimitiveAtom<string>;
+    issueDescriptionAtom: PrimitiveAtom<string>;
+    issueLabelsAtom: PrimitiveAtom<string>;
+    issueCreatingAtom: PrimitiveAtom<boolean>;
+    issueCreateStatusAtom: PrimitiveAtom<RecoderIssueCreateStatus>;
     launchRuntimeIdAtom: PrimitiveAtom<string>;
     launchAlsoRunAtom: PrimitiveAtom<string[]>;
     launchBranchAtom: PrimitiveAtom<string>;
     launchInteractiveAtom: PrimitiveAtom<boolean>;
+    launchSiblingAwarenessAtom: PrimitiveAtom<boolean>;
     postingAtom: PrimitiveAtom<boolean>;
     launchResultAtom: PrimitiveAtom<RecoderLaunchResult>;
     // Live per-agent progress during a multi-agent launch (workspaces POST serially,
@@ -443,14 +570,19 @@ class RecoderViewModel implements ViewModel {
     prevWorkspaceAttention: Map<string, string>;
     // workspaceId:attn:<attention> keys already notified this session (de-dupe).
     notifiedNeedsInputKeys: ReadonlySet<string>;
-    // Per-taskGroup converge-readiness as of the LAST poll; null until the first
-    // poll (which seeds silently, so reopening onto an already-finished cluster
+    // Per-taskGroup converge-readiness as of the LAST canonical refresh (live
+    // state frame or fallback poll); null until the first refresh (which seeds
+    // silently, so reopening onto an already-finished cluster
     // never fires a stale "converge them" ping). A group flips false→true exactly
     // once — when its fan-out settles WITH real divergence — and that transition
     // fires the walk-away notification.
     prevConvergeReady: Map<string, boolean>;
     // taskGroup keys already pinged this session (de-dupe on bounce).
     notifiedConvergeReadyKeys: ReadonlySet<string>;
+    // Last settled workspace revision represented by each cached compare view.
+    // A compare opened mid-run has no settled key, so the final live state frame
+    // forces one fresh aggregate before converge readiness is derived.
+    convergeCompareFetchKeys: Map<string, string>;
     // Per-workspace diff-summary fetch key (state + updatedAt) as of the last
     // loadDiffSummaries attempt. Gates the 6s poll's diff fan-out — each fetch
     // shells host git on the backend, so idle rows whose key hasn't advanced are
@@ -467,6 +599,10 @@ class RecoderViewModel implements ViewModel {
     // record is archived); later polls re-read it only while a history Show view
     // is open, so the recurring 6s cost stays one live-list fetch.
     archivedLoaded: boolean;
+    // Event-driven state/attention subscriptions for active workspaces. The
+    // recurring poll remains fallback; live frames only coalesce an earlier read.
+    boardLive: RecoderBoardLive;
+    liveRefreshTimer: ReturnType<typeof setTimeout> | null;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -478,14 +614,21 @@ class RecoderViewModel implements ViewModel {
         this.archivedMetaAtom = atom(null) as PrimitiveAtom<ArchivedPageMeta>;
         this.loadingOlderArchivedAtom = atom(false) as PrimitiveAtom<boolean>;
         this.archivedLoaded = false;
+        this.liveRefreshTimer = null;
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
-        this.setupAtom = atom({ agents: [], git: false, loaded: false, probed: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
+        this.setupAtom = atom({
+            agents: [], git: false, loaded: false, probed: false, tmuxBin: "", codeNetwork: EMPTY_CODE_NETWORK,
+        }) as PrimitiveAtom<RecoderSetup>;
         this.agentAuthAtom = atom({}) as PrimitiveAtom<Record<string, AgentAuthState>>;
         this.environmentAtom = atom(null) as PrimitiveAtom<RecoderEnvironment>;
+        this.crystalMigrationAtom = atom(null) as PrimitiveAtom<RecoderCrystalMigration>;
+        this.crystalImportingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.crystalImportStatusAtom = atom(null) as PrimitiveAtom<RecoderCrystalImportStatus>;
         this.githubStatusAtom = atom(null) as PrimitiveAtom<RecoderGithubStatus>;
         this.githubReposAtom = atom([]) as PrimitiveAtom<RecoderGithubRepo[]>;
         this.githubLoaded = false;
+        this.crystalLoaded = false;
         this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
         this.prStatusAtom = atom({}) as PrimitiveAtom<Record<string, RecoderPrChip>>;
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
@@ -495,10 +638,20 @@ class RecoderViewModel implements ViewModel {
         this.launchRepoIsGitAtom = atom(true) as PrimitiveAtom<boolean>;
         this.recentReposAtom = atom(loadRecentRepos()) as PrimitiveAtom<string[]>;
         this.launchPromptAtom = atom("") as PrimitiveAtom<string>;
+        this.readyIssuesAtom = atom([]) as PrimitiveAtom<RecoderReadyIssue[]>;
+        this.readyIssuesLoadingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.launchIssueIdAtom = atom("") as PrimitiveAtom<string>;
+        this.issueComposerOpenAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.issueTitleAtom = atom("") as PrimitiveAtom<string>;
+        this.issueDescriptionAtom = atom("") as PrimitiveAtom<string>;
+        this.issueLabelsAtom = atom("") as PrimitiveAtom<string>;
+        this.issueCreatingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.issueCreateStatusAtom = atom(null) as PrimitiveAtom<RecoderIssueCreateStatus>;
         this.launchRuntimeIdAtom = atom(loadLastAgents()[0] ?? "") as PrimitiveAtom<string>;
         this.launchAlsoRunAtom = atom(loadLastAgents().slice(1)) as PrimitiveAtom<string[]>;
         this.launchBranchAtom = atom("") as PrimitiveAtom<string>;
         this.launchInteractiveAtom = atom(loadLastInteractive()) as PrimitiveAtom<boolean>;
+        this.launchSiblingAwarenessAtom = atom(true) as PrimitiveAtom<boolean>;
         this.postingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.launchResultAtom = atom(null) as PrimitiveAtom<RecoderLaunchResult>;
         this.launchProgressAtom = atom("") as PrimitiveAtom<string>;
@@ -531,6 +684,7 @@ class RecoderViewModel implements ViewModel {
         this.notifiedNeedsInputKeys = new Set();
         this.prevConvergeReady = null;
         this.notifiedConvergeReadyKeys = new Set();
+        this.convergeCompareFetchKeys = new Map();
         this.setupProbingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.boardFilterAtom = atom("") as PrimitiveAtom<string>;
         this.boardShowAtom = atom("active") as PrimitiveAtom<RecoderBoardShow>;
@@ -560,12 +714,25 @@ class RecoderViewModel implements ViewModel {
             return deriveBoardDigest(visible, groupByTaskGroup(visible), get(this.compareAtom));
         });
         wireAttentionClicks(this);
+        this.boardLive = new RecoderBoardLive(() => this.scheduleLiveRefresh());
     }
 
     dispose() {
+        this.boardLive.dispose();
+        if (this.liveRefreshTimer != null) clearTimeout(this.liveRefreshTimer);
+        this.liveRefreshTimer = null;
         if (attentionClickModel == this) {
             attentionClickModel = null;
         }
+    }
+
+    // Collapse adjacent state/attention frames into one canonical board read.
+    scheduleLiveRefresh() {
+        if (this.liveRefreshTimer != null) return;
+        this.liveRefreshTimer = setTimeout(() => {
+            this.liveRefreshTimer = null;
+            void this.refresh();
+        }, 120);
     }
 
     get viewComponent(): ViewComponent {
@@ -594,14 +761,34 @@ class RecoderViewModel implements ViewModel {
                       }))
                 : [];
             const tmuxBin = typeof h?.substrate?.tmuxBin == "string" ? h.substrate.tmuxBin : "";
-            globalStore.set(this.setupAtom, { agents, git: Boolean(h?.available), loaded: true, probed: true, tmuxBin });
+            const rawNetwork = h?.codeNetwork;
+            const networkStatus = rawNetwork?.status;
+            const codeNetwork: RecoderSetup["codeNetwork"] = {
+                status:
+                    networkStatus == "idle" || networkStatus == "indexing" || networkStatus == "ready" ||
+                    networkStatus == "partial" || networkStatus == "unavailable"
+                        ? networkStatus
+                        : "unavailable",
+                discoveredRepositories: Number.isFinite(rawNetwork?.discoveredRepositories)
+                    ? Math.max(0, Math.floor(rawNetwork.discoveredRepositories)) : 0,
+                indexedRepositories: Number.isFinite(rawNetwork?.indexedRepositories)
+                    ? Math.max(0, Math.floor(rawNetwork.indexedRepositories)) : 0,
+                unavailableRepositories: Number.isFinite(rawNetwork?.unavailableRepositories)
+                    ? Math.max(0, Math.floor(rawNetwork.unavailableRepositories)) : 0,
+            };
+            globalStore.set(this.setupAtom, {
+                agents, git: Boolean(h?.available), loaded: true, probed: true, tmuxBin, codeNetwork,
+            });
             void this.refreshAgentAuth(agents);
         } catch {
-            globalStore.set(this.setupAtom, { agents: [], git: false, loaded: false, probed: true, tmuxBin: "" });
+            globalStore.set(this.setupAtom, {
+                agents: [], git: false, loaded: false, probed: true, tmuxBin: "", codeNetwork: EMPTY_CODE_NETWORK,
+            });
             globalStore.set(this.agentAuthAtom, {});
         }
         this.refreshEnvironment();
         this.refreshGithub();
+        this.refreshCrystalMigration();
     }
 
     // GET /github/status + /github/repos → the GitHub half of the zero-config
@@ -698,6 +885,155 @@ class RecoderViewModel implements ViewModel {
         }
     }
 
+    // Read Crystal's local session catalogue once per app session. Import forces
+    // a refresh so adopted rows disappear from the available count immediately.
+    async refreshCrystalMigration(force = false) {
+        if (this.crystalLoaded && !force) return;
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/imports/crystal`);
+            const body = await res.json();
+            if (!res.ok) return;
+            globalStore.set(this.crystalMigrationAtom, parseCrystalMigration(body?.data));
+            this.crystalLoaded = true;
+        } catch {
+            // The board remains fully usable when Crystal is not installed.
+        }
+    }
+
+    async importCrystalSessions(sessionIds: readonly string[]): Promise<boolean> {
+        const selected = [...new Set(sessionIds.map((id) => id.trim()).filter(Boolean))];
+        if (selected.length == 0) return false;
+        globalStore.set(this.crystalImportingAtom, true);
+        globalStore.set(this.crystalImportStatusAtom, null);
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/imports/crystal`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sessionIds: selected }),
+            });
+            const body = await res.json().catch(() => null);
+            if (!res.ok || !body?.success) {
+                const reason = readErrorReason(body) || `Crystal import failed (HTTP ${res.status}).`;
+                globalStore.set(this.crystalImportStatusAtom, { kind: "error", message: reason });
+                return false;
+            }
+            const imported = Array.isArray(body?.data?.migration?.imported)
+                ? body.data.migration.imported.length
+                : 0;
+            const skipped = Array.isArray(body?.data?.migration?.skipped)
+                ? body.data.migration.skipped.length
+                : 0;
+            const message = imported > 0
+                ? `Imported ${imported} Crystal session${imported == 1 ? "" : "s"} into Workspaces.`
+                : skipped > 0
+                  ? "Those Crystal sessions are already imported or no longer available."
+                  : "No Crystal sessions were imported.";
+            globalStore.set(this.crystalImportStatusAtom, {
+                kind: imported > 0 ? "success" : "error",
+                message,
+            });
+            await Promise.all([this.refresh(), this.refreshCrystalMigration(true)]);
+            return imported > 0;
+        } catch {
+            globalStore.set(this.crystalImportStatusAtom, {
+                kind: "error",
+                message: "Crystal import unavailable — Recoder isn’t reachable.",
+            });
+            return false;
+        } finally {
+            globalStore.set(this.crystalImportingAtom, false);
+        }
+    }
+
+    /** Load the authoritative `bd ready` projection when the launch sheet opens. */
+    async refreshReadyIssues() {
+        globalStore.set(this.readyIssuesLoadingAtom, true);
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/issues/ready`);
+            const body = await res.json();
+            globalStore.set(
+                this.readyIssuesAtom,
+                res.ok ? parseReadyIssues(body?.data?.ready) : []
+            );
+        } catch {
+            globalStore.set(this.readyIssuesAtom, []);
+        } finally {
+            globalStore.set(this.readyIssuesLoadingAtom, false);
+        }
+    }
+
+    /** Select a Beads item and seed the same task text the MCP fan-out uses. */
+    selectLaunchIssue(issueId: string) {
+        const id = issueId.trim();
+        globalStore.set(this.launchIssueIdAtom, id);
+        if (id == "") return;
+        const issue = globalStore.get(this.readyIssuesAtom).find((candidate) => candidate.id == id);
+        if (!issue) return;
+        const body = issue.description.trim();
+        const bounded = body.length > 8000 ? `${body.slice(0, 7999)}…` : body;
+        globalStore.set(
+            this.launchPromptAtom,
+            `Work bd issue ${issue.id}: ${issue.title.trim()}${bounded != "" ? `\n\n${bounded}` : ""}`
+        );
+    }
+
+    /** File real product work into Beads, optionally continuing straight to launch. */
+    async createIssue(openLaunch: boolean) {
+        const title = globalStore.get(this.issueTitleAtom).trim();
+        const description = globalStore.get(this.issueDescriptionAtom).trim();
+        const labels = globalStore.get(this.issueLabelsAtom).trim();
+        if (title == "") {
+            globalStore.set(this.issueCreateStatusAtom, { kind: "error", message: "Add an issue title." });
+            return;
+        }
+        globalStore.set(this.issueCreatingAtom, true);
+        globalStore.set(this.issueCreateStatusAtom, null);
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/issues`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    title,
+                    ...(description != "" ? { description } : {}),
+                    ...(labels != "" ? { labels } : {}),
+                }),
+            });
+            const body = await res.json().catch(() => null);
+            const issueId = typeof body?.data?.issue?.id == "string" ? body.data.issue.id : "";
+            if (!res.ok || issueId == "") {
+                throw new Error(readErrorReason(body) || `Issue creation failed (HTTP ${res.status}).`);
+            }
+            globalStore.set(this.issueCreateStatusAtom, {
+                kind: "success",
+                issueId,
+                message: `Created ${issueId}.`,
+            });
+            globalStore.set(this.issueComposerOpenAtom, false);
+            globalStore.set(this.issueTitleAtom, "");
+            globalStore.set(this.issueDescriptionAtom, "");
+            globalStore.set(this.issueLabelsAtom, "");
+            await this.refreshReadyIssues();
+            if (openLaunch) {
+                // Seed directly from what the user just authored even if a slow
+                // Beads projection has not returned the new issue in `ready` yet.
+                const bounded = description.length > 8000 ? `${description.slice(0, 7999)}…` : description;
+                globalStore.set(this.launchIssueIdAtom, issueId);
+                globalStore.set(
+                    this.launchPromptAtom,
+                    `Work bd issue ${issueId}: ${title}${bounded != "" ? `\n\n${bounded}` : ""}`
+                );
+                globalStore.set(this.launchOpenAtom, true);
+            }
+        } catch (error) {
+            globalStore.set(this.issueCreateStatusAtom, {
+                kind: "error",
+                message: error instanceof Error ? error.message : "Issue creation failed.",
+            });
+        } finally {
+            globalStore.set(this.issueCreatingAtom, false);
+        }
+    }
+
     async refresh() {
         globalStore.set(this.loadingAtom, true);
         globalStore.set(this.errorAtom, "");
@@ -731,6 +1067,7 @@ class RecoderViewModel implements ViewModel {
                       )
                     : all;
             globalStore.set(this.allWorkspacesAtom, merged);
+            this.boardLive.sync(merged);
             this.noteAttentionTransitions(merged);
             // Only fold the attention axis on a SUCCESSFUL views read, so a degraded
             // probe never reseeds the map and can never manufacture a needs-input ping.
@@ -916,27 +1253,39 @@ class RecoderViewModel implements ViewModel {
     async ensureConvergeCompareLoaded(groups: RecoderWorkspaceGroup[]) {
         const compare = globalStore.get(this.compareAtom);
         const pending: Promise<void>[] = [];
+        const activeGroups = new Set(groups.flatMap((group) => (group.taskGroup == null ? [] : [group.taskGroup])));
+        for (const taskGroup of this.convergeCompareFetchKeys.keys()) {
+            if (!activeGroups.has(taskGroup)) this.convergeCompareFetchKeys.delete(taskGroup);
+        }
         for (const group of groups) {
             const tg = group.taskGroup;
-            if (tg == null || group.workspaces.length < 2 || compare[tg] != null) {
+            if (tg == null || group.workspaces.length < 2) {
                 continue;
             }
             if (!group.workspaces.every((ws) => isSettledSiblingState(ws.state))) {
                 continue;
             }
-            pending.push(this.loadCompare(tg));
+            const revision = convergeCompareFetchKey(group.workspaces);
+            if (compare[tg] != null && this.convergeCompareFetchKeys.get(tg) == revision) {
+                continue;
+            }
+            pending.push(
+                this.loadCompare(tg).then((loaded) => {
+                    if (loaded) this.convergeCompareFetchKeys.set(tg, revision);
+                })
+            );
         }
         if (pending.length > 0) {
             await Promise.all(pending);
         }
     }
 
-    // Compare this poll's converge-readiness against the last poll's and fire ONE OS
+    // Compare this refresh's converge-readiness against the last refresh and fire ONE OS
     // notification per cluster that JUST became converge-ready — the "your agents
     // finished, converge them" ping for a user who walked away. Only fires when
     // divergence is PROVEN (settled + a loaded contested set with 2+ agents on 1+
     // files), never for an all-agree cluster (no fake converge prompt). The first
-    // poll seeds silently, so reopening onto an already-finished cluster stays quiet.
+    // refresh seeds silently, so reopening onto an already-finished cluster stays quiet.
     noteConvergeReadyTransitions(groups: RecoderWorkspaceGroup[]) {
         const compare = globalStore.get(this.compareAtom);
         const prev = this.prevConvergeReady;
@@ -1145,26 +1494,28 @@ class RecoderViewModel implements ViewModel {
     // taskGroup. Reads { data: { compare } }. Degrade-safe: any failure / non-2xx /
     // missing shape leaves the prior entry untouched (absent → neutral), never
     // throws, never fabricates a compare.
-    async loadCompare(taskGroup: string) {
+    async loadCompare(taskGroup: string): Promise<boolean> {
         const tg = taskGroup.trim();
         if (tg == "") {
-            return;
+            return false;
         }
         try {
             const res = await fetch(
                 `${getRecoderBackendUrl()}/api/conductor/workspaces/compare?taskGroup=${encodeURIComponent(tg)}`
             );
             if (!res.ok) {
-                return;
+                return false;
             }
             const compare = (await res.json())?.data?.compare;
             if (compare == null || typeof compare != "object") {
-                return;
+                return false;
             }
             const cur = globalStore.get(this.compareAtom);
             globalStore.set(this.compareAtom, { ...cur, [tg]: compare as CompareView });
+            return true;
         } catch {
             // degrade-safe: an unreachable/failed compare leaves the map unchanged
+            return false;
         }
     }
 
@@ -1441,8 +1792,10 @@ class RecoderViewModel implements ViewModel {
         }
         const also = globalStore.get(this.launchAlsoRunAtom);
         const prompt = globalStore.get(this.launchPromptAtom).trim();
+        const issueId = globalStore.get(this.launchIssueIdAtom).trim();
         const branch = globalStore.get(this.launchBranchAtom).trim();
         const interactive = globalStore.get(this.launchInteractiveAtom);
+        const siblingAwareness = globalStore.get(this.launchSiblingAwarenessAtom);
         // Fold (primary, also) into the ordered fan-out list + shared taskGroup.
         // A shared branch across siblings would collide across worktrees, so the
         // shaping honors a user branch only for a solo launch; parallel siblings
@@ -1455,7 +1808,13 @@ class RecoderViewModel implements ViewModel {
         let started = 0;
         let degraded = 0;
         let lastDegradedReason = "";
-        let firstStarted: { workspaceId: string; sessionName?: string; worktreePath?: string; runtimeId: string } = null;
+        let firstStarted: {
+            workspaceId: string;
+            sessionName?: string;
+            worktreePath?: string;
+            runtimeId: string;
+            substrate?: string;
+        } = null;
         try {
             for (const agent of agents) {
                 if (agents.length > 1) {
@@ -1467,9 +1826,18 @@ class RecoderViewModel implements ViewModel {
                 // Real project identity from the repo path so the board can group
                 // and filter by project (was hardcoded "default").
                 const reqBody = shapeLaunchRequestBody(
-                    { repoPath, prompt, branch, interactive, taskGroup, agentCount: agents.length, projectId },
+                    {
+                        repoPath,
+                        prompt,
+                        branch,
+                        interactive,
+                        siblingAwareness,
+                        taskGroup,
+                        agentCount: agents.length,
+                        projectId,
+                    },
                     agent,
-                    genTaskId()
+                    issueId || genTaskId()
                 );
                 const res = await fetch(`${base}/api/conductor/workspaces`, {
                     method: "POST",
@@ -1502,6 +1870,9 @@ class RecoderViewModel implements ViewModel {
                         if (typeof workspace.worktreePath == "string") {
                             firstStarted.worktreePath = workspace.worktreePath;
                         }
+                        if (typeof workspace.substrate == "string") {
+                            firstStarted.substrate = workspace.substrate;
+                        }
                     }
                 }
             }
@@ -1527,6 +1898,7 @@ class RecoderViewModel implements ViewModel {
                     ? {
                           workspaceId: firstStarted.workspaceId,
                           runtimeId: firstStarted.runtimeId,
+                          substrate: firstStarted.substrate,
                           ...(firstStarted.sessionName != null ? { sessionName: firstStarted.sessionName } : {}),
                           ...(firstStarted.worktreePath != null ? { worktreePath: firstStarted.worktreePath } : {}),
                       }
@@ -1536,6 +1908,13 @@ class RecoderViewModel implements ViewModel {
             });
             globalStore.set(this.launchOpenAtom, false);
             globalStore.set(this.launchPromptAtom, "");
+            globalStore.set(this.launchIssueIdAtom, "");
+            if (issueId != "") {
+                globalStore.set(
+                    this.readyIssuesAtom,
+                    globalStore.get(this.readyIssuesAtom).filter((issue) => issue.id != issueId)
+                );
+            }
             await this.refresh();
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -1705,6 +2084,17 @@ class RecoderViewModel implements ViewModel {
                 return;
             }
             const reason = readErrorReason(body);
+            const outcome = readErrorOutcome(body);
+            if (res.status == 409 && outcome == "escalated") {
+                this.setLastMerge(workspaceId, { status: "escalated", ...(reason ? { reason } : {}), at });
+                this.setRowStatus(workspaceId, `Human review required — ${reason || "convergence trust could not be judged"}.`);
+                return;
+            }
+            if (res.status == 409 && outcome == "trust_blocked") {
+                this.setLastMerge(workspaceId, { status: "blocked", ...(reason ? { reason } : {}), at });
+                this.setRowStatus(workspaceId, `Merge blocked by convergence trust — ${reason || "review the trust evidence"}.`);
+                return;
+            }
             if (res.status == 403) {
                 this.setLastMerge(workspaceId, { status: "blocked", ...(reason ? { reason } : {}), at });
                 this.setRowStatus(workspaceId, reason || "Merge blocked - needs approval.");
@@ -1937,5 +2327,16 @@ class RecoderViewModel implements ViewModel {
     }
 }
 
-export { RecoderViewModel, parseEnvironmentImport, type RecoderSetup, type RecoderEnvironment, type RecoderLaunchResult };
+export {
+    RecoderViewModel,
+    parseEnvironmentImport,
+    parseCrystalMigration,
+    parseReadyIssues,
+    type RecoderSetup,
+    type RecoderEnvironment,
+    type RecoderCrystalCandidate,
+    type RecoderCrystalMigration,
+    type RecoderReadyIssue,
+    type RecoderLaunchResult,
+};
 export * from "./recoder-board-logic";

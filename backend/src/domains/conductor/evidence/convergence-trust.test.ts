@@ -6,13 +6,13 @@
  * contested picks lower the score with truthful factors.
  */
 import { describe, it, expect } from 'vitest';
-import { computeConvergenceTrust } from './convergence-trust.js';
+import { calibrateConvergenceTrust, computeConvergenceTrust } from './convergence-trust.js';
 import type { ConvergenceEvidence } from './convergence-evidence.js';
 
 /** Build a minimal-but-valid evidence record; overrides deep-merge the interesting bits. */
 function evidence(overrides: Partial<ConvergenceEvidence> = {}): ConvergenceEvidence {
   return {
-    schema: 'recoder.convergence-evidence.v3' as ConvergenceEvidence['schema'],
+    schema: 'recoder.convergence-evidence/v4',
     taskGroup: 'grp-1',
     chosenWorkspaceId: 'ws-c',
     candidateCount: 2,
@@ -39,6 +39,27 @@ function evidence(overrides: Partial<ConvergenceEvidence> = {}): ConvergenceEvid
 }
 
 describe('computeConvergenceTrust', () => {
+  it('uses composed provenance sourceCount so an N-way delivery never collapses to solo', () => {
+    const t = computeConvergenceTrust({
+      ...evidence({ candidateCount: 1 }),
+      convergence: {
+        sourceCount: 2,
+        fileCount: 2,
+        selections: [
+          { path: 'picked.ts', mode: 'pick', contested: true },
+          { path: 'merged.ts', mode: 'synthesize', contested: true },
+        ],
+      },
+    });
+    expect(t.vote).toMatchObject({
+      verdict: 'mixed',
+      contestedCount: 2,
+      picked: ['picked.ts'],
+      converged: ['merged.ts'],
+    });
+    expect(t.factors).toContainEqual(expect.objectContaining({ label: 'breadth', impact: 'positive' }));
+  });
+
   it('scores HIGH for a verified, all-clean, multi-candidate merge with no flags', () => {
     const t = computeConvergenceTrust(evidence());
     expect(t.tier).toBe('high');
@@ -83,7 +104,12 @@ describe('computeConvergenceTrust', () => {
   });
 
   it('reports a SOLO vote for a single-candidate merge (nothing to vote on)', () => {
-    const t = computeConvergenceTrust(evidence({ candidateCount: 1 }));
+    const base = evidence();
+    const t = computeConvergenceTrust({
+      ...base,
+      candidateCount: 1,
+      convergence: { ...base.convergence!, sourceCount: 1 },
+    });
     expect(t.vote.verdict).toBe('solo');
   });
 
@@ -133,7 +159,53 @@ describe('computeConvergenceTrust', () => {
     expect(messy.factors.some((f) => f.label === 'contested-picks')).toBe(true);
   });
 
+  it('folds failed required rules only under the explicit operator mode', () => {
+    const result = { id: 'backend-types', text: 'Types pass', check: 'Backend types', status: 'fail' as const };
+    const off = computeConvergenceTrust(evidence({ requiredRules: { mode: 'off', results: [result] } }));
+    const warn = computeConvergenceTrust(evidence({ requiredRules: { mode: 'warn', results: [result] } }));
+    const block = computeConvergenceTrust(evidence({ requiredRules: { mode: 'block', results: [result] } }));
+    expect(off.factors.some(factor => factor.label === 'required-rules')).toBe(false);
+    expect(warn.score).toBeLessThan(off.score);
+    expect(warn.reviewFlags.join(' ')).toMatch(/backend-types/);
+    expect(block.score).toBeLessThanOrEqual(30);
+  });
+
   it('is deterministic — same evidence yields the same score', () => {
     expect(computeConvergenceTrust(evidence())).toEqual(computeConvergenceTrust(evidence()));
+  });
+
+  it('calibrates only exact deliberate flag matches without erasing evidence penalties', () => {
+    const raw = computeConvergenceTrust(evidence({
+      candidateCount: 2,
+      convergence: {
+        sourceCount: 2,
+        fileCount: 1,
+        selections: [{ path: 'b.ts', mode: 'pick', contested: true, sourceWorkspaceId: 'ws-b' }],
+      },
+    }));
+    const flag = raw.reviewFlags[0]!;
+    const dismissed = calibrateConvergenceTrust(raw, [{
+      key: 'ignored-by-fold',
+      flag,
+      disposition: 'dismissed',
+      actorId: 'user-1',
+      workspaceId: 'ws-old',
+      updatedAt: '2026-08-30T20:00:00.000Z',
+    }]);
+    expect(dismissed.reviewFlags).not.toContain(flag);
+    expect(dismissed.score).toBe(raw.score); // dismissal suppresses repetition, not evidence
+    expect(dismissed.calibration?.dismissed).toEqual([flag]);
+
+    const accepted = calibrateConvergenceTrust(raw, [{
+      key: 'ignored-by-fold',
+      flag,
+      disposition: 'accepted',
+      actorId: 'user-1',
+      workspaceId: 'ws-old',
+      updatedAt: '2026-08-30T20:00:00.000Z',
+    }]);
+    expect(accepted.reviewFlags).toContain(flag);
+    expect(accepted.score).toBe(raw.score - 3);
+    expect(accepted.factors).toContainEqual(expect.objectContaining({ label: 'human-calibration', delta: -3 }));
   });
 });

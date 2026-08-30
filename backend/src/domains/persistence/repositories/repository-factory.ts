@@ -11,17 +11,20 @@ import type { KvStore } from '../ports/kv-store.port.js';
 import type { TxContext, UnitOfWork } from '../ports/repository.port.js';
 import { KvStoreRepository } from './kv-store.repository.js';
 import { StateOfRecordRepository } from './state-of-record.repository.js';
+import { tryCreateSqliteKvStore, type SqliteKvStore } from './sqlite-kv-store.repository.js';
 
 /** A domain repo constructor built from the shared executor. */
 export type RepositoryConstructor<R> = (executor: QueryExecutor, log: Logger) => R;
 
 export class RepositoryFactory implements UnitOfWork {
-  private kv: KvStoreRepository | null = null;
+  private kv: KvStore | null = null;
+  private sqliteKv: SqliteKvStore | null = null;
   private stateOfRecord: StateOfRecordRepository | null = null;
 
   constructor(
     private readonly executor: QueryExecutor,
     private readonly log: Logger,
+    private readonly sqlitePath?: string,
   ) {}
 
   /** The shared executor (for domains that build ad-hoc queries via a repo). */
@@ -36,8 +39,19 @@ export class RepositoryFactory implements UnitOfWork {
 
   /** The DB-backed KV store (lazy singleton). */
   kvStore(): KvStore {
-    if (!this.kv) this.kv = new KvStoreRepository(this.executor, this.log);
+    if (!this.kv) {
+      this.sqliteKv = this.sqlitePath
+        ? tryCreateSqliteKvStore(this.sqlitePath, this.log)
+        : null;
+      this.kv = this.sqliteKv ?? new KvStoreRepository(this.executor, this.log);
+    }
     return this.kv;
+  }
+
+  close(): void {
+    this.sqliteKv?.close();
+    this.sqliteKv = null;
+    this.kv = null;
   }
 
   /** The versioned state-of-record repository (lazy singleton). */
@@ -53,6 +67,10 @@ export class RepositoryFactory implements UnitOfWork {
 }
 
 /** Construct a factory over the shared executor. */
-export function createRepositoryFactory(executor: QueryExecutor, log: Logger): RepositoryFactory {
-  return new RepositoryFactory(executor, log);
+export function createRepositoryFactory(
+  executor: QueryExecutor,
+  log: Logger,
+  options?: { readonly sqlitePath?: string },
+): RepositoryFactory {
+  return new RepositoryFactory(executor, log, options?.sqlitePath);
 }

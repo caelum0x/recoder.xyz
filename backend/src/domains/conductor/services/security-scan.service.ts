@@ -26,8 +26,16 @@ export interface SecretFinding {
 
 export interface SecurityScanResult {
   readonly findings: readonly SecretFinding[];
+  readonly dependencyRisks?: readonly DependencyRiskFinding[];
   /** A short, truthful, reviewer-facing one-liner. */
   readonly summary: string;
+}
+
+export interface DependencyRiskFinding {
+  readonly rule: 'install-script' | 'new-dependency' | 'non-registry-dependency' | 'large-lockfile-change';
+  readonly file: string;
+  readonly level: 'blocker' | 'review';
+  readonly evidence: string;
 }
 
 /** Cap findings so a pathological diff cannot flood the surface. */
@@ -79,17 +87,67 @@ export function scanDiffForSecrets(input: { readonly diffText: string | null }):
     return { findings: [], summary: 'no diff to scan for secrets' };
   }
   const findings: SecretFinding[] = [];
+  const dependencyRisks: DependencyRiskFinding[] = [];
   const seen = new Set<string>();
+  const seenDependencyRisks = new Set<string>();
+  const lockfileAdditions = new Map<string, number>();
   let file = '';
+  let dependencySectionIndent: number | null = null;
+
+  const addDependencyRisk = (finding: DependencyRiskFinding): void => {
+    const key = `${finding.file}:${finding.rule}:${finding.evidence}`;
+    if (seenDependencyRisks.has(key) || dependencyRisks.length >= MAX_FINDINGS) return;
+    seenDependencyRisks.add(key);
+    dependencyRisks.push(finding);
+  };
 
   for (const line of diff.split('\n')) {
     if (line.startsWith('+++ ')) {
       const path = line.slice(4).trim();
       file = path === '/dev/null' ? '' : path.replace(/^b\//, '');
+      dependencySectionIndent = null;
       continue;
+    }
+    const content = /^[ +\-]/.test(line) ? line.slice(1) : line;
+    if (file.endsWith('package.json')) {
+      const section = /^(\s*)"(?:dependencies|devDependencies|optionalDependencies|peerDependencies)"\s*:\s*\{/.exec(content);
+      if (section) dependencySectionIndent = section[1]?.length ?? 0;
+      else if (dependencySectionIndent !== null) {
+        const closing = /^(\s*)\}/.exec(content);
+        if (closing && (closing[1]?.length ?? 0) <= dependencySectionIndent) dependencySectionIndent = null;
+      }
     }
     if (!line.startsWith('+') || line.startsWith('+++')) continue;
     const added = line.slice(1);
+
+    if (/(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?)$/.test(file)) {
+      lockfileAdditions.set(file, (lockfileAdditions.get(file) ?? 0) + 1);
+    }
+    if (file.endsWith('package.json')) {
+      const installScript = /^\s*"(preinstall|install|postinstall)"\s*:\s*"/.exec(added);
+      if (installScript?.[1]) {
+        addDependencyRisk({
+          rule: 'install-script',
+          file,
+          level: 'blocker',
+          evidence: `${installScript[1]} lifecycle script added`,
+        });
+      }
+      if (dependencySectionIndent !== null) {
+        const entry = /^(\s*)"([^"\s]+)"\s*:\s*"([^"]+)"/.exec(added);
+        if (entry?.[2] && entry[3] && (entry[1]?.length ?? 0) > dependencySectionIndent) {
+          const nonRegistry = /^(?:git(?:\+|:)|https?:|file:|link:)/i.test(entry[3]);
+          addDependencyRisk({
+            rule: nonRegistry ? 'non-registry-dependency' : 'new-dependency',
+            file,
+            level: 'review',
+            evidence: nonRegistry
+              ? `${entry[2]} added from a non-registry source`
+              : `${entry[2]}@${entry[3].slice(0, 80)} added`,
+          });
+        }
+      }
+    }
 
     let matched: { rule: string; value: string } | null = null;
     for (const r of SECRET_RULES) {
@@ -112,12 +170,31 @@ export function scanDiffForSecrets(input: { readonly diffText: string | null }):
     if (findings.length >= MAX_FINDINGS) break;
   }
 
-  const summary =
-    findings.length === 0
-      ? 'no secrets detected in the diff'
-      : `${findings.length} potential secret(s) added — remove before merging: ${findings
+  for (const [lockfile, addedLines] of lockfileAdditions) {
+    if (addedLines > 500) {
+      addDependencyRisk({
+        rule: 'large-lockfile-change',
+        file: lockfile,
+        level: 'review',
+        evidence: `${addedLines} lockfile lines added`,
+      });
+    }
+  }
+
+  const parts: string[] = [];
+  if (findings.length > 0) {
+    parts.push(`${findings.length} potential secret(s) added — remove before merging: ${findings
           .slice(0, 3)
           .map((f) => `${f.rule}${f.file ? ` (${f.file})` : ''}`)
-          .join(', ')}`;
-  return { findings, summary };
+          .join(', ')}`);
+  }
+  if (dependencyRisks.length > 0) {
+    parts.push(`${dependencyRisks.length} dependency risk(s) require review: ${dependencyRisks
+      .slice(0, 3).map((risk) => `${risk.rule}${risk.file ? ` (${risk.file})` : ''}`).join(', ')}`);
+  }
+  return {
+    findings,
+    dependencyRisks,
+    summary: parts.length > 0 ? parts.join('; ') : 'no secrets or dependency risks detected in the diff',
+  };
 }

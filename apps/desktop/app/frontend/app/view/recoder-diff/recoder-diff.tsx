@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getApi } from "@/app/store/global";
+import { WaveAIModel } from "@/app/aipanel/waveai-model";
 import type { RecoderApproval } from "@/app/view/recoder-approvals/recoder-approvals-model";
 import { agentLabel } from "@/app/view/recoder/recoder-agent-labels";
 import { RecoderDetailHeader, workspaceOptionLabel } from "@/app/view/recoder/recoder-detail-header";
 import { useRecoderDetailNavigation } from "@/app/view/recoder/recoder-detail-navigation";
 import { openWorkspaceDetail } from "@/app/view/recoder/recoder-detail-open";
 import { openWorkspaceTerminal } from "@/app/view/recoder/recoder-open-terminal";
+import { getRecoderBackendUrl } from "@/app/view/recoder/recoder-endpoints";
+import { readErrorReason } from "@/app/view/recoder/recoder-errors";
 import { prChipLabel, prChipTone, prCreateGate, type RecoderPrChip } from "@/app/view/recoder/recoder-pr-status";
 import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { PRIMARY_BTN, QUIET_BTN } from "@/app/view/recoder/recoder-styles";
@@ -25,14 +28,20 @@ import {
     type DiffHunkAnchor,
 } from "./recoder-diff-files";
 import { reviewDetailsDefaultOpen, reviewPrimaryAction } from "./recoder-diff-layout";
-import { nextFileIndex, PRIMARY_CHORD_HINT, reviewKeyAction } from "./recoder-diff-review-keys";
 import {
+    canSendBlockerFeedback,
     isFailedConclusion,
+    parseGeneratedReviewFindings,
     RecoderDiffViewModel,
-    suggestReviewAction,
+    suggestEffectiveReviewAction,
     type RecoderCheckRow,
+    type RecoderReadinessView,
+    type RecoderPrReviewEvidence,
+    type RecoderReviewFinding,
+    type RecoderReviewFindings,
     type RecoderWorkspaceChecks,
 } from "./recoder-diff-model";
+import { nextFileIndex, PRIMARY_CHORD_HINT, reviewKeyAction } from "./recoder-diff-review-keys";
 import { EvidencePanel } from "./recoder-evidence-panel";
 
 const REFRESH_MS = 6000;
@@ -441,8 +450,7 @@ function DiffBody({
     const onDiffKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
         const tag = target?.tagName;
-        const typing =
-            tag == "INPUT" || tag == "TEXTAREA" || tag == "SELECT" || target?.isContentEditable == true;
+        const typing = tag == "INPUT" || tag == "TEXTAREA" || tag == "SELECT" || target?.isContentEditable == true;
         const intent = reviewKeyAction(
             {
                 key: e.key,
@@ -595,17 +603,36 @@ function checkLabel(value: string): string {
     return value.toLowerCase().replace(/_/g, " ");
 }
 
-const REFRESH_LINK = "text-secondary/70 underline hover:text-secondary transition-colors cursor-pointer disabled:opacity-50 disabled:no-underline";
+function remediationLabel(row: RecoderCheckRow): string {
+    if (row.remediation?.state == "running") return "fix running";
+    if (row.remediation?.state == "passed") return "fix verified";
+    if (row.remediation?.state == "failed") return "fix still failing";
+    if (row.remediation?.state == "error") return "fix unverified";
+    return "";
+}
+
+const REFRESH_LINK =
+    "text-secondary/70 underline hover:text-secondary transition-colors cursor-pointer disabled:opacity-50 disabled:no-underline";
 
 function ChecksStrip({
     checks,
     loading,
     onRefresh,
+    onAutofix,
 }: {
     checks: RecoderWorkspaceChecks;
     loading: boolean;
     onRefresh: () => void;
+    onAutofix: (row: RecoderCheckRow) => Promise<string>;
 }) {
+    const [autofixBusy, setAutofixBusy] = useState("");
+    const [autofixStatus, setAutofixStatus] = useState("");
+    const requestAutofix = async (row: RecoderCheckRow) => {
+        setAutofixBusy(row.name);
+        setAutofixStatus("");
+        setAutofixStatus(await onAutofix(row));
+        setAutofixBusy("");
+    };
     // The manual affordance: the 6s poll skips gh, so while a user sits on one
     // workspace watching CI this is how they pull a fresh result on demand.
     const refreshBtn = (
@@ -629,7 +656,8 @@ function ChecksStrip({
     }
     const rows = checks.checks ?? [];
     return (
-        <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-xs text-secondary">
+        <div className="flex flex-col gap-1 text-xs text-secondary">
+        <div className="flex items-center gap-x-3 gap-y-1 flex-wrap">
             {checks.mergeable != "" && (
                 <span className="border border-border rounded px-1">{checkLabel(checks.mergeable)}</span>
             )}
@@ -637,16 +665,268 @@ function ChecksStrip({
                 <span className="border border-border rounded px-1">{checkLabel(checks.reviewDecision)}</span>
             )}
             {rows.map((row, i) => (
-                <span key={`${row.name}-${i}`} className="flex items-center gap-1" title={checkLabel(row.conclusion || row.status)}>
+                <span
+                    key={`${row.name}-${i}`}
+                    className="flex items-center gap-1"
+                    title={row.detail || checkLabel(row.conclusion || row.status)}
+                >
                     <span className={cn("inline-block w-2 h-2 rounded-full shrink-0", checkDotClass(row))} />
                     <span>{row.name}</span>
+                    {row.source == "recoder" && <span className="text-[9px] uppercase tracking-wide text-meta">Recoder</span>}
+                    {row.autofix && !isFailedConclusion(row.conclusion) && (
+                        <span className="border border-white/8 px-1 text-[9px] uppercase tracking-wide text-meta">agent-fixable</span>
+                    )}
+                    {row.remediation && (
+                        <span
+                            className={cn(
+                                "border px-1 text-[9px] uppercase tracking-wide",
+                                row.remediation.state == "passed"
+                                    ? "border-accent/40 text-accent"
+                                    : row.remediation.state == "running"
+                                      ? "border-white/15 text-secondary"
+                                      : "border-error/40 text-error"
+                            )}
+                            title={row.remediation.afterDetail || "Recoder will independently rerun the named check after the agent settles"}
+                        >
+                            {remediationLabel(row)}
+                        </span>
+                    )}
+                    {row.autofix && isFailedConclusion(row.conclusion) && row.remediation?.state != "running" && (
+                        <button
+                            className="border border-accent/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-accent hover:border-accent disabled:opacity-50"
+                            disabled={autofixBusy != ""}
+                            title="Ask the installed runtime to fix and rerun this check in the same isolated Session"
+                            onClick={() => void requestAutofix(row)}
+                        >
+                            {autofixBusy == row.name ? "starting…" : "Ask agent to fix"}
+                        </button>
+                    )}
                 </span>
             ))}
+            {checks.githubAvailable === false && checks.githubReason && (
+                <span className="text-secondary/70" title={checks.githubReason}>GitHub unavailable</span>
+            )}
             {rows.length == 0 && <span>no checks reported</span>}
             {refreshBtn}
         </div>
+        {autofixStatus != "" && <div className="border-l border-accent/50 pl-2 text-[11px] text-secondary">{autofixStatus}</div>}
+        </div>
     );
 }
+
+function CanonicalReadinessEvidence({ readiness, loading }: { readiness: RecoderReadinessView | null; loading: boolean }) {
+    if (loading && readiness == null) {
+        return <div className="text-xs text-secondary/70">checking Recoder gates…</div>;
+    }
+    if (readiness == null || !readiness.available) {
+        return null;
+    }
+    const advisories = readiness.advisories ?? [];
+    if (readiness.blockers.length == 0 && advisories.length == 0) return null;
+    return (
+        <div className="flex flex-col gap-2 text-xs text-secondary">
+            {readiness.blockers.length > 0 && (
+                <div className="flex flex-col gap-1">
+                    <span className="uppercase tracking-wide">Hard blockers</span>
+                    {readiness.blockers.map((blocker, index) => (
+                        <span key={`${blocker}:${index}`} className="font-mono text-error/90">
+                            {blocker}
+                        </span>
+                    ))}
+                </div>
+            )}
+            {advisories.length > 0 && (
+                <div className="flex flex-col gap-1">
+                    <span className="uppercase tracking-wide">Review evidence</span>
+                    {advisories.map((advisory, index) => (
+                        <span key={`${advisory}:${index}`} className="font-mono text-secondary/90">
+                            {advisory}
+                        </span>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ReviewImpactLedger({ impact }: { impact: NonNullable<RecoderPrReviewEvidence["impact"]> }) {
+    const scopeLabel = impact.scope == "file"
+        ? "file imports"
+        : impact.scope == "symbol"
+          ? "symbol calls"
+          : impact.scope == "mixed"
+            ? "mixed graph"
+            : "no graph";
+    const visibleFiles = impact.files.slice(0, 8);
+    return (
+        <div className="flex flex-col border border-white/8">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/8 px-2 py-1.5 text-[10px] uppercase tracking-wide text-secondary">
+                <span>Graph reach · {scopeLabel}</span>
+                <span className="font-mono text-primary">{impact.risk} risk</span>
+                {impact.partial && <span className="text-meta">partial evidence</span>}
+            </div>
+            <div className="grid grid-cols-2 gap-px bg-white/8 sm:grid-cols-6">
+                {[
+                    ["files", impact.summary.impactedFiles],
+                    ["tests", impact.summary.affectedTests],
+                    ["upstream", impact.summary.upstreamFiles],
+                    ["downstream", impact.summary.downstreamFiles],
+                    ["changed together", impact.summary.coChangedFiles],
+                    ["consumer repos", impact.summary.consumerRepositories],
+                ].map(([label, count]) => (
+                    <div key={label} className="flex items-baseline justify-between gap-2 bg-background px-2 py-1.5">
+                        <span className="text-[10px] uppercase tracking-wide text-meta">{label}</span>
+                        <span className="font-mono text-xs text-primary">{count}</span>
+                    </div>
+                ))}
+            </div>
+            {visibleFiles.length > 0 && (
+                <div className="grid grid-cols-1 divide-y divide-white/8 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+                    {visibleFiles.map((file) => (
+                        <div key={file.path} className="flex min-w-0 items-center gap-2 px-2 py-1.5 text-xs">
+                            <span className="min-w-0 flex-1 truncate font-mono text-secondary" title={file.path}>{file.path}</span>
+                            {file.isTest && <span className="text-[10px] uppercase tracking-wide text-meta">test</span>}
+                            <span className="shrink-0 font-mono text-[10px] text-meta">
+                                {file.coChange
+                                    ? `history · ${file.coChange.commits}× · ${Math.round(file.coChange.confidence * 100)}%`
+                                    : `${file.directions.map((direction) => direction == "upstream" ? "up" : "down").join("+")} · d${file.minDepth}`}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {impact.files.length > visibleFiles.length && (
+                <div className="border-t border-white/8 px-2 py-1 text-[10px] text-meta">
+                    +{impact.files.length - visibleFiles.length} more bounded graph files
+                </div>
+            )}
+            {impact.consumers.length > 0 && (
+                <div className="border-t border-white/8 px-2 py-1.5 text-[10px] text-secondary">
+                    <div className="mb-1 uppercase tracking-wide text-meta">cross-repository consumers</div>
+                    {impact.consumers.slice(0, 6).map((consumer) => (
+                        <div key={`${consumer.repoId}:${consumer.path}:${consumer.packageName}`} className="truncate font-mono" title={`${consumer.importSpecifier} → ${consumer.packageName}`}>
+                            {consumer.repoId} · {consumer.path} · imports {consumer.packageName}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ReviewEvidencePanel({
+    workspaceId,
+    impact,
+    onQueueFinding,
+}: {
+    workspaceId: string;
+    impact: RecoderPrReviewEvidence | null;
+    onQueueFinding: (finding: RecoderReviewFinding) => void;
+}) {
+    const [running, setRunning] = useState(false);
+    const [findings, setFindings] = useState<RecoderReviewFindings | null>(null);
+    const [error, setError] = useState("");
+    const [queued, setQueued] = useState<Set<string>>(() => new Set());
+
+    useEffect(() => {
+        setFindings(null);
+        setError("");
+        setRunning(false);
+        setQueued(new Set());
+    }, [workspaceId]);
+
+    const runReview = async () => {
+        setRunning(true);
+        setError("");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/review-findings`,
+                { method: "POST" }
+            );
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                throw new Error(readErrorReason(body) || "Code review is unavailable.");
+            }
+            setFindings(parseGeneratedReviewFindings(body?.data?.findings));
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Code review is unavailable.");
+        } finally {
+            setRunning(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col gap-2 border border-white/8 px-2 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-secondary">Code review</span>
+                {impact && <span className="text-xs font-mono text-meta">PR #{impact.pr}</span>}
+                <button className={`${QUIET_BTN} ml-auto`} disabled={running || workspaceId == ""} onClick={() => void runReview()}>
+                    {running ? "Reviewing…" : findings ? "Run again" : "Run code review"}
+                </button>
+            </div>
+
+            {impact?.available && (
+                <div className="flex flex-col gap-1 text-xs text-secondary">
+                    <div>
+                        Change impact
+                        {impact.diffTruncated ? " · PR diff was truncated" : " · full bounded PR diff analyzed"}
+                    </div>
+                    {impact.impact?.available ? (
+                        <ReviewImpactLedger impact={impact.impact} />
+                    ) : impact.impact?.reason ? (
+                        <div className="text-meta">Impact unavailable: {impact.impact.reason}</div>
+                    ) : null}
+                </div>
+            )}
+            {impact && !impact.available && (
+                <div className="text-xs text-meta">PR impact unavailable: {impact.reason ?? "review probe unavailable"}</div>
+            )}
+
+            {findings && findings.kept.length > 0 && (
+                <div className="flex flex-col divide-y divide-white/8 border border-white/8">
+                    {findings.kept.map((finding, index) => (
+                        <div key={`${finding.file}:${finding.line}:${index}`} className="flex flex-col gap-1 px-2 py-2">
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <span className={`rounded border px-1.5 py-0.5 font-mono ${finding.severity == "critical" || finding.severity == "high" ? "border-accent/60 text-primary" : "border-white/8 text-secondary"}`}>
+                                    {finding.severity}
+                                </span>
+                                <span className="font-mono text-secondary">{finding.file}:{finding.line}</span>
+                                {typeof finding.confidence == "number" && (
+                                    <span className="ml-auto font-mono text-meta">{Math.round(finding.confidence * 100)}% confidence</span>
+                                )}
+                            </div>
+                            <div className="text-sm text-primary">{finding.message}</div>
+                            <div className="text-xs text-secondary">Evidence: {finding.evidence}</div>
+                            <div>
+                                <button
+                                    className={QUIET_BTN}
+                                    disabled={queued.has(`${finding.file}:${finding.line}:${index}`)}
+                                    onClick={() => {
+                                        onQueueFinding(finding);
+                                        setQueued((current) => new Set(current).add(`${finding.file}:${finding.line}:${index}`));
+                                    }}
+                                >
+                                    {queued.has(`${finding.file}:${finding.line}:${index}`) ? "Queued for agent" : "Ask agent to fix"}
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {findings && findings.kept.length == 0 && (
+                <div className="text-xs text-secondary">
+                    No evidence-backed findings returned. This does not prove the diff is clean.
+                </div>
+            )}
+            {findings && findings.dropped > 0 && (
+                <div className="text-xs text-meta">{findings.dropped} candidate finding{findings.dropped == 1 ? " was" : "s were"} removed by the evidence validator.</div>
+            )}
+            {error != "" && <div className="border-l-2 border-white/25 bg-white/[0.04] px-2 py-1 text-xs text-secondary">{error}</div>}
+        </div>
+    );
+}
+
+ReviewEvidencePanel.displayName = "ReviewEvidencePanel";
 
 // The live PR chip on the Review header — the workspace's pull-request state
 // from the same gh-backed pr-status edge the board uses, reusing prChipLabel/
@@ -707,7 +987,9 @@ function InlineApprovalCard({
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
                 <span className="text-sm font-medium">Waiting on your approval</span>
                 {approval.riskTier && (
-                    <span className="ml-auto text-[10px] uppercase tracking-wide text-secondary">{approval.riskTier}</span>
+                    <span className="ml-auto text-[10px] uppercase tracking-wide text-secondary">
+                        {approval.riskTier}
+                    </span>
                 )}
             </div>
             <div className="text-sm text-primary/90">{reason}</div>
@@ -748,10 +1030,14 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const prView = useAtomValue(model.prViewAtom);
     const checks = useAtomValue(model.checksAtom);
     const checksLoading = useAtomValue(model.checksLoadingAtom);
+    const readiness = useAtomValue(model.readinessAtom);
+    const readinessLoading = useAtomValue(model.readinessLoadingAtom);
     const discardStatus = useAtomValue(model.discardStatusAtom);
     const inlineApproval = useAtomValue(model.inlineApprovalAtom);
     const approvalDeciding = useAtomValue(model.approvalDecidingAtom);
     const approvalError = useAtomValue(model.approvalErrorAtom);
+    const blockerFeedbackSending = useAtomValue(model.blockerFeedbackSendingAtom);
+    const blockerFeedbackStatus = useAtomValue(model.blockerFeedbackStatusAtom);
 
     useEffect(() => {
         model.refresh();
@@ -759,24 +1045,32 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
         return () => clearInterval(id);
     }, [model]);
 
+    useEffect(() => {
+        void model.fetchReadiness(selectedId);
+    }, [model, selectedId]);
+
     // The secondary panels (checks · evidence · PR/merge) live in one collapsed
     // disclosure so the diff leads. Switching workspace resets to the calm default;
     // a real blocker (address-feedback / resolve-conflicts) auto-opens it so the
     // failing rows are never hidden — decisions live in reviewDetailsDefaultOpen.
-    const reviewSuggestion = suggestReviewAction(checks);
+    const canSendCanonicalBlockers = canSendBlockerFeedback(checks, readiness);
+    // Canonical readiness is broader than GitHub's check view (local checks and
+    // secret findings live only here). It must participate in the SAME primary
+    // decision or a local-only blocker could accidentally leave Merge promoted.
+    const effectiveReviewSuggestion = suggestEffectiveReviewAction(checks, readiness);
     const [detailsOpen, setDetailsOpen] = useState(false);
     useEffect(() => {
-        setDetailsOpen(reviewDetailsDefaultOpen(reviewSuggestion));
+        setDetailsOpen(reviewDetailsDefaultOpen(effectiveReviewSuggestion));
         // Re-evaluated per workspace only; the effect below re-opens if a blocker
         // arrives after checks finish loading.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedId]);
     useEffect(() => {
-        if (reviewDetailsDefaultOpen(reviewSuggestion)) {
+        if (reviewDetailsDefaultOpen(effectiveReviewSuggestion)) {
             setDetailsOpen(true);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [reviewSuggestion?.action]);
+    }, [effectiveReviewSuggestion?.action]);
 
     const showNotConnected = !loading && !connected;
     const showNoWorkspaces = !loading && connected && workspaces.length == 0;
@@ -790,7 +1084,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const prGate = prCreateGate(prView);
     const primary = reviewPrimaryAction({
         hasSelection: selectedId != "",
-        suggestion: reviewSuggestion,
+        suggestion: effectiveReviewSuggestion,
         hasPr: prChip != null,
         canCreatePr: prGate.canCreate,
     });
@@ -804,9 +1098,17 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     // and muted so it reads as a hint, not a second action.
     const chordHint = <span className="ml-1.5 font-mono opacity-60">{PRIMARY_CHORD_HINT}</span>;
 
+    const canonicalMergeBlockers = readiness?.available && readiness.blockers.length > 0;
     const mergeBtn = (className: string, chord = false) => (
-        <button className={className} disabled={merging} onClick={() => model.mergeSelected()}>
-            {merging ? "Merging…" : "Merge"}
+        <button
+            className={className}
+            disabled={merging}
+            onClick={() => model.mergeSelected()}
+            title={
+                canonicalMergeBlockers ? "Attempt delivery under the configured Recoder merge-trust policy" : undefined
+            }
+        >
+            {merging ? "Merging…" : canonicalMergeBlockers ? "Attempt merge" : "Merge"}
             {chord && !merging && chordHint}
         </button>
     );
@@ -874,11 +1176,17 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
               openWorkspaceTerminal({
                   sessionName: selectedWorkspace.sessionName,
                   cwd: selectedWorkspace.worktreePath,
+                  workspaceId: selectedWorkspace.workspaceId,
+                  substrate: selectedWorkspace.substrate,
               })
         : undefined;
-    const hasHeaderPrimary = primary == "merge" || primary == "create-pr" || (selectedId != "" && prChip != null);
     const headerPrimary = (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+            {selectedId != "" && (
+                <button className={QUIET_BTN} onClick={() => WaveAIModel.getInstance().focusInput()}>
+                    Ask AI
+                </button>
+            )}
             {primary == "merge" && mergeBtn(PRIMARY_BTN, true)}
             {primary == "create-pr" && createPrBtn(PRIMARY_BTN, true)}
             {selectedId != "" && prChip != null && <ReviewPrChip chip={prChip} />}
@@ -900,112 +1208,143 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     }
                 }}
                 onOpenTerminal={onOpenTerminal}
-                primaryAction={hasHeaderPrimary ? headerPrimary : undefined}
+                primaryAction={selectedId != "" ? headerPrimary : undefined}
             />
             <div className="flex flex-col flex-1 min-h-0 overflow-hidden p-3 gap-2">
-            {inlineApproval != null && (
-                <InlineApprovalCard
-                    approval={inlineApproval}
-                    deciding={approvalDeciding}
-                    error={approvalError}
-                    onApprove={() => model.decideInlineApproval("approve")}
-                    onReject={() => model.decideInlineApproval("reject")}
-                />
-            )}
-            {selectedId != "" && reviewSuggestion != null && (
-                <div className="flex items-center gap-1.5 text-xs text-secondary">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" />
-                    <span>{reviewSuggestion.label}</span>
-                </div>
-            )}
-            {mergeStatus != "" && <div className="text-xs text-secondary">{mergeStatus}</div>}
-            {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}
-            {discardStatus != "" && <div className="text-xs text-secondary">{discardStatus}</div>}
-            {selectedId != "" && (
-                <div className="flex flex-col rounded border border-white/8">
-                    <button
-                        className="flex items-center gap-2 px-2 py-1 text-xs text-secondary hover:text-primary focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 recoder-transition cursor-pointer"
-                        aria-expanded={detailsOpen}
-                        onClick={() => setDetailsOpen((v) => !v)}
-                    >
-                        <span className="select-none w-3 text-center opacity-70">{detailsOpen ? "▾" : "▸"}</span>
-                        <span className="uppercase tracking-wide">Details</span>
-                        <span className="text-meta">checks · evidence · PR</span>
-                    </button>
-                    {detailsOpen && (
-                        <div className="flex flex-col gap-2 border-t border-white/8 px-2 py-2">
-                            <ChecksStrip
-                                checks={checks}
-                                loading={checksLoading}
-                                onRefresh={() => model.refreshChecks()}
+                {inlineApproval != null && (
+                    <InlineApprovalCard
+                        approval={inlineApproval}
+                        deciding={approvalDeciding}
+                        error={approvalError}
+                        onApprove={() => model.decideInlineApproval("approve")}
+                        onReject={() => model.decideInlineApproval("reject")}
+                    />
+                )}
+                {selectedId != "" && effectiveReviewSuggestion != null && (
+                    <div className="flex items-center gap-2 text-xs text-secondary flex-wrap">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" />
+                        <span>{effectiveReviewSuggestion.label}</span>
+                        {canSendCanonicalBlockers && (
+                            <button
+                                className={QUIET_BTN}
+                                disabled={blockerFeedbackSending}
+                                onClick={() => model.sendBlockerFeedback()}
+                                title="Re-check Recoder’s canonical gates and send the hard blockers back through the governed review loop"
+                            >
+                                {blockerFeedbackSending ? "Checking…" : "Ask agent to fix"}
+                            </button>
+                        )}
+                    </div>
+                )}
+                {blockerFeedbackStatus != "" && <div className="text-xs text-secondary">{blockerFeedbackStatus}</div>}
+                {mergeStatus != "" && <div className="text-xs text-secondary">{mergeStatus}</div>}
+                {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}
+                {discardStatus != "" && <div className="text-xs text-secondary">{discardStatus}</div>}
+                {selectedId != "" && (
+                    <div className="flex flex-col rounded border border-white/8">
+                        <button
+                            className="flex items-center gap-2 px-2 py-1 text-xs text-secondary hover:text-primary focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 recoder-transition cursor-pointer"
+                            aria-expanded={detailsOpen}
+                            onClick={() => setDetailsOpen((v) => !v)}
+                        >
+                            <span className="select-none w-3 text-center opacity-70">{detailsOpen ? "▾" : "▸"}</span>
+                            <span className="uppercase tracking-wide">Details</span>
+                            <span className="text-meta">checks · code review · evidence · PR</span>
+                        </button>
+                        {detailsOpen && (
+                            <div className="flex flex-col gap-2 border-t border-white/8 px-2 py-2">
+                                <ChecksStrip
+                                    checks={checks}
+                                    loading={checksLoading}
+                                    onRefresh={() => model.refreshChecks()}
+                                    onAutofix={(row) => model.requestCheckAutofix(selectedId, row)}
+                                />
+                                <CanonicalReadinessEvidence readiness={readiness} loading={readinessLoading} />
+                                <ReviewEvidencePanel
+                                    workspaceId={selectedId}
+                                    impact={readiness?.review ?? null}
+                                    onQueueFinding={(finding) =>
+                                        model.addComment(
+                                            finding.file,
+                                            finding.line,
+                                            `${finding.message}\n\nEvidence: ${finding.evidence}`
+                                        )
+                                    }
+                                />
+                                {(showMergeSecondary || showCreatePrSecondary) && (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        {showMergeSecondary && mergeBtn(QUIET_BTN)}
+                                        {showCreatePrSecondary && createPrBtn(QUIET_BTN)}
+                                        {prChip == null && !prGate.canCreate && (
+                                            <span className="text-xs text-secondary">
+                                                Create PR unavailable — {prGate.reason}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                                <EvidencePanel workspaceId={selectedId} />
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {showNotConnected && (
+                    <RecoderEmpty
+                        title="Recoder is still starting…"
+                        hint="Your workspace diffs load once it is ready."
+                    />
+                )}
+                {showNoWorkspaces && (
+                    <RecoderEmpty
+                        title="No workspaces yet"
+                        hint="Press N in Workspaces to launch an agent, then review its diff here."
+                    />
+                )}
+                {loading && workspaces.length == 0 && <RecoderSkeleton rows={5} />}
+
+                {selectedId != "" && (
+                    <div className="flex flex-col gap-2 overflow-hidden">
+                        {diff != null && (
+                            <div className="flex items-center gap-2 text-xs text-secondary">
+                                <span>base {diff.baseRef}</span>
+                                <span>·</span>
+                                <span>{diff.changedFiles} changed</span>
+                                {diff.untracked.length > 0 && (
+                                    <>
+                                        <span>·</span>
+                                        <span>{diff.untracked.length} untracked</span>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                        {diffLoading && <RecoderSkeleton rows={8} />}
+                        {!diffLoading && !hasPatch && (
+                            <div className="text-secondary text-sm">
+                                {diffStatus != "" ? diffStatus : "No diff — the worktree matches its base."}
+                            </div>
+                        )}
+                        {!diffLoading && hasPatch && (
+                            <DiffBody
+                                patch={diff.patch}
+                                model={model}
+                                onPrimary={runPrimary}
+                                primaryAvailable={primaryAvailable}
                             />
-                            {(showMergeSecondary || showCreatePrSecondary) && (
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    {showMergeSecondary && mergeBtn(QUIET_BTN)}
-                                    {showCreatePrSecondary && createPrBtn(QUIET_BTN)}
-                                    {prChip == null && !prGate.canCreate && (
-                                        <span className="text-xs text-secondary">Create PR unavailable — {prGate.reason}</span>
-                                    )}
-                                </div>
-                            )}
-                            <EvidencePanel workspaceId={selectedId} />
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {showNotConnected && (
-                <RecoderEmpty title="Recoder is still starting…" hint="Your workspace diffs load once it is ready." />
-            )}
-            {showNoWorkspaces && (
-                <RecoderEmpty
-                    title="No workspaces yet"
-                    hint="Press N in Workspaces to launch an agent, then review its diff here."
-                />
-            )}
-            {loading && workspaces.length == 0 && <RecoderSkeleton rows={5} />}
-
-            {selectedId != "" && (
-                <div className="flex flex-col gap-2 overflow-hidden">
-                    {diff != null && (
-                        <div className="flex items-center gap-2 text-xs text-secondary">
-                            <span>base {diff.baseRef}</span>
-                            <span>·</span>
-                            <span>{diff.changedFiles} changed</span>
-                            {diff.untracked.length > 0 && (
-                                <>
-                                    <span>·</span>
-                                    <span>{diff.untracked.length} untracked</span>
-                                </>
-                            )}
-                        </div>
-                    )}
-                    {diffLoading && <RecoderSkeleton rows={8} />}
-                    {!diffLoading && !hasPatch && (
-                        <div className="text-secondary text-sm">{diffStatus != "" ? diffStatus : "No diff — the worktree matches its base."}</div>
-                    )}
-                    {!diffLoading && hasPatch && (
-                        <DiffBody
-                            patch={diff.patch}
-                            model={model}
-                            onPrimary={runPrimary}
-                            primaryAvailable={primaryAvailable}
-                        />
-                    )}
-                    {!diffLoading && hasPatch && <ReviewCommentQueue model={model} />}
-                    {!diffLoading && diff != null && diff.untracked.length > 0 && (
-                        <div className="flex flex-col gap-0.5">
-                            <div className="text-xs uppercase tracking-wide text-secondary">Untracked</div>
-                            {diff.untracked.map((f) => (
-                                <div key={f} className="text-xs font-mono text-secondary">
-                                    <span className="select-none opacity-70">+ </span>
-                                    {f}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
+                        )}
+                        {!diffLoading && hasPatch && <ReviewCommentQueue model={model} />}
+                        {!diffLoading && diff != null && diff.untracked.length > 0 && (
+                            <div className="flex flex-col gap-0.5">
+                                <div className="text-xs uppercase tracking-wide text-secondary">Untracked</div>
+                                {diff.untracked.map((f) => (
+                                    <div key={f} className="text-xs font-mono text-secondary">
+                                        <span className="select-none opacity-70">+ </span>
+                                        {f}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -11,7 +11,9 @@
  * Behavior is identical to the proven backend tailer: same 3s interval, same
  * 30-minute safety stop, same prefix-diff delta + 8000-char cap, same exit-code
  * → completed(0)/failed(non-zero) discrimination, same idempotency per
- * workspace, same "session gone = no exit code → completed" default.
+ * workspace. A clean completion now requires an OBSERVED numeric exit code 0;
+ * a vanished session whose exit code cannot be recovered is a truthful failure,
+ * never a fabricated completed(0).
  */
 import type { RunEvent, RunEventType } from '@recoder/agent-os';
 import type { SubstrateHandle } from '../contract/index.js';
@@ -33,9 +35,9 @@ export const CAPTURE_LINES = 2000;
 
 /**
  * The substrate surface the tailer polls. A subset of ConductorSubstrate plus
- * the optional `exitCode` completion-detail method (which the package contract
- * keeps optional — the run-tailer degrades to "session gone = completed(0)"
- * when a substrate cannot report a true exit code).
+ * the optional `exitCode` completion-detail method. The method is optional for
+ * compatibility, but absence cannot prove success: once liveness is false, only
+ * an observed numeric zero is a clean completion.
  */
 export interface TailSubstrate {
   capture(handle: SubstrateHandle, lines?: number): Promise<string | null>;
@@ -126,7 +128,10 @@ export function startRunTail(input: RunTailInput, deps: RunTailerDeps): TailHand
       agentId: input.agentId,
       message,
       createdAt: clock.now(),
-      data,
+      // Every event carries its canonical workspace identity. In particular the
+      // terminal completion hook needs this to advance `running` to Review/Failed;
+      // runId alone is not treated as an implicit, parseable workspace id.
+      data: { ...(data ?? {}), workspaceId: input.workspaceId },
     };
     try {
       await sink.append(event);
@@ -182,15 +187,25 @@ export function startRunTail(input: RunTailInput, deps: RunTailerDeps): TailHand
       // Check the true exit code (upgrade over "session gone = done") —
       // distinguishes success (exit 0 → completed) from crash (non-zero → failed).
       const code = substrate.exitCode ? await substrate.exitCode(subHandle) : undefined;
-      if (code !== undefined && code !== null && code !== 0) {
+      if (typeof code === 'number' && code !== 0) {
         await appendEvent('failed', `Agent session exited with code ${code}`, {
           sessionName: input.sessionName,
           exitCode: code,
         });
-      } else {
+      } else if (code === 0) {
         await appendEvent('completed', 'Agent session ended', {
           sessionName: input.sessionName,
-          exitCode: code ?? 0,
+          exitCode: 0,
+        });
+      } else {
+        // `alive:false` plus no numeric exit is an interrupted/gone handle. It
+        // might have succeeded, but the substrate cannot prove that; booking a
+        // completed(0) here silently loses real CLI crashes (and strands the
+        // canonical workspace in a false Review state).
+        await appendEvent('failed', 'Agent session ended without an observable exit code', {
+          sessionName: input.sessionName,
+          exitCode: null,
+          reason: 'exit_code_unavailable',
         });
       }
       handle.stop();

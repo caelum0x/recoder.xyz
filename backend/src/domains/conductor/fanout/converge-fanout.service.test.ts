@@ -557,4 +557,39 @@ describe('ConvergeFanoutService', () => {
     expect(result.converged).toBeNull();
     expect(result.convergeReason).toMatch(/unresolved contested/i);
   });
+
+  it('retries one failed agent into the original group without composing the replacement alone', async () => {
+    const creator = new FakeCreator();
+    const wait = new FakeWait(
+      new Map([['ws_codex', settled('review_ready')]])
+    );
+    const converge = new FakeConverge(emptyPlan('fan-existing'), OK_COMPOSE);
+    const svc = new ConvergeFanoutService({
+      creator,
+      delivery: new FakeDelivery(),
+      wait,
+      converge,
+      newId: seqIds(),
+    });
+
+    const result = await svc.retry({
+      taskGroup: 'fan-existing',
+      task: 'finish the original task',
+      agentKinds: ['codex'],
+      repoPath: '/repo',
+      spaceId: 'space-1',
+      projectId: 'proj-1',
+      actor: ACTOR,
+    });
+
+    expect(creator.requests[0].request.taskGroup).toBe('fan-existing');
+    expect(creator.requests[0].request.branch).toBe('recoder/fan-codex-id1');
+    expect(result).toMatchObject({
+      taskGroup: 'fan-existing',
+      workspaceIds: ['ws_codex'],
+      reviewableWorkspaceIds: ['ws_codex'],
+    });
+    expect(converge.planCalls).toHaveLength(0);
+    expect(converge.composeCalls).toHaveLength(0);
+  });
 });

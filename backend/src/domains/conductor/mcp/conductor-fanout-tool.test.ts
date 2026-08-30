@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 import type { McpToolCaller } from '../../../shared/module-base.js';
 import type {
   FanoutInput,
+  FanoutRetryInput,
+  FanoutRetryResult,
   FanoutResult,
 } from '../fanout/converge-fanout.service.js';
 import {
@@ -31,16 +33,35 @@ const OK_RESULT: FanoutResult = {
 
 class FakeSurface implements ConvergeFanoutSurface {
   readonly inputs: FanoutInput[] = [];
+  readonly retryInputs: FanoutRetryInput[] = [];
 
   async fanout(input: FanoutInput): Promise<FanoutResult> {
     this.inputs.push(input);
     return OK_RESULT;
+  }
+
+  async retryFanout(input: FanoutRetryInput): Promise<FanoutRetryResult> {
+    this.retryInputs.push(input);
+    return {
+      taskGroup: input.taskGroup,
+      workspaceIds: ['ws_retry'],
+      reviewableWorkspaceIds: ['ws_retry'],
+      perAgent: [],
+    };
   }
 }
 
 function tool(surface: ConvergeFanoutSurface) {
   const [registration] = buildConductorFanoutTools(surface);
   expect(registration.name).toBe('recoder_converge_fanout');
+  return registration;
+}
+
+function retryTool(surface: ConvergeFanoutSurface) {
+  const registration = buildConductorFanoutTools(surface).find(
+    item => item.name === 'recoder_fanout_retry'
+  )!;
+  expect(registration).toBeDefined();
   return registration;
 }
 
@@ -164,5 +185,38 @@ describe('recoder_converge_fanout tool', () => {
       expect(out.error).toContain(field);
     }
     expect(surface.inputs).toHaveLength(0);
+  });
+});
+
+describe('recoder_fanout_retry tool', () => {
+  it('allows one replacement agent in the original group', async () => {
+    const surface = new FakeSurface();
+    await retryTool(surface).handler(
+      validArgs({ taskGroup: 'fan-existing', agentKinds: ['codex'] }),
+      OWNER
+    );
+
+    expect(surface.retryInputs).toHaveLength(1);
+    expect(surface.retryInputs[0]).toMatchObject({
+      taskGroup: 'fan-existing',
+      task: 'add a health endpoint',
+      agentKinds: ['codex'],
+      actor: { userId: 'user-1' },
+    });
+  });
+
+  it('requires a group and at least one known replacement agent', async () => {
+    const surface = new FakeSurface();
+    const missingGroup = (await retryTool(surface).handler(validArgs(), OWNER)) as {
+      error: string;
+    };
+    const noAgents = (await retryTool(surface).handler(
+      validArgs({ taskGroup: 'fan-existing', agentKinds: [] }),
+      OWNER
+    )) as { error: string };
+
+    expect(missingGroup.error).toContain('taskGroup');
+    expect(noAgents.error).toMatch(/≥1/);
+    expect(surface.retryInputs).toHaveLength(0);
   });
 });

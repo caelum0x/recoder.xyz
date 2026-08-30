@@ -33,6 +33,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import {
   execFileSafe,
   buildSubstrateDiff,
+  shellQuote,
   type ExecOptions,
   type ExecResult,
   type LoggerPort,
@@ -100,6 +101,56 @@ export function createTmuxSubstrate(
   // proper `git worktree remove`. Substrate-owned live state (never a module
   // singleton); empty after a restart ⇒ teardown falls back to a direct dir remove.
   const repoByRef = new Map<string, string>();
+
+  /**
+   * Durable local run-state lives beside (never inside) agent worktrees, so the
+   * exit marker survives a short-lived tmux pane without appearing in Git diff.
+   * The filename is derived only from Recoder's validated workspace id contract.
+   */
+  function exitSentinelFor(workspaceId: string): string {
+    return path.join(
+      worktreeRoot,
+      '.run-state',
+      `${tmuxNameFor(workspaceId)}.exit`
+    );
+  }
+
+  /** Read a complete POSIX process exit code; absent/partial markers are unknown. */
+  function readExitSentinel(workspaceId: string): number | undefined {
+    try {
+      const raw = readFileSync(exitSentinelFor(workspaceId), 'utf8').trim();
+      if (!/^\d{1,3}$/.test(raw)) return undefined;
+      const code = Number.parseInt(raw, 10);
+      return code >= 0 && code <= 255 ? code : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Run the generated CLI command in a subshell, then atomically persist its real
+   * status before exiting with that same status. A command-local `exit`/`set -e`
+   * cannot bypass the outer recorder. Paths are POSIX-quoted at the single shared
+   * shell-quoting choke point.
+   */
+  function withExitSentinel(command: string, workspaceId: string): string {
+    const exitFile = exitSentinelFor(workspaceId);
+    const pending = `${exitFile}.pending`;
+    return [
+      `( ${command} )`,
+      '__recoder_exit_code=$?',
+      `mkdir -p ${shellQuote(path.dirname(exitFile))}`,
+      `printf '%s\\n' "$__recoder_exit_code" > ${shellQuote(pending)}`,
+      `mv ${shellQuote(pending)} ${shellQuote(exitFile)}`,
+      'exit "$__recoder_exit_code"',
+    ].join('; ');
+  }
+
+  /** A new turn must never inherit the previous turn's completed marker. */
+  function clearExitSentinel(workspaceId: string): void {
+    rmSync(exitSentinelFor(workspaceId), { force: true });
+    rmSync(`${exitSentinelFor(workspaceId)}.pending`, { force: true });
+  }
 
   /** Truthful binary presence probe (never throws; a missing bin ⇒ false). */
   async function present(bin: string, versionArg: string): Promise<boolean> {
@@ -246,6 +297,7 @@ export function createTmuxSubstrate(
       const branch = input.branch || `recoder/${input.workspaceId}`;
       const tmuxName = tmuxNameFor(input.workspaceId);
       const worktreePath = path.join(worktreeRoot, tmuxName);
+      clearExitSentinel(input.workspaceId);
 
       // Isolated worktree on its own branch — parallel agents never collide.
       // NEVER `-B` (it force-resets an EXISTING branch ref to the start point =
@@ -305,10 +357,40 @@ export function createTmuxSubstrate(
           tmuxName,
           '-c',
           worktreePath,
-          input.command,
+          withExitSentinel(input.command, input.workspaceId),
         ],
         env ? { env } : {}
       );
+
+      // Some tmux builds can print a socket-creation error yet still return exit
+      // status 0 from `new-session` (observed on macOS when a managed sandbox
+      // denies the default Unix socket). Do not turn that false zero into a
+      // fabricated running workspace: prove the named session exists before the
+      // handle escapes. Roll back only the worktree checkout on failure; preserve
+      // the branch ref so a retry cannot discard work from an earlier attempt.
+      try {
+        await exec(tmuxBin, ['has-session', '-t', tmuxName]);
+      } catch (err) {
+        try {
+          await exec('git', [
+            '-C',
+            input.repoPath,
+            'worktree',
+            'remove',
+            '--force',
+            worktreePath,
+          ]);
+        } catch (cleanupErr) {
+          logger.warn('tmux launch rollback could not remove worktree', {
+            workspaceId: input.workspaceId,
+            worktreePath,
+            err: message(cleanupErr),
+          });
+        }
+        throw new Error(
+          `tmux session ${tmuxName} did not materialize after launch: ${message(err)}`
+        );
+      }
 
       // Per-session remain-on-exit is the deterministic guarantee (independent of the
       // server's inherited global). Best-effort: a failure only weakens exit-code
@@ -353,6 +435,7 @@ export function createTmuxSubstrate(
       if (!input.command)
         throw new Error('tmux_worktree continueRun requires a command');
       const tmuxName = handle.sessionName ?? tmuxNameFor(handle.ref);
+      clearExitSentinel(handle.ref);
       // Reuse the EXISTING worktree (the prior run's changes are intact); replace
       // the finished session with a fresh one running the new instruction in place.
       try {
@@ -393,10 +476,17 @@ export function createTmuxSubstrate(
           tmuxName,
           '-c',
           worktreePath,
-          input.command,
+          withExitSentinel(input.command, handle.ref),
         ],
         env ? { env } : {}
       );
+      try {
+        await exec(tmuxBin, ['has-session', '-t', tmuxName]);
+      } catch (err) {
+        throw new Error(
+          `tmux session ${tmuxName} did not materialize after continue: ${message(err)}`
+        );
+      }
       try {
         await exec(tmuxBin, [
           'set-option',
@@ -449,6 +539,9 @@ export function createTmuxSubstrate(
     },
 
     async alive(handle: SubstrateHandle): Promise<boolean> {
+      // The wrapper writes this BEFORE its shell exits, so it remains authoritative
+      // even when tmux removes the pane/session before the next 3s poll.
+      if (readExitSentinel(handle.ref) !== undefined) return false;
       const tmuxName = handle.sessionName ?? tmuxNameFor(handle.ref);
       try {
         await exec(tmuxBin, ['has-session', '-t', tmuxName]);
@@ -473,6 +566,8 @@ export function createTmuxSubstrate(
     async exitCode(
       handle: SubstrateHandle
     ): Promise<number | null | undefined> {
+      const persisted = readExitSentinel(handle.ref);
+      if (persisted !== undefined) return persisted;
       const tmuxName = handle.sessionName ?? tmuxNameFor(handle.ref);
       try {
         await exec(tmuxBin, ['has-session', '-t', tmuxName]);
@@ -496,7 +591,7 @@ export function createTmuxSubstrate(
           '#{pane_dead_status}',
         ]);
         const code = Number.parseInt(status.trim(), 10);
-        return Number.isNaN(code) ? 0 : code;
+        return Number.isNaN(code) ? undefined : code;
       } catch {
         return null; // can't query → treat as gone
       }
@@ -534,6 +629,7 @@ export function createTmuxSubstrate(
       } catch {
         /* already gone */
       }
+      clearExitSentinel(handle.ref);
       if (options?.removeIsolation !== false) {
         const repo = repoByRef.get(handle.ref);
         const wtPath = handle.worktreePath ?? path.join(worktreeRoot, tmuxName);

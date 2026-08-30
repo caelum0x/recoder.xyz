@@ -17,9 +17,9 @@ Resolved/advanced this session (see each bead's notes for evidence + commits):
 
 - `recoder-vbg2` **closed** — the permissive synthetic swarm-unblock policy actor is
   gone; replaced with a deny-biased actor (commit `8b76edf6`).
-- `recoder-trk0` **advanced** — the auto-unblock gate is now genuinely deny-capable on
-  `candidate.risk` (high⇒deny, medium⇒needs_approval). Residual: a real per-workspace
-  agent policy profile (blocked — `Workspace` carries no durable `toolRules` yet).
+- `recoder-trk0` **product-complete 2026-08-30** — the auto-unblock gate remains
+  deny-capable on candidate risk and now consumes a durable, revisioned workspace
+  profile for its exact tool verdict, auto-answer opt-in, and confidence floor.
 - `recoder-jgrx` **closed** — the deny-biased pal-brain consensus/debate VERDICT is now
   agent-callable as `recoder.pal-brain` (`pal.consensus_verdict`/`pal.debate_verdict`),
   parallel to the raw `recoder.pal-comms` tools (commit `3fb75be4`).
@@ -66,11 +66,11 @@ Disposition vocabulary:
 
 | ID | P | Product disposition | Required outcome |
 |---|---:|---|---|
-| `recoder-trk0` | 2 | Swarm safety gate if exposed | **Advanced 2026-08-17:** deny-capable decision path shipped (candidate.risk); residual = a real per-workspace agent policy profile (blocked on `Workspace` having no `toolRules`). |
+| `recoder-trk0` | 2 | Swarm safety gate if exposed | **Product-complete 2026-08-30:** deny-capable candidate-risk path plus durable workspace-owned tool rule, auto-answer opt-in, confidence floor, revision guard, and desktop policy editor ship. Live representative recovery remains product proof, not a missing authority seam. |
 | `recoder-vbg2` | 2 | ~~Duplicate swarm root cause~~ **Closed 2026-08-17** | Permissive synthetic profile removed (deny-biased actor); done. |
-| `recoder-ne6o` | 2 | Governed skills expansion | Define the signed `recoder.skill.json` product contract without inheriting Loom's arbitrary-command plugin marketplace. |
-| `recoder-ubyg` | 2 | Governed skills partial | Complete pinned registry, publisher trust, concrete executor, and canonical/symlink-safe worktree containment. |
-| `recoder-n5pc` | 2 | Remote attach expansion | Existing local service/tools are not a remote product; add authenticated transport and a durable shared session store. |
+| `recoder-ne6o` | 2 | Governed skills expansion | **Product-complete 2026-08-30:** signed contract, authenticated typed Session UI, four-action first-party catalog, operator publisher/manifest Trust ledger, and durable content-hashed invocation history ship without Loom free-argv inheritance. |
+| `recoder-ubyg` | 2 | Governed skills expansion | **Product-complete 2026-08-30:** pinned registry, durable operator trust, concrete bounded read/list/search/diff executor, runtime admission/revocation, canonical containment, and exact action/target/verdict/evidence records ship. |
+| `recoder-n5pc` | 2 | Remote attach expansion | **Advanced 2026-08-30:** authenticated HTTP mint/describe/monitor/stream/steer/revoke, durable TTL sessions, desktop deep-link handoff, signed-in mobile-first receiver, scope-filtered native status/lifecycle SSE, and owner-wide canonical sign-out revocation ship. Residual = provisioned host-to-host Loom transport. |
 | `recoder-klhy` | 2 | Close/reclassify decision | Record the chosen Recoder-owned governed ecosystem and no direct 592-plugin inheritance, then close. |
 | `recoder-jgrx` | 2 | ~~Optional agent deliberation~~ **Closed 2026-08-17** | Deny-biased verdict exposed as `recoder.pal-brain` (`pal.consensus_verdict`/`pal.debate_verdict`). |
 
@@ -81,7 +81,7 @@ Disposition vocabulary:
 | `recoder-p8f3` | 2 | Diff renderer expansion | Adopt `@pierre/diffs` only if review evidence shows the current diff surface is the bottleneck. |
 | `recoder-ry9c` | 2 | Convergence expansion | Add an AST/tree-sitter merge tier only for repeated same-region conflict failures. |
 | `recoder-uou2` | 2 | ~~Board <-> Beads expansion~~ **Closed 2026-08-17 (backend)** | `recoder_fanout_from_issue` + existing trackWork/completeWork loop. FE button = `recoder-b4qx`. |
-| `recoder-4keq` | 2 | Unattended-agent expansion | Define lifecycle, notifications, review ownership, and merge governance before background or PR-review agents. |
+| `recoder-4keq` | 2 | Unattended-agent expansion | **Product-complete 2026-08-30:** Wave owns start/pause/scan and pins the exact Git repo/project/reviewer-runtime contract. Ready issues and the standing local open-PR watcher dispatch durable canonical workspaces; PR reviews dedupe per repo/number/head SHA/runtime and re-run on push. Selected runtimes produce independent evidence-backed findings, Wave shows exact K/N agreement with named sources, and the result prefills—but never auto-posts—the human review. Lifecycle notifications and Session/Review are shared, every launch carries `autoMerge:false`, and GitHub delivery is a human-confirmed, governance-gated Comment / Approve / Request changes action. |
 | `recoder-55v9` | 2 | Platform expansion | Add per-architecture x64/universal artifacts after arm64 beta demand is proven. |
 | `recoder-b8ol` | 2 | Engine packaging expansion | Package only Python sidecars with demonstrated product value and bounded relocatable distributions. |
 

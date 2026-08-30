@@ -59,3 +59,16 @@ herdr bundles two permissively-licensed vendored dependencies, retained here:
 No GPL/AGPL/LGPL or other copyleft content is present in the vendored tree
 (audited 2026-08-12). Marketing docs/website/workers were excluded from the vendor.
 ================================================================================
+Crystal — https://github.com/stravu/crystal
+Copyright (c) 2024 Stravu. Licensed under the MIT License.
+
+Crystal v0.3.5 at commit 1e18e0bc981225f75b5226f82a300fa741970c6f is
+vendored wholesale under third_party/crystal as an architectural and source-code
+donor for Recoder's multi-session product. Its LICENSE and NOTICES files are
+retained verbatim in that directory.
+
+Crystal is not a production runtime authority: Wave remains the desktop shell,
+Loom/HERDR remains the agent-aware terminal and worktree-process substrate, and
+Recoder remains the convergence, governance, memory, and evidence layer. Crystal
+capabilities may be ported into those owned layers with attribution preserved.
+================================================================================

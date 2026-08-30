@@ -37,7 +37,7 @@
  * fabricates a candidate, an answer, or an approval id.
  */
 import type { LoggerPort } from '@recoder/substrate';
-import type { Workspace } from '@recoder/agent-os';
+import type { Workspace, WorkspacePolicyProfile } from '@recoder/agent-os';
 import { evaluatePolicy, type PolicyInput } from '@recoder/agent-policy';
 import type { Principal } from '../../identity/types.js';
 import type { RiskTier } from '../../governance/types.js';
@@ -57,6 +57,7 @@ import type {
   UnblockCandidate,
   UnblockRisk,
 } from '../swarm/swarm-unblock.service.js';
+import { effectiveWorkspacePolicy, policyToolRules } from '../policy/workspace-policy.js';
 
 /** How many trailing pane lines the loom read captures for the question probe. */
 const READ_LINES = 200;
@@ -127,13 +128,14 @@ export const SWARM_UNBLOCK_TOOL_NAME = 'swarm.unblock';
  * auto-approval), so the verdict is driven by the ACTION rules alone rather than by
  * a permissive synthetic profile that would silently pass a future risk rule.
  *
- * NOTE: this is derived from the invoking principal, NOT from the blocked
- * WORKSPACE AGENT's own policy profile — the `Workspace` record carries no durable
- * per-agent `toolRules` today, so a deny rule set by the blocked agent cannot yet be
- * threaded here. Until a per-workspace agent policy profile exists, the real gate is
- * `candidate.risk` (below) plus the service's escalate-by-default posture.
+ * The invoking principal supplies identity, while the blocked workspace's durable
+ * policy profile supplies the exact `swarm.unblock` rule. That keeps ownership and
+ * authority separate: request arguments cannot manufacture a wider permission.
  */
-function unblockActor(actor: Principal): PolicyInput['actor'] {
+function unblockActor(
+  actor: Principal,
+  profile: WorkspacePolicyProfile,
+): PolicyInput['actor'] {
   const nowIso = new Date(0).toISOString();
   return {
     agentId: actor.userId,
@@ -147,7 +149,7 @@ function unblockActor(actor: Principal): PolicyInput['actor'] {
     permissions: {
       defaultFileEffect: 'deny',
       pathRules: [],
-      toolRules: [],
+      toolRules: policyToolRules(profile, SWARM_UNBLOCK_TOOL_NAME),
       allowNetwork: false,
       allowShell: false,
       allowGitWrite: false,
@@ -368,8 +370,10 @@ export function createSwarmUnblockDeps(
         if (request.candidate.risk === 'medium') {
           return { effect: 'needs_approval' };
         }
+        const workspace = await deps.getWorkspace(request.workspaceId);
+        const profile = effectiveWorkspacePolicy(workspace?.policyProfile);
         const verdict = evaluatePolicy({
-          actor: unblockActor(request.actor),
+          actor: unblockActor(request.actor, profile),
           action: 'tool.call',
           target: { toolName: SWARM_UNBLOCK_TOOL_NAME },
         });

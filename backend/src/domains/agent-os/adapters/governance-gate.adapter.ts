@@ -26,6 +26,7 @@ export interface AgentOsGateDecision {
   readonly allowed: boolean;
   /** The raw gate effect (`allow` | `deny` | `needs_approval`). */
   readonly effect: GateVerdict['effect'];
+  readonly tier: GateVerdict['tier'];
   /** Human-readable reason (safe to surface/log; no secrets). */
   readonly reason: string;
   /** The approval gate id when `effect === 'needs_approval'`. */
@@ -78,6 +79,7 @@ export function createGovernanceGateAdapter(gate: GovernanceGate): AgentOsGovern
         return {
           allowed: verdict.effect === 'allow',
           effect: verdict.effect,
+          tier: verdict.tier,
           reason: verdict.reason,
           ...(verdict.approvalId ? { approvalId: verdict.approvalId } : {}),
           ...(verdict.target ? { target: verdict.target } : {}),
@@ -86,7 +88,7 @@ export function createGovernanceGateAdapter(gate: GovernanceGate): AgentOsGovern
       } catch (error) {
         // INFRA fault — fail CLOSED. Never let a write proceed on an errored gate.
         const reason = error instanceof Error ? error.message : 'governance gate unavailable';
-        return { allowed: false, effect: 'deny', reason, degraded: true };
+        return { allowed: false, effect: 'deny', tier: 'critical', reason, degraded: true };
       }
     },
   };

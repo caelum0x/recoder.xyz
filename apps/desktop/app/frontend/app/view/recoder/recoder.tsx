@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import RecoderCubeLogo from "@/app/asset/logo.svg";
-import { createBlock, getApi } from "@/app/store/global";
+import { createBlock, getApi, globalStore } from "@/app/store/global";
 import { cn } from "@/util/util";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { agentAuthOptionSuffix, agentAuthPresentation } from "./recoder-agent-auth";
 import { agentLabel } from "./recoder-agent-labels";
 import { AgentAuthAffordance, RecoderAgentSetup } from "./recoder-agent-setup";
+import { RecoderBackgroundAgents } from "./recoder-background-agents";
 import { WorkspaceCheckpoints } from "./recoder-checkpoints";
+import { WorkspaceDiagnostics } from "./recoder-diagnostics";
 import { RecoderCloneModal } from "./recoder-clone";
 import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-palette";
 import { RecoderComparePanel } from "./recoder-compare";
@@ -47,6 +49,7 @@ import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
     convergeSelectDisabled,
     convergeSelectionRepo,
+    deriveProjectIdentity,
     deriveAdHocConverge,
     deriveCardSummary,
     deriveClusterState,
@@ -60,6 +63,7 @@ import {
     type RecoderBoardShow,
     type RecoderDiffSummary,
     type RecoderEnvironment,
+    type RecoderCrystalCandidate,
     type RecoderRowActionId,
     type RecoderWorkspace,
 } from "./recoder-model";
@@ -122,8 +126,8 @@ function openView(view: string) {
     openBlock({ meta: { view } });
 }
 
-// Attach the workspace's live tmux session as a real wave term block, using the
-// conductor-pinned tmux (from setup health) so we hit the same tmux server.
+// Open the authenticated Recoder terminal. Wave still owns the block surface;
+// Conductor owns workspace identity, substrate routing, output, and steering.
 function openTerminal(ws: RecoderWorkspace, tmuxBin: string) {
     openWorkspaceTerminal(
         {
@@ -356,6 +360,7 @@ function WorkspaceRow({
                 </div>
             )}
             {selected && !terminal && <WorkspaceCheckpoints model={model} workspaceId={ws.workspaceId} busy={busy} />}
+            {selected && !terminal && <WorkspaceDiagnostics workspaceId={ws.workspaceId} />}
         </div>
     );
 }
@@ -497,6 +502,116 @@ function RecoderCompareOverlay({
 
 RecoderCompareOverlay.displayName = "RecoderCompareOverlay";
 
+function RecoderCrystalImportModal({
+    model,
+    candidates,
+    onClose,
+}: {
+    model: RecoderViewModel;
+    candidates: RecoderCrystalCandidate[];
+    onClose: () => void;
+}) {
+    const importing = useAtomValue(model.crystalImportingAtom);
+    const status = useAtomValue(model.crystalImportStatusAtom);
+    const available = candidates.filter((candidate) => candidate.importable && !candidate.imported);
+    const [selected, setSelected] = useState<Set<string>>(
+        () => new Set(available.map((candidate) => candidate.sessionId))
+    );
+    const toggle = (sessionId: string) => {
+        setSelected((prior) => {
+            const next = new Set(prior);
+            if (next.has(sessionId)) next.delete(sessionId);
+            else next.add(sessionId);
+            return next;
+        });
+    };
+    const importSelected = async () => {
+        const ok = await model.importCrystalSessions([...selected]);
+        if (ok) onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-[var(--zindex-typeahead-modal)]">
+            <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+            <div
+                className="absolute left-1/2 top-[10%] flex max-h-[80vh] w-[620px] max-w-[92vw] -translate-x-1/2 flex-col gap-3 overflow-hidden rounded-md border border-white/8 bg-modalbg p-4 shadow-lg recoder-enter"
+                onKeyDown={(event) => {
+                    if (event.key == "Escape" && !importing) onClose();
+                }}
+            >
+                <div className="flex items-start gap-3">
+                    <div className="flex flex-col gap-1">
+                        <h2 className={SECTION_TITLE}>Bring Crystal sessions into Recoder</h2>
+                        <div className={META}>
+                            Keep the existing worktrees. Recoder takes over review, follow-up runs, and merge.
+                        </div>
+                    </div>
+                    <div className="flex-1" />
+                    <button className={QUIET_BTN} disabled={importing} onClick={onClose}>Close</button>
+                </div>
+
+                <div className="min-h-0 overflow-y-auto rounded border border-white/8 divide-y divide-white/8">
+                    {candidates.map((candidate) => {
+                        const enabled = candidate.importable && !candidate.imported;
+                        return (
+                            <label
+                                key={candidate.sessionId}
+                                className={cn(
+                                    "flex items-start gap-3 p-3",
+                                    enabled ? "cursor-pointer hover:bg-white/[0.025]" : "opacity-55"
+                                )}
+                            >
+                                <input
+                                    type="checkbox"
+                                    className="mt-0.5 cursor-pointer"
+                                    disabled={!enabled || importing}
+                                    checked={selected.has(candidate.sessionId)}
+                                    onChange={() => toggle(candidate.sessionId)}
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className={ROW_TITLE}>{candidate.name}</span>
+                                        <span className={CHIP}>{agentLabel(candidate.runtimeId)}</span>
+                                        <span className={CHIP}>{candidate.originalStatus}</span>
+                                        {candidate.imported && <span className={CHIP}>Imported</span>}
+                                    </div>
+                                    <div className={`${META} truncate`} title={candidate.worktreePath}>
+                                        {candidate.projectName} · {candidate.branch || candidate.worktreePath}
+                                    </div>
+                                    {candidate.prompt != "" && (
+                                        <div className="mt-1 text-xs text-secondary line-clamp-2">{candidate.prompt}</div>
+                                    )}
+                                    {!enabled && candidate.reason && <div className={`${META} mt-1`}>{candidate.reason}</div>}
+                                </div>
+                            </label>
+                        );
+                    })}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        className={PRIMARY_BTN}
+                        disabled={selected.size == 0 || importing}
+                        onClick={importSelected}
+                    >
+                        {importing ? "Importing…" : `Import ${selected.size} selected`}
+                    </button>
+                    <button
+                        className={QUIET_BTN}
+                        disabled={importing}
+                        onClick={() => setSelected(new Set(available.map((candidate) => candidate.sessionId)))}
+                    >
+                        Select all available
+                    </button>
+                    {status?.kind == "error" && <span className={ERROR_ROW}>{status.message}</span>}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+RecoderCrystalImportModal.displayName = "RecoderCrystalImportModal";
+
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const allWorkspaces = useAtomValue(model.combinedWorkspacesAtom);
@@ -535,15 +650,27 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const [repoIsGit, setLaunchRepoIsGit] = useAtom(model.launchRepoIsGitAtom);
     const recentRepos = useAtomValue(model.recentReposAtom);
     const [prompt, setPrompt] = useAtom(model.launchPromptAtom);
+    const readyIssues = useAtomValue(model.readyIssuesAtom);
+    const readyIssuesLoading = useAtomValue(model.readyIssuesLoadingAtom);
+    const launchIssueId = useAtomValue(model.launchIssueIdAtom);
+    const [issueComposerOpen, setIssueComposerOpen] = useAtom(model.issueComposerOpenAtom);
+    const [issueTitle, setIssueTitle] = useAtom(model.issueTitleAtom);
+    const [issueDescription, setIssueDescription] = useAtom(model.issueDescriptionAtom);
+    const [issueLabels, setIssueLabels] = useAtom(model.issueLabelsAtom);
+    const issueCreating = useAtomValue(model.issueCreatingAtom);
+    const issueCreateStatus = useAtomValue(model.issueCreateStatusAtom);
     const [runtimeId, setRuntimeId] = useAtom(model.launchRuntimeIdAtom);
     const [alsoRun, setAlsoRun] = useAtom(model.launchAlsoRunAtom);
     const [branch, setBranch] = useAtom(model.launchBranchAtom);
     const [interactive, setInteractive] = useAtom(model.launchInteractiveAtom);
+    const [siblingAwareness, setSiblingAwareness] = useAtom(model.launchSiblingAwarenessAtom);
     const posting = useAtomValue(model.postingAtom);
     const launchProgress = useAtomValue(model.launchProgressAtom);
     const launchResult = useAtomValue(model.launchResultAtom);
     const notifyOnAttention = useAtomValue(model.notifyOnAttentionAtom);
     const environment = useAtomValue(model.environmentAtom);
+    const crystalMigration = useAtomValue(model.crystalMigrationAtom);
+    const crystalImportStatus = useAtomValue(model.crystalImportStatusAtom);
     const githubStatus = useAtomValue(model.githubStatusAtom);
     const githubRepos = useAtomValue(model.githubReposAtom);
     const cloning = useAtomValue(model.cloningAtom);
@@ -555,6 +682,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     // A dimmed first-run chip's "install" affordance opens the existing agent
     // setup panel even when some agents are already detected.
     const [agentSetupOpen, setAgentSetupOpen] = useState(false);
+    const [crystalOpen, setCrystalOpen] = useState(false);
     // taskGroups whose calm converge nudge the user dismissed this session. The
     // Compare & Converge action stays reachable from the header afterward — dismiss
     // only stands the banner down, it never hides the payoff.
@@ -566,6 +694,10 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         const id = setInterval(() => model.refresh(), 6000);
         return () => clearInterval(id);
     }, [model]);
+
+    useEffect(() => {
+        if (launchOpen) void model.refreshReadyIssues();
+    }, [launchOpen, model]);
 
     // The board's keyboard grammar lives at the document level (capture-phase so it
     // beats Wave's window keyhandler; ⌘P/⌘K/⌘/ are not in keymodel.ts globalKeyMap,
@@ -854,6 +986,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const matchingClonableRepos = filterReposByQuery(clonableRepos, repoQuery);
     const clonableHint = repoPickerHint(matchingClonableRepos.length, githubRepos.length);
     const firstRunChips = firstRunAgentChips(environment, setup.agents, agentAuth, githubStatus);
+    const crystalCandidates = crystalMigration?.candidates ?? [];
+    const crystalImportableCount = crystalMigration?.importableCount ?? 0;
     // The first-run HERO: with 2+ agents the parallel run is the star (preselect +
     // open ready); with one, honest "install a second"; with none, the setup panel.
     const hero = firstRunHero(setup.agents, recentRepos);
@@ -939,6 +1073,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 },
             },
             { id: "clone-github", title: "Open GitHub project (clone)", run: () => setCloneOpen(true) },
+            ...(crystalImportableCount > 0
+                ? [{ id: "import-crystal", title: `Import ${crystalImportableCount} Crystal session${crystalImportableCount == 1 ? "" : "s"}`, run: () => setCrystalOpen(true) }]
+                : []),
             { id: "review", title: "Review workspace diff", run: openReview },
             { id: "shortcuts", title: "Show keyboard shortcuts", shortcut: "⌘/", run: () => setShortcutsOpen(true) },
             {
@@ -1016,6 +1153,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         setLaunchOpen,
         setShortcutsOpen,
         setCloneOpen,
+        crystalImportableCount,
     ]);
 
     return (
@@ -1031,7 +1169,16 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 <span className={PAGE_TITLE}>Workspaces</span>
                 <RecoderHealthDot />
                 <div className="flex-1" />
+                {crystalImportableCount > 0 && (
+                    <button className={QUIET_BTN} onClick={() => setCrystalOpen(true)}>
+                        Import Crystal
+                        <span className="ml-1.5 text-xs text-meta font-mono">{crystalImportableCount}</span>
+                    </button>
+                )}
                 <RecoderIdentityAffordance onOpenSettings={() => openView("recoder-settings")} />
+                <button className={QUIET_BTN} onClick={() => setIssueComposerOpen(true)}>
+                    New issue
+                </button>
                 <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(!launchOpen)}>
                     New agent
                     <span className="ml-1.5 text-xs text-meta font-mono">N</span>
@@ -1041,7 +1188,107 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             <RecoderWhatsNew />
 
             <RecoderErrorRow message={coldStart ? "" : error} />
+            {issueCreateStatus?.kind == "success" && (
+                <div className="flex items-center gap-2 text-sm text-secondary">
+                    <span>{issueCreateStatus.message} It is now available in Ready work.</span>
+                    <button className={QUIET_BTN_XS} onClick={() => globalStore.set(model.issueCreateStatusAtom, null)}>
+                        Dismiss
+                    </button>
+                </div>
+            )}
+            {crystalImportStatus?.kind == "success" && (
+                <div className="flex items-center gap-2 text-sm text-secondary">
+                    <span>{crystalImportStatus.message}</span>
+                    <button className={QUIET_BTN_XS} onClick={() => globalStore.set(model.crystalImportStatusAtom, null)}>
+                        Dismiss
+                    </button>
+                </div>
+            )}
+
+            <RecoderBackgroundAgents
+                workspaces={allWorkspaces}
+                repoPath={repoPath}
+                repoReady={repoIsGit}
+                projectId={deriveProjectIdentity(repoPath).projectId}
+                runtimeId={runtimeId}
+                reviewerRuntimeIds={selectedAgents}
+                onOpenSession={openSession}
+                onOpenReview={openReview}
+            />
+
             {loading && workspaces.length == 0 && error == "" && <RecoderSkeleton rows={3} />}
+
+            {issueComposerOpen && (
+                <div className="fixed inset-0 z-[var(--zindex-typeahead-modal)]">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setIssueComposerOpen(false)} />
+                    <div
+                        className="absolute left-1/2 top-[14%] flex w-[520px] max-w-[90vw] -translate-x-1/2 flex-col gap-3 rounded-md border border-white/8 bg-modalbg p-4 shadow-lg recoder-enter"
+                        onKeyDown={(event) => {
+                            if (event.key == "Escape") setIssueComposerOpen(false);
+                            if ((event.metaKey || event.ctrlKey) && event.key == "Enter" && !issueCreating) {
+                                event.preventDefault();
+                                void model.createIssue(true);
+                            }
+                        }}
+                    >
+                        <div className={SECTION_TITLE}>Create a Beads issue</div>
+                        <label className="flex flex-col gap-1">
+                            <span className={FIELD_LABEL}>Title</span>
+                            <input
+                                className={INPUT}
+                                autoFocus
+                                maxLength={240}
+                                placeholder="What should Recoder work on?"
+                                value={issueTitle}
+                                onChange={(event) => setIssueTitle(event.target.value)}
+                            />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                            <span className={FIELD_LABEL}>Description</span>
+                            <textarea
+                                className={`${INPUT} min-h-28 resize-y`}
+                                placeholder="Context, expected behavior, and acceptance notes…"
+                                value={issueDescription}
+                                onChange={(event) => setIssueDescription(event.target.value)}
+                            />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                            <span className={FIELD_LABEL}>Labels (optional)</span>
+                            <input
+                                className={INPUT}
+                                placeholder="frontend, review, bug"
+                                value={issueLabels}
+                                onChange={(event) => setIssueLabels(event.target.value)}
+                            />
+                        </label>
+                        {issueCreateStatus?.kind == "error" && (
+                            <div className={ERROR_ROW}>{issueCreateStatus.message}</div>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                className={PRIMARY_BTN}
+                                disabled={issueCreating || issueTitle.trim() == ""}
+                                onClick={() => void model.createIssue(true)}
+                            >
+                                {issueCreating ? "Creating…" : "Create & launch"}
+                            </button>
+                            <button
+                                className={QUIET_BTN}
+                                disabled={issueCreating || issueTitle.trim() == ""}
+                                onClick={() => void model.createIssue(false)}
+                            >
+                                Create only
+                            </button>
+                            <button className={QUIET_BTN} disabled={issueCreating} onClick={() => setIssueComposerOpen(false)}>
+                                Cancel
+                            </button>
+                            {!issueCreating && (
+                                <span className={META}>⌘↵ creates it and opens the agent picker.</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {launchOpen && (
                 <div className="fixed inset-0 z-[var(--zindex-typeahead-modal)]">
@@ -1063,6 +1310,35 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         }}
                     >
                         <div className={SECTION_TITLE}>Launch a coding agent</div>
+
+                        <label className="flex flex-col gap-1.5">
+                            <span className={FIELD_LABEL}>Ready work from Beads</span>
+                            <select
+                                className={INPUT}
+                                value={launchIssueId}
+                                disabled={readyIssuesLoading}
+                                onChange={(e) => model.selectLaunchIssue(e.target.value)}
+                            >
+                                <option value="">
+                                    {readyIssuesLoading
+                                        ? "Loading ready issues…"
+                                        : readyIssues.length == 0
+                                          ? "No unblocked issues — write a first message"
+                                          : "Write a first message instead"}
+                                </option>
+                                {readyIssues.map((issue) => (
+                                    <option key={issue.id} value={issue.id}>
+                                        {typeof issue.priority == "number" ? `P${issue.priority} · ` : ""}
+                                        {issue.id} · {issue.title}
+                                    </option>
+                                ))}
+                            </select>
+                            {launchIssueId != "" && (
+                                <span className={META}>
+                                    All selected agents share this issue. Recoder claims it now and closes it after the governed merge.
+                                </span>
+                            )}
+                        </label>
 
                         <div className="flex flex-col gap-1.5">
                             <div className="flex items-center justify-between">
@@ -1237,6 +1513,23 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             <span>Interactive session - run the real agent TUI</span>
                         </label>
 
+                        {selectedCount > 1 && (
+                            <label className="flex items-start gap-2 text-sm cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="mt-0.5 cursor-pointer"
+                                    checked={siblingAwareness}
+                                    onChange={(e) => setSiblingAwareness(e.target.checked)}
+                                />
+                                <span className="flex flex-col gap-0.5">
+                                    <span>Let agents coordinate while they work</span>
+                                    <span className={META}>
+                                        Recoder shares bounded file and diff milestones between these agents so they can avoid duplicate work.
+                                    </span>
+                                </span>
+                            </label>
+                        )}
+
                         <div className="flex items-center gap-2">
                             <button className={PRIMARY_BTN} disabled={!canLaunch} onClick={() => model.launch()}>
                                 {posting ? "Launching..." : "Launch"}
@@ -1282,7 +1575,12 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     className={QUIET_BTN}
                                     onClick={() =>
                                         openWorkspaceTerminal(
-                                            { sessionName: launchResult.sessionName, cwd: launchResult.worktreePath },
+                                            {
+                                                sessionName: launchResult.sessionName,
+                                                cwd: launchResult.worktreePath,
+                                                workspaceId: launchResult.workspaceId,
+                                                substrate: launchResult.substrate,
+                                            },
                                             setup.tmuxBin || undefined
                                         )
                                     }
@@ -1503,6 +1801,25 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 ))}
                             </select>
                         </label>
+                    )}
+                    {setup.codeNetwork.discoveredRepositories > 0 && (
+                        <span
+                            className={`${META} whitespace-nowrap ${
+                                setup.codeNetwork.status == "partial" || setup.codeNetwork.status == "unavailable"
+                                    ? "text-warning"
+                                    : ""
+                            }`}
+                            title={
+                                setup.codeNetwork.status == "indexing"
+                                    ? "RecoderGit is rebuilding the repository network from saved Wave projects"
+                                    : setup.codeNetwork.unavailableRepositories > 0
+                                      ? `${setup.codeNetwork.unavailableRepositories} saved repositories could not be indexed`
+                                      : "Saved Wave projects are connected in the RecoderGit impact network"
+                            }
+                        >
+                            graph {setup.codeNetwork.indexedRepositories}/{setup.codeNetwork.discoveredRepositories}
+                            {setup.codeNetwork.status == "indexing" ? "…" : ""}
+                        </span>
                     )}
                     <label className="flex items-center gap-1.5">
                         <span className={FIELD_LABEL}>Show</span>
@@ -1759,6 +2076,13 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             {/* Rendered before the palette/shortcuts so those paint above it; its
                 Escape handler stands down while either of them is open. */}
             {cloneOpen && <RecoderCloneModal model={model} onClose={() => setCloneOpen(false)} />}
+            {crystalOpen && (
+                <RecoderCrystalImportModal
+                    model={model}
+                    candidates={crystalCandidates}
+                    onClose={() => setCrystalOpen(false)}
+                />
+            )}
             {paletteOpen && (
                 <RecoderCommandPalette
                     commands={commands}

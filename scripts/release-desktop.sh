@@ -108,6 +108,7 @@ cmd_dry_run() {
     if (!c.publish || c.publish.provider !== "generic") errs.push("generic publish feed missing");
     if (!c.publish || !/^https:\/\//.test(c.publish.url || "")) errs.push("publish.url not https");
     if (!c.beforePack) errs.push("beforePack fail-loud gate missing");
+    if (!c.afterPack) errs.push("afterPack artifact license gate missing");
     if (errs.length) { console.error("CONFIG ERRORS:\n - " + errs.join("\n - ")); process.exit(1); }
     console.log(JSON.stringify({
       productName: c.productName, appId: c.appId,
@@ -115,7 +116,7 @@ cmd_dry_run() {
       publish: c.publish
     }, null, 2));
   ' "$REPO_ROOT/$CONFIG"; then
-    pass "electron-builder config parses and has dmg+zip / entitlements / icon / generic feed / beforePack gate"
+    pass "electron-builder config parses and has dmg+zip / entitlements / icon / generic feed / packaging gates"
   else
     fail "electron-builder config failed structural validation"
   fi
@@ -171,7 +172,9 @@ cmd_build() {
         RECODER_MAC_ARCH="$ARCH" \
         task package -- --mac --"$ARCH" )
   local app="$APP_DIR/make/mac-$ARCH/Recoder.app"
+  local license_evidence="$APP_DIR/make/license-boundary-darwin-$ARCH.json"
   [[ -d "$app" ]] && pass "unsigned .app packed: $app" || { fail "expected .app not found: $app"; exit 1; }
+  [[ -f "$license_evidence" ]] && pass "license boundary evidence: $license_evidence" || { fail "license evidence not found: $license_evidence"; exit 1; }
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

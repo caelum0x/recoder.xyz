@@ -24,7 +24,12 @@ import {
   type WorkspaceEngineDeps,
 } from '@recoder/substrate';
 import { resumePlan, dedupeKey } from '@recoder/runtime';
-import type { RunEvent, Workspace, WorkspaceState } from '@recoder/agent-os';
+import {
+  isAllowedWorkspaceTransition,
+  type RunEvent,
+  type Workspace,
+  type WorkspaceState,
+} from '@recoder/agent-os';
 import type { Logger } from '../../shared/logger.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
@@ -47,6 +52,11 @@ import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
 import type { MetricsPort } from '../observability/ports/metrics.port.js';
 import type { PrReviewPort } from './ports/pr-review.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
+import type { ConvergenceFeedbackPort } from './ports/convergence-feedback.port.js';
+import type {
+  ConvergenceDecisionProfile,
+  ConvergenceFlagFeedbackAction,
+} from './ports/convergence-feedback.port.js';
 import type {
   ReconcileFindingView,
   SteerInput,
@@ -72,6 +82,10 @@ import type { ConductorRuntimeView } from './adapters/runtime-listing.adapter.js
 import { createWorkspaceRepository } from './adapters/workspace-repository.adapter.js';
 import { tryCreateSqliteWorkspaceRepository } from './adapters/sqlite-workspace-repository.adapter.js';
 import { resolveStateOfRecordSqlitePath } from '../../shared/state-of-record.js';
+import {
+  createCodeNetworkCoverageService,
+  type CodeNetworkCoverage,
+} from './services/code-network-coverage.service.js';
 import type { ConductorRunTailer } from './adapters/run-tailer.adapter.js';
 import { createSubstrateScan } from './adapters/substrate-scan.adapter.js';
 import { TerminalStreamService } from './terminal/terminal-stream.js';
@@ -149,15 +163,32 @@ import {
   type MergeabilityView,
 } from './services/mergeability.service.js';
 import { WorktreeStatusService } from './services/worktree-status.service.js';
+import { LspDiagnosticsService, type LspDiagnosticsDelta } from './services/lsp-diagnostics.service.js';
 import { createWorktreeCheckRunner, type CheckSpec } from './adapters/check-runner.adapter.js';
-import type { CheckRunnerPort } from './services/check-run.service.js';
+import { createOffboxCheckExecutor } from './adapters/offbox-check-runner.adapter.js';
+import {
+  parseCheckRemediationEvidence,
+  type CheckRemediationEvidence,
+  type CheckRemediationResult,
+  type CheckRunnerPort,
+} from './services/check-run.service.js';
 import { createLlmReviewGenerator } from './adapters/review-generator.adapter.js';
 import { validateFindings, type ReviewFindingsPort, type ValidatedFindings } from './services/review-findings.service.js';
-import { conductorTarget, guardConductorWrite } from './audit/conductor-audit.js';
+import {
+  conductorAuditEntry,
+  conductorTarget,
+  guardConductorWrite,
+  recordConductorAudit,
+} from './audit/conductor-audit.js';
 import {
   EnvironmentImportService,
   type EnvironmentImportView,
 } from './services/environment-import.js';
+import {
+  CrystalMigrationService,
+  type CrystalMigrationView,
+  type CrystalImportResult,
+} from './services/crystal-migration.service.js';
 import {
   SessionTranscriptService,
   type TranscriptSearchView,
@@ -192,6 +223,7 @@ import {
   type ConductorWriteResult,
   type CreateConductorWorkspaceInput,
   type ReviewCommentDelivery,
+  type BlockerFeedbackDelivery,
   type WorkspaceRunConfigView,
 } from './module/shared.js';
 import { ConductorIntrospection } from './module/introspection.js';
@@ -199,6 +231,8 @@ import { ConductorCheckpoints } from './module/checkpoints.js';
 import { ConductorPreview } from './module/preview.js';
 import {
   ConductorCompareConverge,
+  type AdHocFileVersionsOutcome,
+  type AdHocPairwiseOutcome,
   type AdHocReject,
   type AdHocPlanOutcome,
 } from './module/compare-converge.js';
@@ -210,6 +244,8 @@ import {
   ConvergeFanoutService,
   type FanoutComposeOutcome,
   type FanoutInput,
+  type FanoutRetryInput,
+  type FanoutRetryResult,
   type FanoutResult,
   type FanoutWorkspaceCreateOutcome,
   type FanoutWorkspaceCreateRequest,
@@ -225,6 +261,19 @@ import type {
   InvokeSkillActionResult,
   SkillActionService,
 } from './skill/skill-action.service.js';
+import type {
+  SkillTrustService,
+  SkillTrustView,
+  SkillPublisherView,
+} from './skill/skill-trust.service.js';
+import type { SkillLoadOutcome, SkillManifest } from './skill/skill.types.js';
+import type { SkillInvocationEvidenceView } from './skill/skill-invocation-evidence.js';
+import {
+  effectiveWorkspacePolicy,
+  workspacePolicyView,
+  type WorkspacePolicyUpdate,
+  type WorkspacePolicyView,
+} from './policy/workspace-policy.js';
 import {
   NeedsYouQueueService,
   type NeedsYouScope,
@@ -280,6 +329,7 @@ export type {
   ConductorWriteResult,
   CreateConductorWorkspaceInput,
   ReviewCommentDelivery,
+  BlockerFeedbackDelivery,
   WorkspaceRunConfigView,
 } from './module/shared.js';
 
@@ -314,6 +364,7 @@ export class ConductorComposer implements ConductorModule {
   private readonly idempotency: ConductorModuleDeps['idempotency'];
   private readonly registry: ConductorRegistry;
   private readonly repository: WorkspaceRepositoryPort;
+  private readonly deliveryEvidence?: ConductorModuleDeps['deliveryEvidence'];
   private readonly tailer: ConductorRunTailer;
   private readonly terminalService: TerminalStreamService;
   private readonly engine: WorkspaceEngine;
@@ -359,8 +410,10 @@ export class ConductorComposer implements ConductorModule {
    */
   private readonly skillRegistry?: SkillRegistry;
   private readonly skillActions?: SkillActionService;
+  private readonly skillTrust?: SkillTrustService;
   /** OPTIONAL code-intel seam (recodergit index + beads issue-graph track/close). */
   private readonly codeIntel?: CodeIntelPort;
+  private readonly codeNetwork: ReturnType<typeof createCodeNetworkCoverageService>;
   /**
    * OPTIONAL preview verifier (browsing facet): fires a bounded browser
    * navigate→assert→screenshot over a stored preview URL. Consulted fire-and-forget
@@ -424,11 +477,15 @@ export class ConductorComposer implements ConductorModule {
   /** Read-only worktree open-work (uncommitted changes) probe (git-native, degrade-truthful). */
   private readonly worktreeStatus: WorktreeStatusService;
   private readonly checkRunner: CheckRunnerPort;
+  private readonly convergenceFeedback?: ConvergenceFeedbackPort;
   private readonly reviewGenerator: ReviewFindingsPort;
   /** Read-only first-run environment-import probe (git identity, agent configs, gh, shell). */
   private readonly environmentImportService: EnvironmentImportService;
+  /** Read-only Crystal discovery + explicit adoption into native Recoder workspaces. */
+  private readonly crystalMigrationService: CrystalMigrationService;
   /** Read-only bounded search over Claude session transcripts (~/.claude/projects). */
   private readonly sessionTranscriptService: SessionTranscriptService;
+  private readonly lspDiagnostics: LspDiagnosticsService;
   /**
    * OPTIONAL dmux LAYOUT-brain seam (F3 compare/parallel grid). Absent / dmux not
    * built ⇒ the compare read stays hint-less and `arrangeCompareGrid` returns a
@@ -476,6 +533,7 @@ export class ConductorComposer implements ConductorModule {
     this.brain = deps.brain;
     this.skillRegistry = deps.skillRegistry;
     this.skillActions = deps.skillActions;
+    this.skillTrust = deps.skillTrust;
     this.swarmUnblock = deps.swarmUnblock;
     this.codeIntel = deps.codeIntel;
     this.previewVerify = deps.previewVerify;
@@ -489,6 +547,7 @@ export class ConductorComposer implements ConductorModule {
     this.workspaceGrid = deps.workspaceGrid;
     this.tmuxIntrospect = deps.tmuxIntrospect;
     this.auditReader = deps.auditReader;
+    this.convergenceFeedback = deps.convergenceFeedback;
     this.infer = deps.infer;
     // Durable by default WITHOUT a database: metadata rides each workspace repo's
     // annotated `recoder-checkpoint/<id>` tags, rebuilt on list after a restart
@@ -529,6 +588,7 @@ export class ConductorComposer implements ConductorModule {
     // Read-only worktree open-work probe over the SAME git seam (never throws;
     // truthful `available:false` when git/worktree is absent — never a fake clean).
     this.worktreeStatus = new WorktreeStatusService({ logger: this.log });
+    this.lspDiagnostics = new LspDiagnosticsService(this.log);
     // Recoder's OWN check runner (recoder-fxee): live-wired but OPT-IN — it runs the
     // configured check allowlist in the worktree and folds real pass/fail into the
     // `checks` readiness signal. Default is EMPTY (inert, GitHub-only) so no behavior
@@ -538,6 +598,9 @@ export class ConductorComposer implements ConductorModule {
       getWorkspace: (id) => this.getWorkspace(id),
       checks: configuredChecks,
       logger: this.log,
+      ...(deps.offboxChecks
+        ? { offbox: createOffboxCheckExecutor(deps.offboxChecks, this.log) }
+        : {}),
     });
     // LLM review generator (recoder-7z42) — ACTIVATED over the SAME injected inference
     // one-shot that assisted convergence uses (`this.infer`, TZ function 'recoder_default').
@@ -604,6 +667,15 @@ export class ConductorComposer implements ConductorModule {
           ? { canonicalStore: deps.canonicalRunStore }
           : {}),
       });
+    this.codeNetwork = createCodeNetworkCoverageService({
+      repository: this.repository,
+      ...(this.codeIntel ? { codeIntel: this.codeIntel } : {}),
+    });
+    this.deliveryEvidence = deps.deliveryEvidence;
+    this.crystalMigrationService = new CrystalMigrationService({
+      repository: this.repository,
+      logger: this.log,
+    });
 
     // Terminal surface owns the sync hub; steering is gated through this composer.
     this.terminalService = new TerminalStreamService({
@@ -624,11 +696,12 @@ export class ConductorComposer implements ConductorModule {
               ) {
                 throw new Error('workspace unavailable');
               }
-              if (workspace.substrate !== 'loom' || !workspace.sessionName) {
-                throw new Error('workspace has no Loom terminal');
+              if (!workspace.sessionName) {
+                throw new Error('workspace has no interactive terminal');
               }
               return deps.interactiveTerminal!.attach({
                 paneId: workspace.sessionName,
+                substrate: workspace.substrate,
                 cols,
                 rows,
               });
@@ -652,6 +725,76 @@ export class ConductorComposer implements ConductorModule {
       getMeter: () => this.usageMeter,
       getRunSignalPush: () => this.runSignalPush,
       getMetrics: () => this.metrics,
+      // Late-bound like the checkpoint seam: this cannot run until a tailer
+      // emits, by which point `this.engine` below is fully constructed. Persist
+      // first, then publish state so the live Board always reads the transition.
+      settleWorkspace: async (workspaceId, outcome, event) => {
+        const current = await this.engine.getWorkspace(workspaceId);
+        if (!current) return null;
+        const parsedRemediation = parseCheckRemediationEvidence(current.metadata?.checkRemediation);
+        const pendingRemediation = parsedRemediation?.state === 'running' ? parsedRemediation : null;
+        const target: WorkspaceState | null =
+          outcome === 'completed'
+            ? current.state === 'running'
+              ? 'awaiting_review'
+              : null
+            : isAllowedWorkspaceTransition(current.state, 'failed')
+              ? 'failed'
+              : null;
+        if (!target) return current;
+        let settled = await this.engine.advanceWorkspace(
+          workspaceId,
+          target,
+          undefined,
+          {
+            runOutcome: outcome,
+            runFinishedAt: event.createdAt,
+            runEventId: event.eventId,
+          }
+        );
+        this.terminalService.publishSync({
+          workspaceId,
+          kind: 'state',
+          state: settled.state,
+          at: settled.updatedAt,
+        });
+        // An agent's exit is not evidence that its remediation worked. For an
+        // explicit check-fix attempt, independently rerun the exact named argv
+        // after the workspace settles, then attach the attestation to canonical
+        // workspace metadata. The agent never gets to declare its own pass.
+        if (pendingRemediation) {
+          const attestedAt = new Date().toISOString();
+          let afterStatus: 'pass' | 'fail' | 'error' = 'error';
+          let afterDetail = 'named check became unavailable before attestation';
+          try {
+            const after = await this.checkRunner.runNamed(
+              workspaceId,
+              pendingRemediation.checkName,
+            );
+            if (after) {
+              afterStatus = after.status;
+              afterDetail = after.detail ?? (after.status === 'pass' ? 'check passed' : 'check did not pass');
+            }
+          } catch (err) {
+            afterDetail = err instanceof Error ? err.message : 'check attestation failed';
+          }
+          const evidence: CheckRemediationEvidence = {
+            ...pendingRemediation,
+            state: afterStatus === 'pass' ? 'passed' : afterStatus === 'fail' ? 'failed' : 'error',
+            attestedAt,
+            afterStatus,
+            afterDetail,
+            agentOutcome: outcome,
+          };
+          settled = await this.engine.advanceWorkspace(
+            workspaceId,
+            settled.state,
+            undefined,
+            { checkRemediation: evidence },
+          );
+        }
+        return settled;
+      },
       siblings: id => this.workspaceSiblings(id),
       steer: (input, principal) => this.steerWorkspace(input, principal),
     });
@@ -698,6 +841,12 @@ export class ConductorComposer implements ConductorModule {
             ? { scheduler: deps.needsYouScheduler }
             : {}),
           logger: loggerPort,
+          onChange: change => this.terminalService.publishSync({
+            workspaceId: change.workspaceId,
+            kind: 'attention',
+            attention: change.attention,
+            at: change.at,
+          }),
         })
       : undefined;
 
@@ -752,6 +901,12 @@ export class ConductorComposer implements ConductorModule {
       get repository() {
         return self.repository;
       },
+      get deliveryEvidence() {
+        return self.deliveryEvidence;
+      },
+      get convergenceFeedback() {
+        return self.convergenceFeedback;
+      },
       get tailer() {
         return self.tailer;
       },
@@ -791,8 +946,14 @@ export class ConductorComposer implements ConductorModule {
       get environmentImportService() {
         return self.environmentImportService;
       },
+      get crystalMigrationService() {
+        return self.crystalMigrationService;
+      },
       get sessionTranscriptService() {
         return self.sessionTranscriptService;
+      },
+      get lspDiagnostics() {
+        return self.lspDiagnostics;
       },
       get brain() {
         return self.brain;
@@ -896,6 +1057,14 @@ export class ConductorComposer implements ConductorModule {
     return this.reads.listWorkspaces();
   }
 
+  codeNetworkCoverage(): CodeNetworkCoverage {
+    return this.codeNetwork.coverage();
+  }
+
+  refreshCodeNetwork(): Promise<CodeNetworkCoverage> {
+    return this.codeNetwork.refresh();
+  }
+
   async queryWorkspaces(filters: WorkspaceQueryFilters): Promise<Workspace[]> {
     return this.reads.queryWorkspaces(filters);
   }
@@ -930,6 +1099,13 @@ export class ConductorComposer implements ConductorModule {
     principal: Principal
   ): Promise<ConductorWriteResult<ReviewCommentDelivery>> {
     return this.writes.sendReviewComments(input, principal);
+  }
+
+  async sendBlockerFeedback(
+    workspaceId: string,
+    principal: Principal
+  ): Promise<ConductorWriteResult<BlockerFeedbackDelivery>> {
+    return this.writes.sendBlockerFeedback(workspaceId, principal);
   }
 
   async stopWorkspace(
@@ -1024,6 +1200,10 @@ export class ConductorComposer implements ConductorModule {
     workspaceId: string
   ): Promise<WorkspaceChecksView | null> {
     return this.introspection.workspaceChecks(workspaceId);
+  }
+
+  async workspaceDiagnostics(workspaceId: string): Promise<LspDiagnosticsDelta | null> {
+    return this.introspection.workspaceDiagnostics(workspaceId);
   }
 
   // --- workspace detail (the run screen): reads --------------------------------
@@ -1157,7 +1337,17 @@ export class ConductorComposer implements ConductorModule {
       ...this.swarmUnblock,
       logger: this.swarmUnblock.logger ?? toLoggerPort(this.log),
     });
-    return service.resolveBlocked(input);
+    const workspace = await this.getWorkspace(input.workspaceId);
+    const profile = effectiveWorkspacePolicy(workspace?.policyProfile);
+    return service.resolveBlocked({
+      ...input,
+      // The durable workspace profile is authoritative. A caller cannot widen
+      // auto-answer posture or lower the confidence floor with request args.
+      policy: {
+        autoAnswer: profile.swarm.autoAnswer,
+        minConfidence: profile.swarm.minConfidence,
+      },
+    });
   }
 
   /**
@@ -1234,6 +1424,34 @@ export class ConductorComposer implements ConductorModule {
     });
   }
 
+  /** Read one remote-continuity session's immutable contract as its owner. */
+  async remoteSession(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<RemoteAttachSession> {
+    if (!this.remoteAttachService) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: governed remote attach is not configured on this deployment'
+      );
+    }
+    return this.remoteAttachService.describe(input);
+  }
+
+  /** Resolve the live, still-owned workspace ids behind a remote session. */
+  async remoteWorkspaceIds(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<readonly string[]> {
+    if (!this.remoteAttachService) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: governed remote attach is not configured on this deployment'
+      );
+    }
+    return this.remoteAttachService.workspaceIds(input);
+  }
+
   /**
    * GOVERNED REMOTE ATTACH — monitor (`recoder_remote_snapshot`). Re-derives identity +
    * re-verifies ownership, then returns an owner-scoped live snapshot filtered to the
@@ -1275,6 +1493,28 @@ export class ConductorComposer implements ConductorModule {
     return this.remoteAttachService.steer(input);
   }
 
+  /** Revoke one remote-continuity session as its authenticated owner. */
+  async remoteRevoke(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<void> {
+    if (!this.remoteAttachService) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: governed remote attach is not configured on this deployment'
+      );
+    }
+    await this.remoteAttachService.revoke(input);
+  }
+
+  /** Revoke every remote-continuity session for global sign-out. */
+  async remoteRevokeAll(input: {
+    readonly principal: Principal;
+  }): Promise<number> {
+    if (!this.remoteAttachService) return 0;
+    return this.remoteAttachService.revokeAll(input);
+  }
+
   /**
    * List the VERIFIED skills (`recoder_skill_list`, LOOM Bigger Bet A). Reads the
    * registry that has ALREADY verified signature + pinned version at load, so only
@@ -1304,6 +1544,119 @@ export class ConductorComposer implements ConductorModule {
         })),
       })),
     }));
+  }
+
+  async skillTrustView(): Promise<SkillTrustView> {
+    if (!this.skillTrust) {
+      throw createError(ErrorCode.SERVICE_UNAVAILABLE, 'conductor: skill trust onboarding is not configured');
+    }
+    return this.skillTrust.view();
+  }
+
+  async trustSkillPublisher(input: {
+    readonly keyId: string;
+    readonly publicKey: string;
+    readonly actorId: string;
+  }): Promise<SkillPublisherView> {
+    if (!this.skillTrust) {
+      throw createError(ErrorCode.SERVICE_UNAVAILABLE, 'conductor: skill trust onboarding is not configured');
+    }
+    return this.skillTrust.trustPublisher(input);
+  }
+
+  async admitSkillManifest(input: {
+    readonly manifest: SkillManifest;
+    readonly actorId: string;
+  }): Promise<SkillLoadOutcome> {
+    if (!this.skillTrust) {
+      throw createError(ErrorCode.SERVICE_UNAVAILABLE, 'conductor: skill trust onboarding is not configured');
+    }
+    return this.skillTrust.admitManifest(input);
+  }
+
+  async revokeSkillPublisher(keyId: string): Promise<number> {
+    if (!this.skillTrust) {
+      throw createError(ErrorCode.SERVICE_UNAVAILABLE, 'conductor: skill trust onboarding is not configured');
+    }
+    return this.skillTrust.revokePublisher(keyId);
+  }
+
+  async skillInvocationEvidence(
+    workspaceId: string,
+    limit?: number,
+  ): Promise<SkillInvocationEvidenceView> {
+    if (!this.skillActions) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: governed skill invocation evidence is not configured',
+      );
+    }
+    return this.skillActions.evidenceForWorkspace(workspaceId, limit);
+  }
+
+  async workspacePolicy(workspaceId: string): Promise<WorkspacePolicyView> {
+    const workspace = await this.getWorkspace(workspaceId);
+    if (!workspace) throw createError(ErrorCode.NOT_FOUND, 'workspace not found');
+    return workspacePolicyView(workspace);
+  }
+
+  async setWorkspacePolicy(
+    workspaceId: string,
+    update: WorkspacePolicyUpdate,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<WorkspacePolicyView>> {
+    const workspace = await this.getWorkspace(workspaceId);
+    if (!workspace) throw createError(ErrorCode.NOT_FOUND, 'workspace not found');
+    const current = workspacePolicyView(workspace);
+    if (current.profile.revision !== update.expectedRevision) {
+      throw createError(
+        ErrorCode.CONFLICT,
+        `workspace policy changed (expected revision ${update.expectedRevision}, current ${current.profile.revision})`,
+      );
+    }
+    const action = 'workspace.policy';
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: conductorTarget('workspace', workspaceId, 'policy'),
+        metadata: {
+          workspaceId,
+          revision: update.expectedRevision + 1,
+          ruleCount: update.toolRules.length,
+        },
+      },
+    );
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+
+    const now = new Date().toISOString();
+    const next = {
+      version: 1 as const,
+      revision: update.expectedRevision + 1,
+      defaultToolEffect: update.defaultToolEffect,
+      toolRules: update.toolRules.map(rule => ({ ...rule })),
+      swarm: { ...update.swarm },
+      updatedAt: now,
+      updatedBy: principal.userId,
+    };
+    const stored = await this.repository.upsertWorkspace({
+      ...workspace,
+      policyProfile: next,
+      updatedAt: now,
+    });
+    await recordConductorAudit(
+      this.gate,
+      conductorAuditEntry(action, principal, verdict, {
+        workspaceId,
+        revision: next.revision,
+        defaultToolEffect: next.defaultToolEffect,
+        ruleCount: next.toolRules.length,
+        swarmAutoAnswer: next.swarm.autoAnswer,
+        swarmMinConfidence: next.swarm.minConfidence,
+      }),
+    );
+    return { ok: true, verdict, value: workspacePolicyView(stored) };
   }
 
   /**
@@ -1396,6 +1749,17 @@ export class ConductorComposer implements ConductorModule {
 
   async environmentImport(): Promise<EnvironmentImportView> {
     return this.reads.environmentImport();
+  }
+
+  async crystalMigration(): Promise<CrystalMigrationView> {
+    return this.reads.crystalMigration();
+  }
+
+  async importCrystalSessions(
+    sessionIds: readonly string[],
+    principal: Principal,
+  ): Promise<ConductorWriteResult<CrystalImportResult>> {
+    return this.writes.importCrystalSessions(sessionIds, principal);
   }
 
   async searchTranscripts(query: string): Promise<TranscriptSearchView> {
@@ -1491,6 +1855,22 @@ export class ConductorComposer implements ConductorModule {
     return this.writes.mergeWorkspace(workspaceId, input, principal);
   }
 
+  async setConvergenceFlagFeedback(
+    workspaceId: string,
+    input: { readonly flag: string; readonly disposition: ConvergenceFlagFeedbackAction },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ConvergenceDecisionProfile>> {
+    return this.writes.setConvergenceFlagFeedback(workspaceId, input, principal);
+  }
+
+  async setConvergenceRequiredRulePolicy(
+    workspaceId: string,
+    input: { readonly mode: import('./ports/convergence-feedback.port.js').RequiredRuleTrustMode },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ConvergenceDecisionProfile>> {
+    return this.writes.setConvergenceRequiredRulePolicy(workspaceId, input, principal);
+  }
+
   async getConvergenceEvidence(
     workspaceId: string
   ): Promise<ConvergenceEvidenceRecord | null> {
@@ -1501,6 +1881,12 @@ export class ConductorComposer implements ConductorModule {
     workspaceId: string
   ): Promise<ConvergenceTrust | null> {
     return this.compareConverge.getConvergenceTrust(workspaceId);
+  }
+
+  async getConvergenceDecisionProfile(
+    workspaceId: string
+  ): Promise<ConvergenceDecisionProfile | null> {
+    return this.compareConverge.getConvergenceDecisionProfile(workspaceId);
   }
 
   async getConvergenceEvidenceExport(
@@ -1546,6 +1932,34 @@ export class ConductorComposer implements ConductorModule {
     principal?: Principal
   ): Promise<AdHocCompareOutcome> {
     return this.compareConverge.compareAdHoc(workspaceIds, principal);
+  }
+
+  async pairwiseDiffAdHoc(
+    workspaceIds: readonly string[],
+    aId: string,
+    bId: string,
+    paths: readonly string[] | undefined,
+    principal?: Principal
+  ): Promise<AdHocPairwiseOutcome> {
+    return this.compareConverge.pairwiseDiffAdHoc(
+      workspaceIds,
+      aId,
+      bId,
+      paths,
+      principal
+    );
+  }
+
+  async fileVersionsAdHoc(
+    workspaceIds: readonly string[],
+    relPath: string,
+    principal?: Principal
+  ): Promise<AdHocFileVersionsOutcome> {
+    return this.compareConverge.fileVersionsAdHoc(
+      workspaceIds,
+      relPath,
+      principal
+    );
   }
 
   async planConvergenceAdHoc(
@@ -1599,8 +2013,7 @@ export class ConductorComposer implements ConductorModule {
     return (await this.codeIntel?.readIssue?.(id)) ?? null;
   }
 
-  async fanout(input: FanoutInput): Promise<FanoutResult> {
-    const actor = input.actor;
+  private fanoutService(actor: Principal): ConvergeFanoutService {
     const service = new ConvergeFanoutService({
       logger: this.log,
       creator: {
@@ -1622,7 +2035,13 @@ export class ConductorComposer implements ConductorModule {
             // instruction rides args") — one delivery, no double-prompt.
             command: request.task,
             env: { RECODER_LOOM_KIND: request.kind },
-            metadata: { taskGroup: request.taskGroup },
+            metadata: {
+              taskGroup: request.taskGroup,
+              // Recovery validates that replacement panes remain in the original
+              // repository instead of trusting a fresh client path blindly.
+              repoPath: request.repoPath,
+              fanoutTask: request.task,
+            },
           };
           const result = await this.createWorkspace(created, actor);
           if (result.ok && result.value) {
@@ -1682,7 +2101,80 @@ export class ConductorComposer implements ConductorModule {
         },
       },
     });
-    return service.fanout(input);
+    return service;
+  }
+
+  async fanout(input: FanoutInput): Promise<FanoutResult> {
+    return this.fanoutService(input.actor).fanout(input);
+  }
+
+  /**
+   * Recover one or more incomplete panes inside an existing OWNED fan-out group.
+   * The context check prevents a caller from using an arbitrary group label to
+   * splice work from another project/repository into its convergence cockpit.
+   */
+  async retryFanout(input: FanoutRetryInput): Promise<FanoutRetryResult> {
+    const group = await this.compareTaskGroup(input.taskGroup, input.actor);
+    if (group.count === 0 || group.siblings.length === 0) {
+      throw new Error('fan-out group unavailable');
+    }
+    const anchor = await this.getWorkspace(group.siblings[0]!.workspaceId);
+    if (
+      !anchor ||
+      !canAccessWorkspace(input.actor, anchor, { soloMode: this.cfg.soloMode })
+    ) {
+      throw new Error('fan-out group unavailable');
+    }
+    if (anchor.spaceId !== input.spaceId || anchor.projectId !== input.projectId) {
+      throw new Error('fan-out recovery context does not match the original group');
+    }
+    const originalRepo =
+      typeof anchor.metadata?.repoPath === 'string'
+        ? anchor.metadata.repoPath
+        : '';
+    if (originalRepo && originalRepo !== input.repoPath) {
+      throw new Error('fan-out recovery repository does not match the original group');
+    }
+    const originalTask =
+      typeof anchor.metadata?.fanoutTask === 'string'
+        ? anchor.metadata.fanoutTask.trim()
+        : '';
+    const task = input.task?.trim() || originalTask;
+    if (!task) {
+      throw new Error('fan-out recovery task is unavailable');
+    }
+    const recovered = await this.fanoutService(input.actor).retry({
+      ...input,
+      task,
+    });
+
+    // A replacement becomes authoritative only after it actually reaches a
+    // reviewable state. Keep the old record for history/session access, but remove
+    // it from active task-group compare/cockpit/compose reads via metadata.
+    const reviewable = new Set(recovered.reviewableWorkspaceIds);
+    const replacementByKind = new Map<string, string>();
+    for (const outcome of recovered.perAgent) {
+      if (outcome.workspaceId && reviewable.has(outcome.workspaceId)) {
+        replacementByKind.set(outcome.kind, outcome.workspaceId);
+      }
+    }
+    const supersededAt = new Date().toISOString();
+    for (const sibling of group.siblings) {
+      const replacementId = replacementByKind.get(sibling.agent);
+      if (!replacementId || replacementId === sibling.workspaceId) continue;
+      const workspace = await this.getWorkspace(sibling.workspaceId);
+      if (!workspace) continue;
+      await this.repository.upsertWorkspace({
+        ...workspace,
+        updatedAt: supersededAt,
+        metadata: {
+          ...(workspace.metadata ?? {}),
+          fanoutSupersededBy: replacementId,
+          fanoutSupersededAt: supersededAt,
+        },
+      });
+    }
+    return recovered;
   }
 
   /**
@@ -1778,6 +2270,14 @@ export class ConductorComposer implements ConductorModule {
     principal: Principal
   ): Promise<ConductorWriteResult<ContinueWorkspaceResult>> {
     return this.writes.sendWorkspaceMessage(workspaceId, input, principal);
+  }
+
+  async remediateWorkspaceCheck(
+    workspaceId: string,
+    checkName: string,
+    principal: Principal
+  ): Promise<ConductorWriteResult<CheckRemediationResult>> {
+    return this.writes.remediateWorkspaceCheck(workspaceId, checkName, principal);
   }
 
   async listReconcileFindings(
@@ -1913,6 +2413,8 @@ export class ConductorComposer implements ConductorModule {
     this.started = true;
     // Open the ONE long-lived Needs-You subscription (build-now #4) when wired.
     this.needsYouQueue?.start();
+    void this.refreshCodeNetwork().catch(error =>
+      this.log.warn({ error }, 'conductor code-network backfill failed'));
     this.log.info(
       {
         substrates: (await this.registry.availability())

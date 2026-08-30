@@ -1,4 +1,5 @@
 export * from './dependency-graph';
+export * from './graph-snapshot';
 export * from './ownership-map';
 export * from './test-target-map';
 export * from './impact-report';
@@ -7,5 +8,11 @@ export * from './repo-scan';
 export * from './ownership';
 export * from './impact';
 export * from './repo-indexer';
+export * from './file-impact';
 export * from './semantic-index';
+export * from './symbol-evidence';
+export * from './git-history';
+export * from './repository-packages';
+export * from './workspace-imports';
+export * from './repository-network';
 export * from './mcp-server';

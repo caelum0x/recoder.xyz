@@ -12,6 +12,21 @@ const ELF_MACHINE_X64 = 0x3e;
 const ELF_MACHINE_ARM64 = 0xb7;
 
 /**
+ * Build the platform-sensitive options for the fail-loud resource gate.
+ * Existence is always enforced. CPU-header validation is macOS-only because
+ * staged Windows/Linux packaging must use on-target artifacts rather than
+ * interpreting a Darwin Mach-O header as its target architecture.
+ */
+function buildExtraResourcesGateOptions(platform, archName, optional, archSensitive) {
+    const isDarwin = platform === "darwin";
+    return {
+        targetArch: isDarwin && archName !== "universal" ? archName : null,
+        optional,
+        archSensitive: isDarwin ? archSensitive : new Set(),
+    };
+}
+
+/**
  * Read a native binary's CPU arch from its header, without a shell or any heavy
  * tooling — the first ~20 bytes are enough. Returns "arm64" | "x64" | null.
  * A null (unparseable / unknown format) is fail-open: the arch check never
@@ -152,4 +167,4 @@ function assertExtraResourcesExist(extraResources, appRoot, opts = {}) {
     return verified;
 }
 
-module.exports = { assertExtraResourcesExist, readBinaryArch };
+module.exports = { assertExtraResourcesExist, buildExtraResourcesGateOptions, readBinaryArch };

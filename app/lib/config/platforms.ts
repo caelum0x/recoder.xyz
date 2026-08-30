@@ -48,18 +48,6 @@ export const RECODER_SERVICES: RecoderService[] = [
     internal: false,
   },
   {
-    id: 'web',
-    label: 'Recoder Web',
-    description: 'Web AI IDE',
-    productionUrl: RECODER_ECOSYSTEM_URLS.web,
-    devUrl: 'http://localhost:5173',
-    port: 5173,
-    healthPath: '/',
-    healthResponseType: 'html',
-    showInSwitcher: SWITCHER_SERVICE_IDS.has('web'),
-    internal: false,
-  },
-  {
     id: 'api',
     label: 'Recoder API',
     description: 'Unified API gateway & task engine',
@@ -167,15 +155,6 @@ export function getMonitoredServices(): RecoderService[] {
   return RECODER_SERVICES.filter(s => s.healthPath !== '');
 }
 
-// ── Legacy helpers (backward compat) ──
-
-export function getRecoderWebUrl(): string {
-  if (process.env.RECODER_WEB_URL) {
-    return process.env.RECODER_WEB_URL;
-  }
-  return getServiceUrl('web');
-}
-
 export function getRecoderChatUrl(): string {
   if (process.env.RECODER_CHAT_URL) {
     return process.env.RECODER_CHAT_URL;
@@ -188,21 +167,4 @@ export function getMainSiteUrl(): string {
     return process.env.MAIN_SITE_URL;
   }
   return getServiceUrl('app');
-}
-
-export function getWebIdeUrl(path: string = ''): string {
-  const baseUrl = getRecoderWebUrl();
-  return path ? `${baseUrl}${path}` : baseUrl;
-}
-
-export function getRecoderWebUrlClient(): string {
-  if (typeof window === 'undefined') {
-    return getRecoderWebUrl();
-  }
-
-  if (process.env.NEXT_PUBLIC_RECODER_WEB_URL) {
-    return process.env.NEXT_PUBLIC_RECODER_WEB_URL;
-  }
-
-  return getServiceUrlClient('web');
 }

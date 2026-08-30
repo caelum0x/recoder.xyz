@@ -2,30 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SiblingCompareEntry } from "./recoder-board-logic";
+import { adHocWorkspaceIds } from "./recoder-ad-hoc-group";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { readErrorReason } from "./recoder-errors";
-
-// Ad-hoc converge groups (workspaces launched SEPARATELY, not same-taskGroup
-// siblings) carry a synthetic group id the backend mints — the sorted workspace
-// ids joined by "+", prefixed "adhoc:" (mirrors adHocGroupId() in
-// compare.service.ts). Such a group has NO real metadata.taskGroup, so its
-// converge-plan/compose MUST route to the dedicated /compare/ad-hoc/* edges
-// (which resolve the set from an explicit id list) instead of
-// /compare/:taskGroup/*, which would 404 with siblingCount 0.
-const AD_HOC_GROUP_PREFIX = "adhoc:";
-
-// Recover the explicit workspace-id list from a synthetic ad-hoc group id.
-// "adhoc:ws1+ws2" → ["ws1", "ws2"]; a non-ad-hoc taskGroup yields [].
-function adHocIdsFromGroup(taskGroup: string): string[] {
-    if (!taskGroup.startsWith(AD_HOC_GROUP_PREFIX)) {
-        return [];
-    }
-    return taskGroup
-        .slice(AD_HOC_GROUP_PREFIX.length)
-        .split("+")
-        .map((id) => id.trim())
-        .filter((id) => id != "");
-}
 
 // The user's convergence choice: a contested path → the sibling workspaceId whose
 // version wins. A path absent from the map is deliberately unresolved (the server
@@ -60,6 +39,8 @@ type ConvergeContestedProbe = {
     synthesizable: boolean;
     reason?: string;
     regions?: ConvergeConflictRegion[];
+    symbols?: { workspaceId: string; names: string[] }[];
+    sharedSymbols?: string[];
 };
 
 // The selection value that requests an auto 3-way merge for a path instead of a
@@ -244,6 +225,17 @@ function normalizeContested(value: unknown): ConvergeContestedProbe[] {
         if (regions != null) {
             entry.regions = regions;
         }
+        if (Array.isArray(obj.symbols)) {
+            const symbols = obj.symbols.flatMap((value): { workspaceId: string; names: string[] }[] => {
+                const symbol = asObject(value);
+                const workspaceId = typeof symbol?.workspaceId == "string" ? symbol.workspaceId : "";
+                const names = stringArray(symbol?.names);
+                return workspaceId != "" && names.length > 0 ? [{ workspaceId, names }] : [];
+            });
+            if (symbols.length > 0) entry.symbols = symbols;
+        }
+        const sharedSymbols = stringArray(obj.sharedSymbols);
+        if (sharedSymbols.length > 0) entry.sharedSymbols = sharedSymbols;
         out.push(entry);
     }
     return out;
@@ -505,7 +497,7 @@ async function fetchConvergePlan(
     try {
         const sel = encodeURIComponent(JSON.stringify(selection));
         const probeParam = probe ? "&probe=1" : "";
-        const adHocIds = adHocIdsFromGroup(tg);
+        const adHocIds = adHocWorkspaceIds(tg);
         const url =
             adHocIds.length > 0
                 ? `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/ad-hoc/converge-plan?ids=${encodeURIComponent(adHocIds.join(","))}&selection=${sel}${probeParam}`
@@ -540,7 +532,7 @@ async function composeConvergence(
     }
     try {
         const trimmedBranch = (branch ?? "").trim();
-        const adHocIds = adHocIdsFromGroup(tg);
+        const adHocIds = adHocWorkspaceIds(tg);
         const url =
             adHocIds.length > 0
                 ? `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/ad-hoc/converge`

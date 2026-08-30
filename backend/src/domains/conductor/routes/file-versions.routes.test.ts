@@ -160,6 +160,36 @@ describe('GET /workspaces/compare/:taskGroup/file-versions (route + recoder-kybr
     }
   });
 
+  it('ad-hoc deep inspection resolves the explicit workspace set for N-up and A/B reads', async () => {
+    const { module } = composeConductor({ substrates: [statSubstrate()] });
+    const a = await launch(module, 'solo_a', 'claude_code', userA);
+    const b = await launch(module, 'solo_b', 'codex', userA);
+    const ids = encodeURIComponent(`${a.workspaceId},${b.workspaceId}`);
+    const h = await serve(module);
+    try {
+      const versions = await request(
+        h.base,
+        `/api/conductor/workspaces/compare/ad-hoc/file-versions?ids=${ids}&path=shared.ts`,
+      );
+      expect(versions.status).toBe(200);
+      expect(fileVersionsOf(versions.json)!.versions.map(v => v.workspaceId).sort())
+        .toEqual([a.workspaceId, b.workspaceId].sort());
+
+      const pairwise = await request(
+        h.base,
+        `/api/conductor/workspaces/compare/ad-hoc/pairwise?ids=${ids}&a=${a.workspaceId}&b=${b.workspaceId}&paths=shared.ts`,
+      );
+      expect(pairwise.status).toBe(200);
+      const pair = (pairwise.json as {
+        data?: { pairwise?: { a: string; b: string; files: unknown[] } };
+      }).data?.pairwise;
+      expect(pair).toMatchObject({ a: a.workspaceId, b: b.workspaceId });
+      expect(pair?.files).toHaveLength(1);
+    } finally {
+      await h.close();
+    }
+  });
+
   it('a foreign principal gets a no-oracle 404, byte-identical to an unknown group', async () => {
     const { module } = composeConductor({ substrates: [statSubstrate()] });
     await launch(module, 'grp_a', 'claude_code', userA);

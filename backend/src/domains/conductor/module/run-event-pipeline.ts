@@ -7,6 +7,7 @@
  * stay closures so bootstrap setters bind after construction, unchanged.
  */
 import { systemClock, uuidId } from '@recoder/substrate';
+import type { RunEvent, Workspace } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
 import type { Principal } from '../../identity/types.js';
 import type { MetricsPort } from '../../observability/ports/metrics.port.js';
@@ -59,6 +60,12 @@ export interface RunEventPipelineArgs {
   readonly getMeter: () => UsageMeterPort | undefined;
   readonly getRunSignalPush: () => RunSignalPushPort | undefined;
   readonly getMetrics: () => MetricsPort | undefined;
+  /** Canonical terminal lifecycle settlement, late-bound to WorkspaceEngine. */
+  readonly settleWorkspace: (
+    workspaceId: string,
+    outcome: 'completed' | 'failed',
+    event: RunEvent
+  ) => Promise<Workspace | null>;
   /** The facade's governed cross-group seams (sibling awareness delivery). */
   readonly siblings: (workspaceId: string) => Promise<CompareView | null>;
   readonly steer: (
@@ -111,6 +118,7 @@ export function buildRunEventPipeline(
     // terminal event, so bootstrap can inject it AFTER observability is
     // composed (setMetrics). Unwired ⇒ a truthful no-op (no series recorded).
     getMetrics: args.getMetrics,
+    settleWorkspace: args.settleWorkspace,
     getWorkspace: id => repository.getWorkspace(id),
     logger: log,
   });

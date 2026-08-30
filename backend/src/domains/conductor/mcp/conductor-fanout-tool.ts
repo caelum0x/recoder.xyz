@@ -29,6 +29,8 @@ import {
   MIN_FANOUT_AGENTS,
   MAX_FANOUT_AGENTS,
   type FanoutInput,
+  type FanoutRetryInput,
+  type FanoutRetryResult,
   type FanoutResult,
 } from '../fanout/converge-fanout.service.js';
 
@@ -38,6 +40,7 @@ import {
  */
 export interface ConvergeFanoutSurface {
   fanout(input: FanoutInput): Promise<FanoutResult>;
+  retryFanout(input: FanoutRetryInput): Promise<FanoutRetryResult>;
 }
 
 /** A fail-fast validation error (bad tool input; no fan-out started). */
@@ -124,6 +127,20 @@ export function isInputError<T>(r: T | ToolInputError): r is ToolInputError {
  * list, or a fail-fast {@link ToolInputError}.
  */
 export function parseAgentKinds(raw: unknown): readonly string[] | ToolInputError {
+  return parseAgentKindsWithMinimum(raw, MIN_FANOUT_AGENTS);
+}
+
+/** Recovery may replace one pane while retaining healthy siblings in the group. */
+export function parseRetryAgentKinds(
+  raw: unknown
+): readonly string[] | ToolInputError {
+  return parseAgentKindsWithMinimum(raw, 1);
+}
+
+function parseAgentKindsWithMinimum(
+  raw: unknown,
+  minimum: number
+): readonly string[] | ToolInputError {
   if (!Array.isArray(raw)) {
     return inputError('agentKinds must be an array of agent kinds');
   }
@@ -141,9 +158,9 @@ export function parseAgentKinds(raw: unknown): readonly string[] | ToolInputErro
     seen.add(kind);
     kinds.push(kind);
   }
-  if (kinds.length < MIN_FANOUT_AGENTS) {
+  if (kinds.length < minimum) {
     return inputError(
-      `agentKinds needs ≥${MIN_FANOUT_AGENTS} distinct known kinds (got ${kinds.length})`
+      `agentKinds needs ≥${minimum} distinct known kinds (got ${kinds.length})`
     );
   }
   // Clamp N to the sane max — take the first MAX_FANOUT_AGENTS distinct kinds.
@@ -205,6 +222,44 @@ export function buildConductorFanoutTools(
           ...(settleTimeoutMs !== undefined ? { settleTimeoutMs } : {}),
         };
         return surface.fanout(input);
+      },
+    },
+    {
+      name: 'recoder_fanout_retry',
+      description:
+        'Recover an incomplete fan-out by launching 1..6 replacement agent panes into the SAME owned taskGroup. Existing healthy siblings remain available; this action does not compose replacement panes alone. Refresh the convergence cockpit and use its Converge action when the full group is ready. Args: taskGroup, agentKinds, repoPath, spaceId, projectId (required); task (optional, defaults to the original server-recorded task), base, taskId, settleTimeoutMs (optional).',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
+        const body = asObject(raw);
+        const resolved = resolveCaller(body, caller);
+        if (isInputError(resolved)) return resolved;
+
+        const taskGroup = reqString(body, 'taskGroup');
+        if (!taskGroup) return inputError('taskGroup is required');
+        const task = reqString(body, 'task');
+        const repoPath = reqString(body, 'repoPath');
+        if (!repoPath) return inputError('repoPath is required');
+        const spaceId = reqString(body, 'spaceId');
+        if (!spaceId) return inputError('spaceId is required');
+        const projectId = reqString(body, 'projectId');
+        if (!projectId) return inputError('projectId is required');
+
+        const agentKinds = parseRetryAgentKinds(body.agentKinds);
+        if (isInputError(agentKinds)) return agentKinds;
+        const base = reqString(body, 'base');
+        const taskId = reqString(body, 'taskId');
+        const settleTimeoutMs = parseSettleTimeoutMs(body.settleTimeoutMs);
+        return surface.retryFanout({
+          taskGroup,
+          ...(task ? { task } : {}),
+          agentKinds,
+          repoPath,
+          spaceId,
+          projectId,
+          actor: resolved.principal,
+          ...(base ? { base } : {}),
+          ...(taskId ? { taskId } : {}),
+          ...(settleTimeoutMs !== undefined ? { settleTimeoutMs } : {}),
+        });
       },
     },
   ];

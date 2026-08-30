@@ -10,8 +10,14 @@
  * resolves against the service identity (`ownerId`).
  */
 import { describe, it, expect } from 'vitest';
-import { buildInteropMcpTools, type InteropEngineDeps } from './interop-engine.js';
-import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
+import {
+  buildInteropMcpTools,
+  type InteropEngineDeps,
+} from './interop-engine.js';
+import type {
+  McpToolCaller,
+  McpToolRegistration,
+} from '../../../shared/module-base.js';
 
 const OWNER = 'svc-owner';
 const CALLER = 'user-attacker';
@@ -20,13 +26,18 @@ const VICTIM = 'user-victim';
 /** A recording seam: captures every `userId` the tools resolve and forward. */
 function build() {
   const seen: string[] = [];
-  const record = <T>(value: T) => (userId: string): Promise<T> => {
-    seen.push(userId);
-    return Promise.resolve(value);
-  };
+  const record =
+    <T>(value: T) =>
+    (userId: string): Promise<T> => {
+      seen.push(userId);
+      return Promise.resolve(value);
+    };
   const deps = {
     registry: { list: record<readonly unknown[]>([]) },
-    heartbeat: { liveness: async () => 'unknown' },
+    heartbeat: {
+      liveness: (_agentId: string, userId: string) =>
+        record<'unknown'>('unknown')(userId),
+    },
     tasks: {
       get: (_id: string, userId: string) => record<null>(null)(userId),
       messages: async () => [],
@@ -34,7 +45,13 @@ function build() {
     contextBridge: {
       build: (input: { taskId: string; userId: string }) => {
         seen.push(input.userId);
-        return Promise.resolve({ taskId: input.taskId, task: null, messages: [], truncated: false, notes: [] });
+        return Promise.resolve({
+          taskId: input.taskId,
+          task: null,
+          messages: [],
+          truncated: false,
+          notes: [],
+        });
       },
     },
     jsonRpc: { methods: () => ['message/send'] },
@@ -42,19 +59,39 @@ function build() {
   } as unknown as InteropEngineDeps;
 
   const tools = buildInteropMcpTools(deps);
-  const byName = new Map(tools.map((t) => [t.name, t] as const));
-  const call = <T = unknown>(name: string, input: unknown, caller?: McpToolCaller): Promise<T> =>
+  const byName = new Map(tools.map(t => [t.name, t] as const));
+  const call = <T = unknown>(
+    name: string,
+    input: unknown,
+    caller?: McpToolCaller
+  ): Promise<T> =>
     Promise.resolve(byName.get(name)!.handler(input, caller) as T);
   return { tools, seen, call };
 }
 
 const nonPriv = (userId: string): McpToolCaller => ({ userId });
-const admin = (userId: string): McpToolCaller => ({ userId, scopes: ['read', 'admin'] });
+const admin = (userId: string): McpToolCaller => ({
+  userId,
+  scopes: ['read', 'admin'],
+});
 
-const SUBJECT_TOOLS: readonly { name: string; input: (userId?: string) => unknown }[] = [
-  { name: 'interop_list_agents', input: (userId) => (userId ? { userId } : {}) },
-  { name: 'interop_get_task', input: (userId) => ({ taskId: 't-1', ...(userId ? { userId } : {}) }) },
-  { name: 'interop_task_context', input: (userId) => ({ taskId: 't-1', ...(userId ? { userId } : {}) }) },
+const SUBJECT_TOOLS: readonly {
+  name: string;
+  input: (userId?: string) => unknown;
+}[] = [
+  { name: 'interop_list_agents', input: userId => (userId ? { userId } : {}) },
+  {
+    name: 'interop_agent_liveness',
+    input: userId => ({ agentId: 'agent-1', ...(userId ? { userId } : {}) }),
+  },
+  {
+    name: 'interop_get_task',
+    input: userId => ({ taskId: 't-1', ...(userId ? { userId } : {}) }),
+  },
+  {
+    name: 'interop_task_context',
+    input: userId => ({ taskId: 't-1', ...(userId ? { userId } : {}) }),
+  },
 ];
 
 describe('interop-wire read MCP tools — subject binding', () => {
@@ -73,7 +110,9 @@ describe('interop-wire read MCP tools — subject binding', () => {
   for (const { name, input } of SUBJECT_TOOLS) {
     it(`${name}: a non-privileged caller naming a FOREIGN userId is refused (403), victim never hits the seam`, async () => {
       const { call, seen } = build();
-      await expect(call(name, input(VICTIM), nonPriv(CALLER))).rejects.toMatchObject({
+      await expect(
+        call(name, input(VICTIM), nonPriv(CALLER))
+      ).rejects.toMatchObject({
         code: 'AUTHZ_PROJECT_ACCESS_DENIED',
       });
       expect(seen).not.toContain(VICTIM);

@@ -13,6 +13,7 @@
     "agent-os:persistence-smoke": "tsx scripts/agent-os-persistence-smoke.ts",
     "agent-os:verify-paid-loop": "tsx scripts/verify-agent-os-paid-loop.ts",
     "agent-os:verify-outbox-nats": "tsx scripts/verify-agent-os-outbox-nats.ts",
+    "conductor:verify-live-agents": "node --import tsx scripts/verify-live-agent-convergence.ts",
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:coverage": "vitest --coverage",

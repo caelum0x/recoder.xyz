@@ -223,8 +223,22 @@ parity while preserving the Wave-owned renderer and governed input boundary.
   infrastructure but do not gate local workspaces.
 - **Tsunami apps:** supported shell extension mechanism, not a beta product dependency.
 - **Loom remote attach/plugins/layout UI:** engine capabilities are not automatically
-  product capabilities. Remote attach and governed skills remain unfinished product
-  contracts (`recoder-n5pc`, `recoder-ne6o`, `recoder-ubyg`); Wave remains layout owner.
+  product capabilities. Remote attach now has authenticated HTTP mint/monitor/steer/
+  revoke, TTL-backed durable sessions, a Wave deep-link handoff, and a signed-in
+  mobile-first web receiver. Native Loom status/lifecycle edges drive its
+  scope-filtered SSE stream, and canonical sign-out revokes every owner-bound
+  remote session before credential invalidation. Provisioned host-to-host Loom
+  transport remains expansion work (`recoder-n5pc`). Governed skills have a signed/pinned
+  four-action first-party catalog, typed workspace UI, and durable operator publisher/
+  manifest Trust ledger with runtime admission and revocation. Each attempt persists
+  content-hashed action, target, parameters, actor, policy verdict, and terminal evidence,
+  verified and inspectable per owned workspace. The installed desktop binds the shared
+  KV contract to its embedded SQLite state-of-record, making trust, invocation evidence,
+  remote sessions, and idempotency restart-survivable without Postgres (`recoder-ne6o`,
+  `recoder-ubyg`). A revisioned workspace policy in that same state-of-record owns
+  unmatched defaults, exact skill/swarm allow/approval/deny rules, reasons, and
+  auto-answer confidence; the Session editor and invocation evidence expose the
+  actual applied revision. Wave remains layout owner.
 
 ## 7. Product state model
 
@@ -294,8 +308,8 @@ A release candidate is accepted only after a real fresh-machine run proves:
 10. the run artifact contains the evidence contract above.
 
 Billing, public signup, x64/universal packaging, Python sidecars, remote attach,
-social connectors, background agents, governed skills, and AST convergence are not
-part of this acceptance gate.
+social connectors, background agents, governed-skill ecosystem expansion, and AST
+convergence are not part of this acceptance gate.
 
 ## 10. Status vocabulary
 

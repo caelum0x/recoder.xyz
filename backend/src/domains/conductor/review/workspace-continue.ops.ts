@@ -44,6 +44,8 @@ export interface ContinueWorkspaceInput {
   model?: string;
   /** Actor sending the message (for provenance/enrichment scope). */
   createdBy?: string;
+  /** Internal-only metadata stamped atomically with the new running state. */
+  continuationMetadata?: Record<string, unknown>;
 }
 
 export interface ContinueWorkspaceResult {
@@ -177,7 +179,11 @@ export async function continueWorkspace(
     workspaceId,
     'running',
     { runId, sessionName: handle.sessionName, worktreePath: handle.worktreePath },
-    { lastMessage: text.slice(0, 280), continuedAt: now },
+    {
+      lastMessage: text.slice(0, 280),
+      continuedAt: now,
+      ...(input.continuationMetadata ?? {}),
+    },
   );
 
   deps.tailer.start({

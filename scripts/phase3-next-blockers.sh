@@ -52,7 +52,7 @@ if (has("P3.3")) {
   console.log("2. Fix apps/frontend typecheck errors, then rerun pnpm -C apps/frontend run typecheck.");
 }
 if (has("P3.4") || has("P3.5") || has("P3.6")) {
-  console.log("3. Ensure network/DNS reachability for web.recoder.xyz, docker.recoder.xyz, recoder.xyz from runner host.");
+  console.log("3. Ensure network/DNS reachability for docker.recoder.xyz and recoder.xyz from runner host.");
 }
 if (has("P3.7")) {
   console.log("4. Set RECODER_A2A_SHARED_SECRET and rerun pnpm run a2a:smoke:codex-claude.");
@@ -89,7 +89,7 @@ fi
 if node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const b=Array.isArray(j.blockers)?j.blockers:[];process.exit(b.some((x)=>x.includes("P3.4")||x.includes("P3.5")||x.includes("P3.6"))?0:1);' "$scorecard"; then
   echo ""
   echo "Network diagnostics:"
-  for u in "${RECODER_WEB_URL:-https://web.recoder.xyz}" "${BACKEND_URL:-https://docker.recoder.xyz}" "${BASE_URL:-https://recoder.xyz}"; do
+  for u in "${BACKEND_URL:-https://docker.recoder.xyz}" "${BASE_URL:-https://recoder.xyz}"; do
     code="$(curl -s -o /tmp/phase3_net.out -w "%{http_code}" "$u" || true)"
     [[ -z "$code" ]] && code="000"
     echo "  - $u -> $code"

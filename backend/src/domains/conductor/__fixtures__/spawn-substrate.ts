@@ -17,7 +17,7 @@
  * a launch is NEVER faked as running. This file carries no `*.test.ts` name, so
  * vitest ignores it.
  */
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type {
@@ -79,6 +79,7 @@ interface SpawnRun {
   exitCode: number | null;
   worktreePath: string;
   output: string;
+  child: ChildProcess;
 }
 
 export interface SpawningSubstrateOptions {
@@ -91,6 +92,10 @@ export interface SpawningSubstrateOptions {
    * runtime's real bin unresolvable so the launch degrades truthfully (exit 127).
    */
   readonly pathDirs: readonly string[];
+  /** Preserve host credentials/config for an explicitly requested live-CLI proof. */
+  readonly inheritEnv?: boolean;
+  /** Additional fixed environment for every spawned run (for example an isolated runtime home). */
+  readonly env?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -103,12 +108,16 @@ export class SpawningSubstrate implements ConductorSubstrate {
   readonly id: WorkspaceSubstrate;
   readonly #worktreesDir: string;
   readonly #path: string;
+  readonly #inheritEnv: boolean;
+  readonly #env: Readonly<Record<string, string>>;
   readonly #runs = new Map<string, SpawnRun>();
 
   constructor(options: SpawningSubstrateOptions) {
     this.id = options.id ?? 'tmux_worktree';
     this.#worktreesDir = options.worktreesDir;
     this.#path = options.pathDirs.join(path.delimiter);
+    this.#inheritEnv = options.inheritEnv ?? false;
+    this.#env = options.env ?? {};
   }
 
   capabilities(): SubstrateCapabilities {
@@ -126,6 +135,44 @@ export class SpawningSubstrate implements ConductorSubstrate {
     return { available: true };
   }
 
+  #spawnRun(
+    workspaceId: string,
+    worktreePath: string,
+    command: string,
+    extraEnv: Readonly<Record<string, string>> = {},
+  ): SpawnRun {
+    const child = spawn(command, {
+      cwd: worktreePath,
+      shell: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...(this.#inheritEnv ? process.env : {}),
+        ...this.#env,
+        ...extraEnv,
+        PATH: this.#path,
+      },
+    });
+    const run: SpawnRun = { alive: true, exitCode: null, worktreePath, output: '', child };
+    child.stdout?.on('data', (d: Buffer) => {
+      run.output += d.toString();
+    });
+    child.stderr?.on('data', (d: Buffer) => {
+      run.output += d.toString();
+    });
+    child.on('exit', (code) => {
+      run.alive = false;
+      // A signal-only exit is failure/termination, never a fabricated success.
+      run.exitCode = code ?? 1;
+    });
+    child.on('error', (err) => {
+      run.alive = false;
+      run.exitCode = 127;
+      run.output += `spawn error: ${err.message}\n`;
+    });
+    this.#runs.set(workspaceId, run);
+    return run;
+  }
+
   async launch(input: SubstrateLaunchInput): Promise<SubstrateHandle> {
     const wt = path.join(this.#worktreesDir, input.workspaceId);
     // Cut a real worktree off the resolved base (branch is engine-assigned + unique).
@@ -138,33 +185,11 @@ export class SpawningSubstrate implements ConductorSubstrate {
       input.baseRef || 'HEAD',
     ]);
 
-    const run: SpawnRun = { alive: true, exitCode: null, worktreePath: wt, output: '' };
     // Genuinely SPAWN the resolved runtime command inside the worktree. The child
     // PATH is hermetic (only the supplied dirs) so an absent fake bin fails
     // truthfully; node's `shell:true` invokes `/bin/sh -c` via an absolute path,
     // so the shell runs regardless of PATH and reports "not found" for a missing bin.
-    const child = spawn(input.command, {
-      cwd: wt,
-      shell: true,
-      env: { ...input.env, PATH: this.#path },
-    });
-    child.stdout?.on('data', (d: Buffer) => {
-      run.output += d.toString();
-    });
-    child.stderr?.on('data', (d: Buffer) => {
-      run.output += d.toString();
-    });
-    child.on('exit', (code) => {
-      run.alive = false;
-      run.exitCode = code ?? 0;
-    });
-    // A spawn error (e.g. shell missing) surfaces as a truthful non-zero, never a fake 0.
-    child.on('error', (err) => {
-      run.alive = false;
-      run.exitCode = 127;
-      run.output += `spawn error: ${err.message}\n`;
-    });
-    this.#runs.set(input.workspaceId, run);
+    const run = this.#spawnRun(input.workspaceId, wt, input.command, input.env);
 
     return {
       ref: input.workspaceId,
@@ -203,16 +228,18 @@ export class SpawningSubstrate implements ConductorSubstrate {
     return { stat, patch, untracked: [], changedFiles };
   }
 
-  async teardown(): Promise<void> {
-    // Keep the worktree for assertions (the test reads the fake agent's marker).
+  async teardown(handle: SubstrateHandle): Promise<void> {
+    const run = this.#runs.get(handle.ref);
+    if (run?.alive) run.child.kill('SIGTERM');
+    // Keep the worktree for assertions/evidence (the launch proof reads it).
   }
 
   async continueRun(
     handle: SubstrateHandle,
     input: ContinueRunInput,
   ): Promise<SubstrateHandle> {
-    const run = this.#runs.get(handle.ref);
-    if (run) run.alive = true;
+    if (!input.command) throw new Error('process-worktree continuation requires a command');
+    this.#spawnRun(input.workspaceId, input.worktreePath, input.command);
     return {
       ref: handle.ref,
       worktreePath: input.worktreePath,

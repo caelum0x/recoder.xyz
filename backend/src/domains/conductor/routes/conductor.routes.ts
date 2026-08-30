@@ -7,6 +7,8 @@
  *   POST   /api/conductor/workspaces              create + launch (GATED)
  *   POST   /api/conductor/workspaces/:id/steer    send-keys to a live agent (GATED)
  *   POST   /api/conductor/workspaces/:id/review-comments  line-anchored review notes → agent (steer live / new run) (GATED)
+ *   POST   /api/conductor/workspaces/:id/review-findings  on-demand evidence-validated code review (GATED)
+ *   POST   /api/conductor/workspaces/:id/blocker-feedback  re-probe hard blockers → agent (GATED)
  *   GET    /api/conductor/workspaces/:id/events   RunEvents (conversation + lifecycle)
  *   GET    /api/conductor/workspaces/:id/diff     reviewable diff vs base
  *   GET    /api/conductor/workspaces/:id/diff/files  per-file changed list (numstat + name-status)
@@ -16,10 +18,15 @@
  *   GET    /api/conductor/workspaces/:id/readiness  folded merge-readiness read-model (4 signals + verdict)
  *   GET    /api/conductor/workspaces/:id/evidence  exportable convergence evidence record (404 when unmerged)
  *   GET    /api/conductor/workspaces/:id/convergence-trust  "should I trust this merge?" score + factors (404 when unmerged)
+ *   GET    /api/conductor/workspaces/:id/convergence-feedback durable repo decision history
+ *   POST   /api/conductor/workspaces/:id/convergence-feedback explicit flag disposition
+ *   PUT    /api/conductor/workspaces/:id/convergence-policy operator required-rule policy
  *   GET    /api/conductor/workspaces/:id/evidence/export  framework-mapped evidence pack (`?format=md` for text)
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
  *   GET    /api/conductor/workspaces/:id/run-config  committed scripts + RECODER_PORT + detected cmd
  *   GET    /api/conductor/environment  first-run import: git identity, agent configs, gh, shell
+ *   GET    /api/conductor/imports/crystal  discover adoptable Crystal sessions
+ *   POST   /api/conductor/imports/crystal  adopt Crystal worktrees into Recoder (GATED)
  *   GET    /api/conductor/transcript/search?q=  search Claude session transcripts by content
  *   GET    /api/conductor/workspaces/:id/transcript  hydrate this workspace's Claude transcript (available:false when none)
  *   GET    /api/conductor/workspaces/:id/preview-verification  last preview verification summary (404 when unverified)
@@ -36,12 +43,30 @@
  *   POST   /api/conductor/workspaces/:id/preview-url  persist sniffed preview URL (GATED)
  *   POST   /api/conductor/workspaces/:id/preview-verify  verify the stored preview URL (GATED)
  *   GET    /api/conductor/substrates              truthful per-substrate availability
+ *   GET    /api/conductor/skills                  verified + pinned governed skills
+ *   GET    /api/conductor/skills/trust            operator publisher/manifest trust ledger
+ *   POST   /api/conductor/skills/publishers       persist a trusted public publisher key (ADMIN)
+ *   DELETE /api/conductor/skills/publishers/:keyId  revoke an operator publisher and its skills (ADMIN)
+ *   POST   /api/conductor/skills/manifests        verify, pin, and admit a signed skill manifest (ADMIN)
+ *   POST   /api/conductor/workspaces/:id/skills/:skillId/actions/:actionId  invoke a typed governed skill action
+ *   GET    /api/conductor/workspaces/:id/skills/invocations  durable governed-skill evidence
+ *   GET    /api/conductor/workspaces/:id/policy   effective governed-action policy profile
+ *   PUT    /api/conductor/workspaces/:id/policy   revision-checked policy update (GATED)
+ *   POST   /api/conductor/remote/sessions         mint an owned remote-continuity session
+ *   GET    /api/conductor/remote/sessions/:sessionId  read its owner-bound session contract
+ *   GET    /api/conductor/remote/sessions/:sessionId/snapshot  monitor its live owned scope
+ *   GET    /api/conductor/remote/sessions/:sessionId/stream  stream its live owned scope
+ *   POST   /api/conductor/remote/sessions/:sessionId/workspaces/:workspaceId/steer  governed remote input
+ *   DELETE /api/conductor/remote/sessions/:sessionId  revoke remote continuity
+ *   DELETE /api/conductor/remote/sessions            revoke all caller sessions
  *   GET    /api/conductor/runtimes                installed agent CLIs (PATH-probed)
  *   GET    /api/conductor/github/status           GitHub connection + identity (token-free)
  *   GET    /api/conductor/github/repos            detected account's repos via gh (empty when gh absent)
  *   POST   /api/conductor/repos/clone             clone a GitHub repo (gh-first, git fallback)
- *   GET    /api/conductor/workspaces/:id/checks   per-check PR rollup via gh (truthful degrade)
- *   GET    /api/conductor/health                  conductor readiness summary + substrate.tmuxBin/tmuxSocket
+ *   GET    /api/conductor/workspaces/:id/checks   per-check PR + Recoder rollup
+ *   GET    /api/conductor/workspaces/:id/diagnostics base-versus-head LSP delta
+ *   POST   /api/conductor/workspaces/:id/checks/remediate governed named-check agent fix
+ *   GET    /api/conductor/health                  readiness + substrate tmux identity + durable-project code-network coverage
  *   GET    /api/conductor/reconcile/findings      reconcile findings (operator review)
  *   GET    /api/conductor/sessions                live recoder-* tmux sessions (read-only attach list)
  *   POST   /api/conductor/reconcile               run a reconcile pass (GATED)
@@ -66,6 +91,8 @@ import type {
 } from '../conductor-module.js';
 import type { PreviewVerifyOptions } from '../services/preview-verify.service.js';
 import type { CloneRepoErrorCode } from '../services/repo-clone.service.js';
+import type { SkillManifest } from '../skill/skill.types.js';
+import { parseWorkspacePolicyUpdate } from '../policy/workspace-policy.js';
 import type { PreviewVerifyAssertion } from '../ports/preview-verify.port.js';
 import { parseReviewComments } from '../review/review-comments.js';
 import { resolveConductorTmuxSocket } from '../tmux-socket.js';
@@ -181,6 +208,204 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     middleware.authenticate,
     asyncHandler(async (_req, res) => {
       sendSuccess(res, { substrates: await module.substrates() });
+    }),
+  );
+
+  // Product surface for the governed skill registry. The composer projects only
+  // manifests that passed signature verification + version pinning at bootstrap;
+  // an unwired deployment returns SERVICE_UNAVAILABLE, never a fake empty catalog.
+  router.get(
+    '/skills',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, { skills: await module.listVerifiedSkills() });
+    }),
+  );
+
+  router.get(
+    '/skills/trust',
+    middleware.authenticate,
+    middleware.requireAdmin,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, { trust: await module.skillTrustView() });
+    }),
+  );
+
+  router.post(
+    '/skills/publishers',
+    middleware.authenticateMutating,
+    middleware.requireAdmin,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const publisher = await module.trustSkillPublisher({
+        keyId: requireString(body, 'keyId'),
+        publicKey: requireString(body, 'publicKey'),
+        actorId: req.principal!.userId,
+      });
+      sendSuccess(res, { publisher }, { statusCode: 201 });
+    }),
+  );
+
+  router.delete(
+    '/skills/publishers/:keyId',
+    middleware.authenticateMutating,
+    middleware.requireAdmin,
+    asyncHandler(async (req, res) => {
+      const removedSkills = await module.revokeSkillPublisher(req.params.keyId);
+      sendSuccess(res, { revoked: true, removedSkills });
+    }),
+  );
+
+  router.post(
+    '/skills/manifests',
+    middleware.authenticateMutating,
+    middleware.requireAdmin,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const rawManifest = body.manifest;
+      if (!rawManifest || typeof rawManifest !== 'object' || Array.isArray(rawManifest)) {
+        throw createError(ErrorCode.VALIDATION_ERROR, '`manifest` must be a signed skill manifest object');
+      }
+      const outcome = await module.admitSkillManifest({
+        manifest: rawManifest as SkillManifest,
+        actorId: req.principal!.userId,
+      });
+      sendSuccess(res, { outcome }, { statusCode: outcome.ok ? 201 : 200 });
+    }),
+  );
+
+  router.get(
+    '/remote/sessions/:sessionId',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const session = await module.remoteSession({
+        sessionId: req.params.sessionId,
+        principal: req.principal!,
+      });
+      sendSuccess(res, { session });
+    }),
+  );
+
+  router.get(
+    '/remote/sessions/:sessionId/snapshot',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const snapshot = await module.remoteSnapshot({
+        sessionId: req.params.sessionId,
+        principal: req.principal!,
+      });
+      sendSuccess(res, { snapshot });
+    }),
+  );
+
+  router.get(
+    '/remote/sessions/:sessionId/stream',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const sessionId = req.params.sessionId;
+      const principal = req.principal!;
+      // Authorize before committing SSE headers so a bad/expired session still
+      // receives the normal typed HTTP refusal instead of a misleading 200 stream.
+      const initialWorkspaceIds = await module.remoteWorkspaceIds({ sessionId, principal });
+
+      res.status(200);
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+
+      let closed = false;
+      let emitting = false;
+      let pending = false;
+      let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+      const subscriptions = new Map<string, () => void>();
+
+      const cleanup = (): void => {
+        if (closed) return;
+        closed = true;
+        if (coalesceTimer != null) clearTimeout(coalesceTimer);
+        clearInterval(heartbeat);
+        for (const unsubscribe of subscriptions.values()) unsubscribe();
+        subscriptions.clear();
+      };
+
+      const write = (frame: unknown): void => {
+        if (closed || res.writableEnded || res.destroyed) return;
+        // This stream carries bounded snapshots, never terminal logs. A client
+        // that stopped draining is closed instead of accumulating memory.
+        if (res.writableLength > 1024 * 1024) {
+          cleanup();
+          res.end();
+          return;
+        }
+        res.write(`data: ${JSON.stringify(frame)}\n\n`);
+      };
+
+      const syncSubscriptions = (workspaceIds: readonly string[]): void => {
+        const desired = new Set(workspaceIds);
+        for (const [workspaceId, unsubscribe] of subscriptions) {
+          if (desired.has(workspaceId)) continue;
+          unsubscribe();
+          subscriptions.delete(workspaceId);
+        }
+        for (const workspaceId of desired) {
+          if (subscriptions.has(workspaceId)) continue;
+          subscriptions.set(
+            workspaceId,
+            module.terminal().subscribeSync(workspaceId, event => {
+              if (event.kind === 'state' || event.kind === 'attention') scheduleSnapshot();
+            }),
+          );
+        }
+      };
+
+      const emitSnapshot = async (): Promise<void> => {
+        if (closed) return;
+        if (emitting) {
+          pending = true;
+          return;
+        }
+        emitting = true;
+        try {
+          const [snapshot, workspaceIds] = await Promise.all([
+            module.remoteSnapshot({ sessionId, principal }),
+            module.remoteWorkspaceIds({ sessionId, principal }),
+          ]);
+          if (closed) return;
+          syncSubscriptions(workspaceIds);
+          write({ type: 'snapshot', snapshot, at: new Date().toISOString() });
+        } catch (error) {
+          write({
+            type: 'closed',
+            reason: error instanceof Error ? error.message : 'Remote session closed',
+          });
+          cleanup();
+          res.end();
+        } finally {
+          emitting = false;
+          if (pending && !closed) {
+            pending = false;
+            void emitSnapshot();
+          }
+        }
+      };
+
+      function scheduleSnapshot(): void {
+        if (closed || coalesceTimer != null) return;
+        coalesceTimer = setTimeout(() => {
+          coalesceTimer = null;
+          void emitSnapshot();
+        }, 120);
+      }
+
+      syncSubscriptions(initialWorkspaceIds);
+      const heartbeat = setInterval(() => {
+        if (!closed) void emitSnapshot();
+      }, 15_000);
+      if (typeof heartbeat.unref === 'function') heartbeat.unref();
+      req.on('close', cleanup);
+      await emitSnapshot();
     }),
   );
 
@@ -374,6 +599,73 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
+  router.get(
+    '/workspaces/:id/convergence-feedback',
+    middleware.authenticate,
+    access,
+    asyncHandler(async (req, res) => {
+      try {
+        const profile = await module.getConvergenceDecisionProfile(req.params.id);
+        if (profile) {
+          sendSuccess(res, { profile });
+          return;
+        }
+        const workspace = await module.getWorkspace(req.params.id);
+        sendError(res, createError(
+          ErrorCode.NOT_FOUND,
+          workspace ? 'convergence decision history unavailable' : 'workspace not found',
+        ));
+      } catch (err) {
+        sendError(res, toReadError(err, 'convergence-feedback read failed'));
+      }
+    }),
+  );
+
+  // Explicit calibration for one trust flag that was actually carried through a
+  // delivered convergence. The store rejects invented flags. Accept/Dismiss/Clear
+  // are audited human decisions; delivery alone never creates a disposition.
+  router.post(
+    '/workspaces/:id/convergence-feedback',
+    middleware.authenticateMutating,
+    access,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const flag = requireString(body, 'flag');
+      const disposition = requireString(body, 'disposition');
+      if (disposition !== 'accepted' && disposition !== 'dismissed' && disposition !== 'clear') {
+        throw createError(
+          ErrorCode.VALIDATION_ERROR,
+          '`disposition` must be accepted, dismissed, or clear',
+        );
+      }
+      const result = await module.setConvergenceFlagFeedback(
+        req.params.id,
+        { flag, disposition },
+        req.principal!,
+      );
+      finishWrite(res, result, { key: 'profile' });
+    }),
+  );
+
+  router.put(
+    '/workspaces/:id/convergence-policy',
+    middleware.authenticateMutating,
+    access,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const mode = requireString(body, 'mode');
+      if (mode !== 'off' && mode !== 'warn' && mode !== 'block') {
+        throw createError(ErrorCode.VALIDATION_ERROR, '`mode` must be off, warn, or block');
+      }
+      const result = await module.setConvergenceRequiredRulePolicy(
+        req.params.id,
+        { mode },
+        req.principal!,
+      );
+      finishWrite(res, result, { key: 'profile' });
+    }),
+  );
+
   // The framework-mapped, exportable evidence PACK rendered from that record — a
   // control-mapped artifact (SOC 2 / EU AI Act / DORA / Recoder) an auditor/CI can
   // read. PURE read (no gate). `?format=md` returns the human-readable markdown
@@ -432,6 +724,14 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     middleware.authenticate,
     asyncHandler(async (_req, res) => {
       sendSuccess(res, await module.environmentImport());
+    }),
+  );
+
+  router.get(
+    '/imports/crystal',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, await module.crystalMigration());
     }),
   );
 
@@ -802,6 +1102,35 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
+  router.get(
+    '/workspaces/:id/diagnostics',
+    middleware.authenticate,
+    access,
+    asyncHandler(async (req, res) => {
+      const diagnostics = await module.workspaceDiagnostics(req.params.id);
+      if (!diagnostics) {
+        sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
+        return;
+      }
+      sendSuccess(res, { diagnostics });
+    }),
+  );
+
+  router.post(
+    '/workspaces/:id/checks/remediate',
+    middleware.authenticateMutating,
+    access,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const result = await module.remediateWorkspaceCheck(
+        req.params.id,
+        requireString(body, 'checkName'),
+        req.principal!,
+      );
+      finishWrite(res, result, { statusCode: 201, key: 'remediation' });
+    }),
+  );
+
   // Conductor readiness summary the cockpit polls: can work be launched here.
   // Also carries `substrate.tmuxBin` — the effective pinned tmux binary (config
   // pin, else PATH `tmux`; durable-shell unify §A1a) — and `substrate.tmuxSocket`
@@ -821,6 +1150,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
       sendSuccess(res, {
         available,
         tmux: tmux?.available === true,
+        codeNetwork: module.codeNetworkCoverage(),
         substrate: {
           tmuxBin: tmux?.tmuxBin ?? null,
           // Only meaningful when a tmux substrate exists; otherwise `null` so the
@@ -857,6 +1187,88 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   );
 
   // --- writes (gated) --------------------------------------------------------
+
+  // Mint a short-lived remote-continuity session. Scope ids are untrusted input;
+  // the service resolves and ownership-checks every one at mint and every use.
+  router.post(
+    '/remote/sessions',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const workspaceIds = Array.isArray(body.workspaceIds)
+        ? [...new Set(body.workspaceIds
+            .filter((value): value is string => typeof value === 'string')
+            .map(value => value.trim())
+            .filter(Boolean))]
+        : [];
+      const taskGroup = optionalString(body.taskGroup);
+      const capabilities = parseRemoteCapabilities(body.capabilities);
+      const session = await module.remoteAttach({
+        principal: req.principal!,
+        scope: {
+          ...(workspaceIds.length > 0 ? { workspaceIds } : {}),
+          ...(taskGroup ? { taskGroup } : {}),
+        },
+        capabilities,
+      });
+      sendSuccess(res, { session }, { statusCode: 201 });
+    }),
+  );
+
+  router.delete(
+    '/remote/sessions',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const revoked = await module.remoteRevokeAll({ principal: req.principal! });
+      sendSuccess(res, { revoked });
+    }),
+  );
+
+  router.post(
+    '/remote/sessions/:sessionId/workspaces/:workspaceId/steer',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const result = await module.remoteSteer({
+        sessionId: req.params.sessionId,
+        principal: req.principal!,
+        workspaceId: req.params.workspaceId,
+        input: requireString(body, 'input'),
+      });
+      sendSuccess(res, { result });
+    }),
+  );
+
+  router.delete(
+    '/remote/sessions/:sessionId',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      await module.remoteRevoke({
+        sessionId: req.params.sessionId,
+        principal: req.principal!,
+      });
+      sendSuccess(res, { revoked: true });
+    }),
+  );
+
+  router.post(
+    '/imports/crystal',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const sessionIds = Array.isArray(body.sessionIds)
+        ? [...new Set(body.sessionIds
+            .filter((value): value is string => typeof value === 'string')
+            .map(value => value.trim())
+            .filter(Boolean))]
+        : [];
+      if (sessionIds.length === 0) {
+        throw createError(ErrorCode.VALIDATION_ERROR, '`sessionIds` must contain a Crystal session id');
+      }
+      const result = await module.importCrystalSessions(sessionIds, req.principal!);
+      finishWrite(res, result, { statusCode: 201, key: 'migration' });
+    }),
+  );
 
   router.post(
     '/workspaces',
@@ -912,6 +1324,63 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
+  // Invoke one closed-schema action in THIS owned workspace. The actor always
+  // comes from the authenticated Principal and `workspace` is the durable id;
+  // the skill service resolves its real server-side worktree before policy and
+  // capability dispatch. Refused / needs_approval / executed are all truthful
+  // product outcomes, so each is returned as data rather than flattened into an
+  // HTTP transport error.
+  router.post(
+    '/workspaces/:id/skills/:skillId/actions/:actionId',
+    middleware.authenticateMutating,
+    access,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const invocation = await module.invokeSkillAction({
+        skillId: req.params.skillId,
+        actionId: req.params.actionId,
+        params: body.params ?? {},
+        actorId: req.principal!.userId,
+        workspace: req.params.id,
+      });
+      sendSuccess(res, { invocation });
+    }),
+  );
+
+  // Newest-first, content-hashed invocation evidence for this owned workspace.
+  // The shared access middleware keeps the target tenant-scoped; the record is a
+  // read projection and never re-runs a capability.
+  router.get(
+    '/workspaces/:id/skills/invocations',
+    middleware.authenticate,
+    access,
+    asyncHandler(async (req, res) => {
+      const requested = Number(req.query.limit);
+      const limit = Number.isFinite(requested) ? Math.max(1, Math.min(200, Math.floor(requested))) : 50;
+      sendSuccess(res, { evidence: await module.skillInvocationEvidence(req.params.id, limit) });
+    }),
+  );
+
+  router.get(
+    '/workspaces/:id/policy',
+    middleware.authenticate,
+    access,
+    asyncHandler(async (req, res) => {
+      sendSuccess(res, { policy: await module.workspacePolicy(req.params.id) });
+    }),
+  );
+
+  router.put(
+    '/workspaces/:id/policy',
+    middleware.authenticateMutating,
+    access,
+    asyncHandler(async (req, res) => {
+      const update = parseWorkspacePolicyUpdate(asObject(req.body));
+      const result = await module.setWorkspacePolicy(req.params.id, update, req.principal!);
+      finishWrite(res, result, { key: 'policy' });
+    }),
+  );
+
   router.post(
     '/workspaces/:id/review-comments',
     middleware.authenticateMutating,
@@ -939,6 +1408,26 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   );
 
   router.post(
+    '/workspaces/:id/review-findings',
+    middleware.authenticateMutating,
+    access,
+    asyncHandler(async (req, res) => {
+      const findings = await module.generateReviewFindings(req.params.id, req.principal!);
+      sendSuccess(res, { findings });
+    }),
+  );
+
+  router.post(
+    '/workspaces/:id/blocker-feedback',
+    middleware.authenticateMutating,
+    access,
+    asyncHandler(async (req, res) => {
+      const result = await module.sendBlockerFeedback(req.params.id, req.principal!);
+      finishWrite(res, result, { key: 'feedback' });
+    }),
+  );
+
+  router.post(
     '/reconcile',
     middleware.authenticateMutating,
     asyncHandler(async (req, res) => {
@@ -960,6 +1449,15 @@ function finishWrite<T>(
     sendSuccess(res, { [opts.key]: result.value ?? null, verdict: verdictView(result) }, {
       ...(opts.statusCode ? { statusCode: opts.statusCode } : {}),
     });
+    return;
+  }
+  if (result.code === 'escalated' || result.code === 'trust_blocked') {
+    sendError(res, createError(ErrorCode.CONFLICT, result.reason ?? 'merge requires review', {
+      details: {
+        outcome: result.code,
+        verdict: verdictView(result),
+      },
+    }));
     return;
   }
   if (result.verdict.effect === 'allow') {
@@ -985,6 +1483,13 @@ function asObject(value: unknown): Record<string, unknown> {
     throw createError(ErrorCode.VALIDATION_ERROR, 'request body must be a JSON object');
   }
   return value as Record<string, unknown>;
+}
+
+function parseRemoteCapabilities(value: unknown): readonly ('monitor' | 'steer')[] {
+  if (!Array.isArray(value)) return ['monitor'];
+  const requested = new Set(value.filter((entry): entry is string => typeof entry === 'string'));
+  const capabilities = (['monitor', 'steer'] as const).filter(capability => requested.has(capability));
+  return capabilities.length > 0 ? capabilities : ['monitor'];
 }
 
 function requireString(body: Record<string, unknown>, key: string): string {

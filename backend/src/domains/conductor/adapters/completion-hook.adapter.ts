@@ -34,6 +34,7 @@ import type { RunSignalPushPort } from '../ports/run-signal-push.port.js';
 // to record RED/USE without coupling to the concrete registry). Erased at build.
 import type { MetricSpec, MetricsPort } from '../../observability/ports/metrics.port.js';
 import type { ConductorBrainMemory } from './brain-memory.adapter.js';
+import { legacyRepoId } from '../../../shared/repo-identity.js';
 
 /** RED rate+errors for conductor runs: one increment per emitted terminal event. */
 const RUNS_TOTAL: MetricSpec = {
@@ -93,6 +94,16 @@ export interface CompletionHookDeps {
    * fault-isolated — a metrics fault NEVER stalls the terminal-event path.
    */
   readonly getMetrics?: () => MetricsPort | undefined;
+  /**
+   * Persist the owning workspace's canonical terminal lifecycle state. Unlike
+   * the ancillary hooks, this is part of completing the run itself: it is
+   * awaited after the terminal RunEvent is durable, then fault-isolated.
+   */
+  readonly settleWorkspace?: (
+    workspaceId: string,
+    outcome: 'completed' | 'failed',
+    event: RunEvent
+  ) => Promise<Workspace | null>;
   /** Resolve the owning workspace (for userId/taskId provenance) — may return null. */
   readonly getWorkspace: (workspaceId: string) => Promise<Workspace | null>;
   readonly logger: Logger;
@@ -149,18 +160,11 @@ function convergenceFromEvent(event: RunEvent): {
   };
 }
 
-/**
- * Derive the deterministic, path-safe recodergit repoId from a repo full-name or
- * absolute path (lowercase; every non `[a-z0-9_-]` run → `__`). MUST stay in sync
- * with `conductor-module.ts` `repoIdFromRepoRef`, which derives the SAME id at
- * launch-time index; matching ids let this completion-time reindex refresh the
- * exact graph that launch built. Returns '' for an empty ref (⇒ reindex skipped).
- */
-function repoIdFromRepoRef(ref: string | undefined): string {
-  return (ref ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '__');
+/** Use the launch-persisted canonical identity; retain the legacy derivation for old rows. */
+function workspaceRepoId(workspace: Workspace): string {
+  const persisted = workspace.metadata?.['repoId'];
+  if (typeof persisted === 'string' && persisted.trim()) return persisted.trim();
+  return legacyRepoId(workspace.projectId || workspace.worktreePath || '');
 }
 
 /**
@@ -170,8 +174,8 @@ function repoIdFromRepoRef(ref: string | undefined): string {
 export function createCompletionHookSink(
   deps: CompletionHookDeps
 ): RunEventSinkPort {
-  const { inner, brain, codeIntel, getMeter, agentEvent, getRunSignalPush, getMetrics, getWorkspace, logger } = deps;
-  if (!brain && !codeIntel && !getMeter && !agentEvent && !getRunSignalPush && !getMetrics) return inner;
+  const { inner, brain, codeIntel, getMeter, agentEvent, getRunSignalPush, getMetrics, settleWorkspace, getWorkspace, logger } = deps;
+  if (!brain && !codeIntel && !getMeter && !agentEvent && !getRunSignalPush && !getMetrics && !settleWorkspace) return inner;
 
   return {
     async append(event: RunEvent): Promise<void> {
@@ -185,7 +189,20 @@ export function createCompletionHookSink(
           typeof event.data?.workspaceId === 'string'
             ? event.data.workspaceId
             : undefined;
-        const workspace = workspaceId ? await getWorkspace(workspaceId) : null;
+        let workspace = workspaceId ? await getWorkspace(workspaceId) : null;
+        // Advance the state-of-record now so Board/Compare do not need a later
+        // diff read (or polling tick) to discover that the agent finished.
+        if (workspaceId && settleWorkspace) {
+          try {
+            workspace =
+              (await settleWorkspace(workspaceId, outcome, event)) ?? workspace;
+          } catch (err) {
+            logger.warn(
+              { err, workspaceId, outcome },
+              'conductor workspace completion settlement faulted'
+            );
+          }
+        }
         const taskId = workspace?.taskId ?? event.taskId;
         const userId = workspace?.createdBy;
 
@@ -238,7 +255,8 @@ export function createCompletionHookSink(
             );
         }
 
-        // (i) issue-graph close/note — best-effort; a failed run keeps the issue open.
+        // (i) issue-graph run note — best-effort. Delivery/closure belongs to the
+        // governed merge path because sibling runs can finish independently.
         if (codeIntel && taskId) {
           void codeIntel
             .completeWork(taskId, outcome)
@@ -257,9 +275,7 @@ export function createCompletionHookSink(
         // code, and the engine truthfully skips when nothing was indexed). Fire-
         // and-forget + degrade-safe: a reindex fault NEVER stalls the terminal event.
         if (codeIntel && workspace) {
-          const repoId = repoIdFromRepoRef(
-            workspace.projectId || workspace.worktreePath
-          );
+          const repoId = workspaceRepoId(workspace);
           if (repoId) {
             void codeIntel
               .reindexRepo(repoId)

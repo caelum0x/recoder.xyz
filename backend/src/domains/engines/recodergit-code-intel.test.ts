@@ -100,6 +100,7 @@ describe('RecoderGitService.codeIntel — engine-method mapping', () => {
       symbol: 'login',
       filePath: 'src/a.ts',
       maxDepth: 2,
+      includeTests: true,
     });
     expect(calls[0]).toEqual({
       method: 'impact',
@@ -109,6 +110,7 @@ describe('RecoderGitService.codeIntel — engine-method mapping', () => {
         direction: 'upstream',
         file_path: 'src/a.ts',
         maxDepth: 2,
+        includeTests: true,
       },
     });
   });
@@ -498,7 +500,7 @@ describe('RecoderGitService.codeIntel — permissive (MIT) Path B fallback', () 
     }
   });
 
-  it('a scope-resolved op (find_references) does NOT reroute — stays truthfully unavailable', async () => {
+  it('a scope-resolved op stays unavailable when no impact fallback is wired', async () => {
     const service = createRecoderGitService({
       loadEngineLib: async () => null,
       store: storeWith('r1', '/repo/r1'),
@@ -508,6 +510,60 @@ describe('RecoderGitService.codeIntel — permissive (MIT) Path B fallback', () 
     const res = await service.codeIntel('find_references', 'r1', { symbol: 'foo' });
     expect(res.enabled).toBe(true);
     if (res.enabled) expect(res.available).toBe(false);
+  });
+
+  it('find_references and call_graph route to the permissive file graph with explicit scope', async () => {
+    const fallbackImpact = vi.fn(async (input: { direction: 'upstream' | 'downstream' }) => ({
+      engine: 'permissive-mit' as const,
+      scope: 'file-import-graph' as const,
+      target: { id: 'src/pay.ts', name: 'pay.ts', type: 'File' as const, filePath: 'src/pay.ts' },
+      direction: input.direction,
+      impactedCount: 1,
+      risk: 'LOW' as const,
+      partial: false,
+      summary: { direct: 1, processes_affected: 0 as const, modules_affected: 1 },
+      byDepthCounts: { 1: 1 },
+      affected_processes: [] as [],
+      affected_modules: [{ name: 'src/jobs', hits: 1, impact: 'direct' as const }],
+      byDepth: { 1: [{
+        depth: 1,
+        id: 'src/jobs/settle.ts',
+        name: 'settle.ts',
+        type: 'File' as const,
+        filePath: 'src/jobs/settle.ts',
+        relationType: input.direction === 'upstream' ? 'IMPORTED_BY' as const : 'IMPORTS' as const,
+        confidence: 1 as const,
+        processes: [] as [],
+      }] },
+    }));
+    const service = createRecoderGitService({
+      loadEngineLib: async () => null,
+      store: storeWith('r1', '/repo/r1'),
+      logger: NOOP_LOG,
+      fallbackImpact,
+    });
+    const refs = await service.codeIntel('find_references', 'r1', {
+      symbol: 'settle',
+      filePath: 'src/pay.ts',
+      maxDepth: 2,
+      limit: 12,
+      includeTests: true,
+    });
+    const calls = await service.codeIntel('call_graph', 'r1', {
+      symbol: 'settle',
+      filePath: 'src/pay.ts',
+    });
+    expect(refs).toMatchObject({ enabled: true, available: true, result: { scope: 'file-import-graph', direction: 'upstream' } });
+    expect(calls).toMatchObject({ enabled: true, available: true, result: { scope: 'file-import-graph', direction: 'downstream' } });
+    expect(fallbackImpact.mock.calls[0]?.[0]).toMatchObject({
+      repoRoot: '/repo/r1',
+      symbol: 'settle',
+      filePath: 'src/pay.ts',
+      direction: 'upstream',
+      maxDepth: 2,
+      limit: 12,
+      includeTests: true,
+    });
   });
 
   it('symbol_search stays unavailable when the fallback returns no hits (truthful degrade)', async () => {

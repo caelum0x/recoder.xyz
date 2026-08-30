@@ -2,7 +2,12 @@ const { Arch } = require("electron-builder");
 const pkg = require("./package.json");
 const fs = require("fs");
 const path = require("path");
-const { assertExtraResourcesExist } = require("./build/assert-extra-resources.cjs");
+const { assertExtraResourcesExist, buildExtraResourcesGateOptions } = require("./build/assert-extra-resources.cjs");
+const {
+    assertRestrictedEngineInputs,
+    assertRestrictedEnginesAbsentFromArtifact,
+    writeLicenseBoundaryEvidence,
+} = require("./build/assert-license-boundary.cjs");
 
 // Notarization is automatic when Apple API (or apple-id) creds are present — this
 // obsoletes the old untracked electron-builder.notarize.cjs helper. Absent creds →
@@ -44,9 +49,7 @@ const buildTargets = new Set(
 // built here), so the entry is retained purely so the gate emits an explicit
 // degrade line instead of silence. When Lance is later vendored + built, move
 // this out so its absence fails loud again.
-const OPTIONAL_EXTRA_RESOURCES = new Set([
-    "../../../crates/lance/npm-bindings/target/release/lance_npm_bindings.node",
-]);
+const OPTIONAL_EXTRA_RESOURCES = new Set(["../../../crates/lance/npm-bindings/target/release/lance_npm_bindings.node"]);
 
 // Native binaries whose CPU arch must match the dmg target arch. The gate reads
 // each Mach-O header and aborts on an arm64-in-x64-dmg (or vice-versa) mismatch.
@@ -255,6 +258,7 @@ const config = {
         // per-arch check is skipped (null targetArch), matching the gate contract.
         const platform = context && context.electronPlatformName;
         const archName = context && context.arch != null ? Arch[context.arch] : null;
+        assertRestrictedEngineInputs(config, __dirname);
         // The Mach-O CPU-arch gate only applies to the mac build: every path in
         // ARCH_SENSITIVE_EXTRA_RESOURCES is a darwin .node/bd artifact. For a
         // win/linux target those must be swapped for on-target native builds
@@ -262,12 +266,11 @@ const config = {
         // that machine — reading a mac Mach-O header here would falsely reject or
         // falsely pass them. So off darwin we keep the fail-loud EXISTENCE gate
         // but truthfully skip the CPU-arch check (documented: DESKTOP-CROSS-PLATFORM.md).
-        const isDarwin = platform === "darwin";
-        assertExtraResourcesExist(config.extraResources, __dirname, {
-            targetArch: isDarwin && archName !== "universal" ? archName : null,
-            optional: OPTIONAL_EXTRA_RESOURCES,
-            archSensitive: isDarwin ? ARCH_SENSITIVE_EXTRA_RESOURCES : new Set(),
-        });
+        assertExtraResourcesExist(
+            config.extraResources,
+            __dirname,
+            buildExtraResourcesGateOptions(platform, archName, OPTIONAL_EXTRA_RESOURCES, ARCH_SENSITIVE_EXTRA_RESOURCES)
+        );
     },
     afterPack: (context) => {
         // This is a workaround to restore file permissions to the recoder-server binaries on macOS after packaging the universal binary.
@@ -285,6 +288,19 @@ const config = {
                 .filter((f) => f.isFile() && f.name.startsWith("recoder-server"))
                 .forEach((f) => fs.chmodSync(path.resolve(f.parentPath ?? f.path, f.name), 0o755)); // 0o755 corresponds to -rwxr-xr-x
         }
+
+        const resourcesDir = context.packager.getResourcesDir(context.appOutDir);
+        const report = assertRestrictedEnginesAbsentFromArtifact(resourcesDir);
+        const archName = context.arch != null ? Arch[context.arch] : "unknown";
+        writeLicenseBoundaryEvidence(
+            {
+                ...report,
+                platform: context.electronPlatformName,
+                arch: archName,
+                packagingInputs: assertRestrictedEngineInputs(config, __dirname),
+            },
+            path.join(context.outDir, `license-boundary-${context.electronPlatformName}-${archName}.json`)
+        );
     },
 };
 

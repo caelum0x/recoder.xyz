@@ -5,8 +5,11 @@ import {
 } from './context-pack';
 import { buildDependencyGraph, type DependencyGraph } from './dependency-graph';
 import { computeImpact } from './impact';
+import { indexGitCoChanges, type CoChangeHistoryOptions } from './git-history';
 import { buildOwnershipMap } from './ownership';
 import { scanRepo } from './repo-scan';
+import { discoverRepositoryPackages } from './repository-packages';
+import { resolveWorkspacePackageImports } from './workspace-imports';
 
 export type RepoIndexer = {
   /**
@@ -25,18 +28,36 @@ export type RepoIndexer = {
  * Create a real repo indexer.
  *
  * The previous implementation returned an empty-graph envelope. This version
- * actually walks the repository, parses TS/JS imports into real edges, builds an
- * ownership map (CODEOWNERS or path heuristics), and computes a reachability
- * impact report keyed off the task's target paths.
+ * walks the repository, parses TypeScript/JavaScript, Python, Go, and Rust
+ * dependencies into real edges, builds an ownership map (CODEOWNERS or path
+ * heuristics), and computes a reachability impact report from the task paths.
  */
-export function createRepoIndexer(): RepoIndexer {
+export function createRepoIndexer(options: { history?: CoChangeHistoryOptions } = {}): RepoIndexer {
   return {
     async indexDependencyGraph(repoRoot: string): Promise<DependencyGraph> {
       const scan = await scanRepo(repoRoot);
       const resolvedEdges = scan.edges
         .filter((edge): edge is typeof edge & { to: string } => edge.to !== null)
         .map((edge) => ({ from: edge.from, to: edge.to }));
-      return buildDependencyGraph(repoRoot, scan.files, resolvedEdges);
+      const coChanges = await indexGitCoChanges(repoRoot, scan.files, options.history);
+      const packages = await discoverRepositoryPackages(repoRoot, scan.files);
+      const localPackages = await discoverRepositoryPackages(repoRoot, scan.files, { includeUnlistedNpm: true });
+      const workspaceImports = await resolveWorkspacePackageImports({
+        repoRoot,
+        files: scan.files,
+        packages: localPackages,
+        externalImports: scan.externalImports,
+      });
+      resolvedEdges.push(...workspaceImports.edges.filter((edge): edge is typeof edge & { to: string } => edge.to !== null));
+      return buildDependencyGraph(repoRoot, scan.files, resolvedEdges, undefined, {
+        symbols: scan.symbols,
+        symbolCalls: scan.symbolCalls,
+        processes: scan.processes,
+        coChanges,
+        externalImports: workspaceImports.externalImports,
+        packages,
+        index: { indexedFiles: scan.files.length, maxFiles: scan.maxFiles, truncated: scan.truncated },
+      });
     },
 
     async contextPack(input: CreateContextPackInput): Promise<ContextPack> {
@@ -50,8 +71,26 @@ export function createRepoIndexer(): RepoIndexer {
         const resolvedEdges = scan.edges
           .filter((edge): edge is typeof edge & { to: string } => edge.to !== null)
           .map((edge) => ({ from: edge.from, to: edge.to }));
+        const coChanges = await indexGitCoChanges(input.repoRoot, scan.files, options.history);
+        const packages = await discoverRepositoryPackages(input.repoRoot, scan.files);
+        const localPackages = await discoverRepositoryPackages(input.repoRoot, scan.files, { includeUnlistedNpm: true });
+        const workspaceImports = await resolveWorkspacePackageImports({
+          repoRoot: input.repoRoot,
+          files: scan.files,
+          packages: localPackages,
+          externalImports: scan.externalImports,
+        });
+        resolvedEdges.push(...workspaceImports.edges.filter((edge): edge is typeof edge & { to: string } => edge.to !== null));
         const dependencyGraph =
-          input.dependencyGraph ?? buildDependencyGraph(input.repoRoot, scan.files, resolvedEdges);
+          input.dependencyGraph ?? buildDependencyGraph(input.repoRoot, scan.files, resolvedEdges, undefined, {
+            symbols: scan.symbols,
+            symbolCalls: scan.symbolCalls,
+            processes: scan.processes,
+            coChanges,
+            externalImports: workspaceImports.externalImports,
+            packages,
+            index: { indexedFiles: scan.files.length, maxFiles: scan.maxFiles, truncated: scan.truncated },
+          });
         const ownershipMap = input.ownershipMap ?? (await buildOwnershipMap(input.repoRoot, scan.files));
 
         const pack = createContextPack({

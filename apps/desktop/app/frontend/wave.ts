@@ -16,6 +16,7 @@ import { modalsModel } from "@/app/store/modalmodel";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { makeBuilderRouteId, makeTabRouteId } from "@/app/store/wshrouter";
 import { initWshrpc, TabRpcClient } from "@/app/store/wshrpcutil";
+import { initializeRecoderBackendEndpoint } from "@/app/view/recoder/recoder-endpoints";
 import { BuilderApp } from "@/builder/builder-app";
 import { getLayoutModelForStaticTab } from "@/layout/index";
 import { countersClear, countersPrint } from "@/store/counters";
@@ -58,6 +59,7 @@ function updateZoomFactor(zoomFactor: number) {
 
 async function initBare() {
     getApi().sendLog("Init Bare");
+    initializeRecoderBackendEndpoint(getApi());
     document.body.style.visibility = "hidden";
     document.body.style.opacity = "0";
     document.body.classList.add("is-transparent");

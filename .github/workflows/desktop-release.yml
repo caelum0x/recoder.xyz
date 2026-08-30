@@ -69,7 +69,7 @@ jobs:
       - name: Typecheck desktop app
         run: pnpm run typecheck:desktop
       - name: Packaging-config tests
-        run: pnpm -C apps/desktop/app exec vitest run tests/packaging-config.test.ts tests/assert-extra-resources.test.ts
+        run: pnpm -C apps/desktop/app exec vitest run tests/packaging-config.test.ts tests/assert-extra-resources.test.ts tests/assert-license-boundary.test.ts
       - name: Release pipeline dry-run (config-validate)
         run: bash scripts/release-desktop.sh dry-run
 
@@ -169,4 +169,5 @@ jobs:
           retention-days: 14
           path: |
             apps/desktop/app/Recoder-arm64.dmg
+            apps/desktop/app/make/license-boundary-darwin-arm64.json
             dist/desktop-release/**

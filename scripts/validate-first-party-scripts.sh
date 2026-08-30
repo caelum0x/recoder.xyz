@@ -10,7 +10,6 @@ required_surfaces=(
 )
 
 optional_retired_surfaces=(
-  "recoder-web"
   "recoder-studio"
 )
 

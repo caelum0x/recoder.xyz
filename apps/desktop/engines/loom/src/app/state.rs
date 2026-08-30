@@ -1402,6 +1402,8 @@ pub struct AppState {
     // Config
     pub prefix_code: KeyCode,
     pub prefix_mods: KeyModifiers,
+    /// Virtual terminal size used before a view exists and while the server has no clients.
+    pub headless_size: (u16, u16),
     pub default_sidebar_width: u16,
     pub sidebar_width: u16,
     pub sidebar_min_width: u16,
@@ -1596,7 +1598,7 @@ impl AppState {
         if let Some(info) = self.view.pane_infos.first() {
             (info.rect.height, info.rect.width)
         } else {
-            (24, 80)
+            (self.headless_size.1, self.headless_size.0)
         }
     }
 
@@ -1778,6 +1780,10 @@ impl AppState {
             outer_terminal_focus: None,
             prefix_code: KeyCode::Char('b'),
             prefix_mods: KeyModifiers::CONTROL,
+            headless_size: (
+                crate::config::DEFAULT_HEADLESS_COLS,
+                crate::config::DEFAULT_HEADLESS_ROWS,
+            ),
             default_sidebar_width: 26,
             sidebar_width: 26,
             sidebar_min_width: 18,
@@ -2401,6 +2407,14 @@ mod tests {
             KeyCode::Char('b'),
             KeyModifiers::SHIFT,
         ));
+    }
+
+    #[test]
+    fn pane_size_estimate_uses_headless_size_before_first_view() {
+        let mut state = AppState::test_new();
+        state.headless_size = (132, 41);
+
+        assert_eq!(state.estimate_pane_size(), (41, 132));
     }
 
     #[test]

@@ -32,6 +32,24 @@ import type { CoordinationAdmissionPort } from './ports/coordination-admission.p
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
+import type { CloudSandboxGatewayPort } from './ports/cloud-sandbox.port.js';
+import type { DeliveryEvidenceStore } from './ports/delivery-evidence.port.js';
+import type { ConvergenceFeedbackPort } from './ports/convergence-feedback.port.js';
+import type {
+  ConvergenceDecisionProfile,
+  ConvergenceFlagFeedbackAction,
+  RequiredRuleTrustMode,
+} from './ports/convergence-feedback.port.js';
+export type {
+  ConvergenceDecisionProfile,
+  ConvergenceDecisionRecord,
+  ConvergenceFeedbackSummary,
+  ConvergenceFlagDisposition,
+  ConvergenceFlagFeedbackAction,
+  ConvergenceFlagFeedbackEvent,
+  ConvergenceRequiredRulePolicy,
+  RequiredRuleTrustMode,
+} from './ports/convergence-feedback.port.js';
 // TYPE-ONLY: the frozen Phase-11 metrics seam (erased at build); bootstrap
 // late-binds the concrete value via `setMetrics` after observability is composed.
 import type { MetricsPort } from '../observability/ports/metrics.port.js';
@@ -53,6 +71,12 @@ import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import type { SwarmUnblockDeps } from './swarm/swarm-unblock.service.js';
 import type { RemoteAttachExternalDeps } from './remote-attach/remote-attach.service.js';
+import type {
+  RemoteAttachCapability,
+  RemoteAttachScope,
+  RemoteAttachSession,
+  RemoteSteerResult,
+} from './remote-attach/remote-attach.types.js';
 import type {
   NeedsYouScheduler,
   NeedsYouScope,
@@ -82,7 +106,22 @@ export type {
 } from './attention/status-board.service.js';
 import type { SubstrateScanDeps } from './adapters/substrate-scan.adapter.js';
 import type { SkillRegistry } from './skill/skill-registry.js';
-import type { SkillActionService } from './skill/skill-action.service.js';
+import type {
+  InvokeSkillActionResult,
+  SkillActionService,
+} from './skill/skill-action.service.js';
+import type {
+  SkillPublisherView,
+  SkillTrustService,
+  SkillTrustView,
+} from './skill/skill-trust.service.js';
+import type { SkillLoadOutcome, SkillManifest } from './skill/skill.types.js';
+import type { SkillInvocationEvidenceView } from './skill/skill-invocation-evidence.js';
+import type {
+  WorkspacePolicyUpdate,
+  WorkspacePolicyView,
+} from './policy/workspace-policy.js';
+import type { VerifiedSkillView } from './mcp/conductor-skill-tools.js';
 // SECURITY re-export — the workspace-resolution seam bootstrap binds to the
 // conductor workspace store (`createOwnedWorkspaceResolver({ getWorkspace })`) when it
 // constructs the `SkillActionService`, so the governed skill invoke path only ever
@@ -108,10 +147,16 @@ import type {
   CreateConductorWorkspaceInput,
   ConductorWriteResult,
   ReviewCommentDelivery,
+  BlockerFeedbackDelivery,
   WorkspaceRunConfigView,
 } from './conductor-module.js';
 import type { ReviewComment } from './review/review-comments.js';
+export type { BlockerFeedbackDelivery } from './conductor-module.js';
 import type { EnvironmentImportView } from './services/environment-import.js';
+import type {
+  CrystalMigrationView,
+  CrystalImportResult,
+} from './services/crystal-migration.service.js';
 import type { TranscriptSearchView, WorkspaceTranscriptView } from './services/session-transcript.service.js';
 import type {
   WorkspaceDiffView,
@@ -129,6 +174,7 @@ import type { WorkspaceDiscardHunksView } from './review/workspace-discard-hunks
 export type { WorkspaceDiscardHunksView } from './review/workspace-discard-hunks.ops.js';
 import type { MergeabilityView } from './services/mergeability.service.js';
 import type { ReadinessView } from './services/readiness.service.js';
+import type { ValidatedFindings } from './services/review-findings.service.js';
 export type { ReadinessView, ReadinessSignal } from './services/readiness.service.js';
 import type { ConvergenceEvidenceRecord } from './evidence/convergence-evidence.js';
 import type { ConvergenceTrust } from './evidence/convergence-trust.js';
@@ -179,13 +225,26 @@ import type {
   ContinueWorkspaceInput,
   ContinueWorkspaceResult,
 } from './review/workspace-continue.ops.js';
+import type { CheckRemediationResult } from './services/check-run.service.js';
 import type { DevCommandView } from './adapters/dev-command.adapter.js';
 import type { ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
 import type { WorkspaceQueryFilters } from './services/workspace-query.service.js';
+import type { CodeNetworkCoverage } from './services/code-network-coverage.service.js';
+export type { CodeNetworkCoverage, CodeNetworkRepositoryCoverage } from './services/code-network-coverage.service.js';
 import type { CompareView, AdHocCompareOutcome } from './services/compare.service.js';
 export type { AdHocCompareOutcome } from './services/compare.service.js';
-import type { AdHocReject, AdHocPlanOutcome } from './module/compare-converge.js';
-export type { AdHocReject, AdHocPlanOutcome } from './module/compare-converge.js';
+import type {
+  AdHocFileVersionsOutcome,
+  AdHocPairwiseOutcome,
+  AdHocReject,
+  AdHocPlanOutcome,
+} from './module/compare-converge.js';
+export type {
+  AdHocFileVersionsOutcome,
+  AdHocPairwiseOutcome,
+  AdHocReject,
+  AdHocPlanOutcome,
+} from './module/compare-converge.js';
 import type { PairwiseDiffView } from './services/pairwise-diff.service.js';
 export type { PairwiseDiffView, PairwiseFileDiff } from './services/pairwise-diff.service.js';
 import type { FileVersionsView } from './converge/converge.ops.js';
@@ -202,8 +261,10 @@ import type { RepoSetupExec } from './services/repo-setup.service.js';
 import type { RepoConfigFile } from './services/repo-config-file.js';
 import type { CloneRepoInput, CloneRepoOutcome } from './services/repo-clone.service.js';
 import type { WorkspaceChecksView } from './services/pr-checks.service.js';
+import type { LspDiagnosticsDelta } from './services/lsp-diagnostics.service.js';
 export type { CloneRepoInput, CloneRepoOutcome } from './services/repo-clone.service.js';
 export type { WorkspaceChecksView, WorkspaceCheckRow } from './services/pr-checks.service.js';
+export type { LspDiagnosticsDelta, LspDiagnostic } from './services/lsp-diagnostics.service.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
 export interface ConductorModuleDeps {
@@ -236,6 +297,16 @@ export interface ConductorModuleDeps {
    * reports `isDurable() === false` truthfully. Ignored when `repository` is set.
    */
   readonly canonicalRunStore?: CanonicalRunStore;
+  /**
+   * Optional Agent OS state-of-record seam for evidence created after an
+   * outward delivery. PR creation remains successful when this is absent or
+   * degraded, but the response reports that evidence was not attached.
+   */
+  readonly deliveryEvidence?: DeliveryEvidenceStore;
+  /** Durable repository-scoped history of delivered converge picks/trust flags. */
+  readonly convergenceFeedback?: ConvergenceFeedbackPort;
+  /** Optional remote sandbox used only by checks declaring `execution:"offbox"`. */
+  readonly offboxChecks?: CloudSandboxGatewayPort;
   /** Optional collision-prevention write-lock (conductor-locks over coordination). */
   readonly lock?: WorkLockPort;
   /** Optional resource-governor admission (refuse over-budget launches). */
@@ -271,7 +342,8 @@ export interface ConductorModuleDeps {
   /**
    * Optional code-intel seam: recodergit repo index + beads issue-graph tracking.
    * On create the run flow indexes the repo (`indexRepo`) and claims the bd issue
-   * (`trackWork`); on terminal events it closes/notes the issue (`completeWork`).
+   * (`trackWork`); terminal events note outcomes (`completeWork`), while a
+   * successful governed merge closes the delivered issue (`deliverWork`).
    * Absent/disabled engines ⇒ every call is a truthful logged skip (never blocks a
    * launch, never fabricated). See `adapters/code-intel.adapter.ts`.
    */
@@ -322,7 +394,7 @@ export interface ConductorModuleDeps {
    * `ok:false` with the transport's reason.
    */
   readonly steerTransport?: SteerTransportPort;
-  /** Public Loom terminal renderer used by the authenticated `/terminal` bridge. */
+  /** Substrate-routed terminal renderer used by the authenticated `/terminal` bridge. */
   readonly interactiveTerminal?: InteractiveTerminalPort;
   /**
    * Optional per-worktree `.mcp.json` injector: on a successful launch the composer
@@ -470,6 +542,7 @@ export interface ConductorModuleDeps {
    */
   readonly skillRegistry?: SkillRegistry;
   readonly skillActions?: SkillActionService;
+  readonly skillTrust?: SkillTrustService;
   /**
    * OPTIONAL GOVERNED REMOTE ATTACH seams (LOOM Bigger Bet C): the steer transport,
    * `evaluatePolicy`, the approval gate, the audit sink, and (optionally) the
@@ -488,6 +561,9 @@ export interface ConductorModule {
   readonly name: 'conductor';
   /** List every workspace record (state of record). */
   listWorkspaces(): Promise<Workspace[]>;
+  /** Background RecoderGit coverage across repositories recovered from durable workspaces. */
+  codeNetworkCoverage(): CodeNetworkCoverage;
+  refreshCodeNetwork(): Promise<CodeNetworkCoverage>;
   /** Board search/filter over the record list (read-only; empty match ⇒ truthful `[]`). */
   queryWorkspaces(filters: WorkspaceQueryFilters): Promise<Workspace[]>;
   /** Archived history — every archived workspace, most-recent-first (read-only). */
@@ -514,6 +590,16 @@ export interface ConductorModule {
     input: { readonly workspaceId: string; readonly comments: readonly ReviewComment[] },
     principal: Principal,
   ): Promise<ConductorWriteResult<ReviewCommentDelivery>>;
+  /** On-demand evidence-validated, line-anchored review over the workspace diff. */
+  generateReviewFindings(
+    workspaceId: string,
+    principal: Principal,
+  ): Promise<ValidatedFindings>;
+  /** Re-probe canonical hard blockers and deliver a server-authored fix packet. */
+  sendBlockerFeedback(
+    workspaceId: string,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<BlockerFeedbackDelivery>>;
   /**
    * Gracefully STOP a running workspace — GATED (`workspace.stop`): substrate
    * session kill (worktree preserved for review) + `cancelled` transition +
@@ -648,6 +734,13 @@ export interface ConductorModule {
   workspaceRunConfig(workspaceId: string): Promise<WorkspaceRunConfigView | null>;
   /** First-run environment import: git identity, agent configs, gh auth, shell (degrade-truthful). */
   environmentImport(): Promise<EnvironmentImportView>;
+  /** Existing Crystal sessions that can be adopted as native Recoder workspaces. */
+  crystalMigration(): Promise<CrystalMigrationView>;
+  /** Adopt selected Crystal worktrees into the canonical Recoder board (GATED). */
+  importCrystalSessions(
+    sessionIds: readonly string[],
+    principal: Principal,
+  ): Promise<ConductorWriteResult<CrystalImportResult>>;
   /** Bounded search over Claude session transcripts (~/.claude/projects) by message content. */
   searchTranscripts(query: string): Promise<TranscriptSearchView>;
   /**
@@ -726,6 +819,18 @@ export interface ConductorModule {
     input: MergeInput,
     principal: Principal,
   ): Promise<ConductorWriteResult<MergeResultView>>;
+  /** Gated explicit Accept/Dismiss/Clear decision for one delivered trust flag. */
+  setConvergenceFlagFeedback(
+    workspaceId: string,
+    input: { readonly flag: string; readonly disposition: ConvergenceFlagFeedbackAction },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ConvergenceDecisionProfile>>;
+  /** Gated operator-owned policy for required check-backed rules in trust. */
+  setConvergenceRequiredRulePolicy(
+    workspaceId: string,
+    input: { readonly mode: RequiredRuleTrustMode },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ConvergenceDecisionProfile>>;
   /**
    * SINGLE-WRITER persist of a run's TensorZero-resolvable `inference_id` onto the
    * workspace record (`metadata.inferenceId`), so a later {@link mergeWorkspace}
@@ -747,6 +852,12 @@ export interface ConductorModule {
     input: ContinueWorkspaceInput,
     principal: Principal,
   ): Promise<ConductorWriteResult<ContinueWorkspaceResult>>;
+  /** Reproduce then launch an explicitly opted-in named check remediation. */
+  remediateWorkspaceCheck(
+    workspaceId: string,
+    checkName: string,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<CheckRemediationResult>>;
   /** Reconcile persisted workspaces against the live substrate (never kills live work). */
   reconcile(principal: Principal): Promise<ConductorWriteResult<ReconcileReport>>;
   /** Capture a git checkpoint of a workspace — GATED (`workspace.checkpoint`). */
@@ -846,6 +957,8 @@ export interface ConductorModule {
    * workspace does not exist (→ 404 at the edge).
    */
   workspaceChecks(workspaceId: string): Promise<WorkspaceChecksView | null>;
+  /** Live base-vs-head diagnostics from repository-configured LSP servers. */
+  workspaceDiagnostics(workspaceId: string): Promise<LspDiagnosticsDelta | null>;
   /** Reconcile findings for operator/policy review. */
   listReconcileFindings(workspaceId?: string): Promise<readonly ReconcileFindingView[]>;
   /**
@@ -873,6 +986,8 @@ export interface ConductorModule {
    * (no evidence), never a fabricated score.
    */
   getConvergenceTrust(workspaceId: string): Promise<ConvergenceTrust | null>;
+  /** Durable repository history of delivered converge choices for this workspace's repo. */
+  getConvergenceDecisionProfile(workspaceId: string): Promise<ConvergenceDecisionProfile | null>;
   /**
    * The framework-mapped, exportable evidence PACK (`GET …/evidence/export`) —
    * renders the stored convergence evidence record into a control-mapped artifact
@@ -920,6 +1035,20 @@ export interface ConductorModule {
     workspaceIds: readonly string[],
     principal?: Principal,
   ): Promise<AdHocCompareOutcome>;
+  /** True A/B line diff over an explicitly validated ad-hoc workspace set. */
+  pairwiseDiffAdHoc(
+    workspaceIds: readonly string[],
+    aId: string,
+    bId: string,
+    paths: readonly string[] | undefined,
+    principal?: Principal,
+  ): Promise<AdHocPairwiseOutcome>;
+  /** N-up contents for one path over an explicitly validated ad-hoc workspace set. */
+  fileVersionsAdHoc(
+    workspaceIds: readonly string[],
+    relPath: string,
+    principal?: Principal,
+  ): Promise<AdHocFileVersionsOutcome>;
   /**
    * PLAN an ad-hoc convergence — the SAME pure fold as {@link planConvergence} over an
    * explicit workspace set (`options.probe` adds the read-only synthesizability
@@ -970,6 +1099,85 @@ export interface ConductorModule {
     scope: StatusBoardScope,
     principal: Principal,
   ): Promise<StatusBoardSnapshot>;
+  /** Mint an authenticated, owner-scoped remote continuity session. */
+  remoteAttach(input: {
+    readonly principal: Principal;
+    readonly scope: RemoteAttachScope;
+    readonly capabilities: readonly RemoteAttachCapability[];
+  }): Promise<RemoteAttachSession>;
+  /** Read one remote-continuity session's immutable contract as its owner. */
+  remoteSession(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<RemoteAttachSession>;
+  /** Resolve the current, still-owned workspace ids behind a monitor session. */
+  remoteWorkspaceIds(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<readonly string[]>;
+  /** Read the live status board narrowed to a remote session's owned scope. */
+  remoteSnapshot(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<StatusBoardSnapshot>;
+  /** Governed remote input delivery into one workspace in the session scope. */
+  remoteSteer(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+    readonly workspaceId: string;
+    readonly input: string;
+  }): Promise<RemoteSteerResult>;
+  /** Explicitly revoke a remote-continuity session owned by the caller. */
+  remoteRevoke(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<void>;
+  /** Revoke every remote-continuity session for the authenticated owner. */
+  remoteRevokeAll(input: {
+    readonly principal: Principal;
+  }): Promise<number>;
+  /**
+   * List only signature-verified, version-pinned skills. This is the product read
+   * surface used by both MCP and the authenticated desktop workspace drawer.
+   */
+  listVerifiedSkills(): Promise<readonly VerifiedSkillView[]>;
+  /** Operator view of trusted publishers and manifest admissions. */
+  skillTrustView(): Promise<SkillTrustView>;
+  /** Trust one ed25519 publisher public key at runtime. */
+  trustSkillPublisher(input: {
+    readonly keyId: string;
+    readonly publicKey: string;
+    readonly actorId: string;
+  }): Promise<SkillPublisherView>;
+  /** Verify, explicitly pin, persist, and admit one signed manifest. */
+  admitSkillManifest(input: {
+    readonly manifest: SkillManifest;
+    readonly actorId: string;
+  }): Promise<SkillLoadOutcome>;
+  /** Revoke one operator-managed publisher and every admitted skill it owns. */
+  revokeSkillPublisher(keyId: string): Promise<number>;
+  /** Content-hashed invocation evidence for one owned workspace, newest first. */
+  skillInvocationEvidence(workspaceId: string, limit?: number): Promise<SkillInvocationEvidenceView>;
+  /** Effective durable governed-action policy for one owned workspace. */
+  workspacePolicy(workspaceId: string): Promise<WorkspacePolicyView>;
+  /** Revision-checked, governance-gated policy profile update. */
+  setWorkspacePolicy(
+    workspaceId: string,
+    update: WorkspacePolicyUpdate,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<WorkspacePolicyView>>;
+  /**
+   * Invoke one typed skill action as the host-authorized actor in an owned
+   * workspace. The implementation resolves the real worktree and applies policy
+   * before dispatching a capability; callers never supply a filesystem path.
+   */
+  invokeSkillAction(input: {
+    readonly skillId: string;
+    readonly actionId: string;
+    readonly params: unknown;
+    readonly actorId: string;
+    readonly workspace: string;
+  }): Promise<InvokeSkillActionResult>;
   /** The terminal WS surface (edge registers `terminalBackends()`). */
   terminal(): TerminalStreamPort;
   /** The `/api/conductor` router. */

@@ -22,7 +22,8 @@
 import type { Router } from 'express';
 import type { AppConfig } from '../../shared/app-config.js';
 import type { Logger } from '../../shared/logger.js';
-import type { PermissiveSymbolSearchFallback } from './permissive-code-search.js';
+import type { PermissiveImpactFallback, PermissiveSymbolSearchFallback } from './permissive-code-search.js';
+import type { IndexStateStore } from './recodergit-service.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
@@ -95,6 +96,10 @@ export interface EnginesModuleDeps {
    * the service keeps its truthful 'unavailable' degrade.
    */
   readonly codeSearchFallback?: PermissiveSymbolSearchFallback;
+  /** MIT file-import impact fallback used when the donor symbol graph is absent. */
+  readonly codeImpactFallback?: PermissiveImpactFallback;
+  /** Canonical installed-app persistence for RecoderGit index freshness/state. */
+  readonly codeIndexStateStore?: IndexStateStore;
   /** Not-yet-in-AppConfig engine values (paths / URLs / venvs / flags). */
   readonly overrides?: EnginesConfigOverrides;
 }
@@ -257,6 +262,12 @@ import { EnginesComposer } from './engines-module.js';
 export async function createEnginesModule(deps: EnginesModuleDeps): Promise<EnginesModule> {
   return new EnginesComposer(deps);
 }
+
+/** Installed-app adapter that preserves RecoderGit index state across restarts. */
+export { createRecoderGitIndexStateStore } from './recodergit-index-state.store.js';
+export { createRecoderGitRepositoryNetwork } from './recodergit-repository-network.store.js';
+/** Installed-app adapter for reusable packaged dependency-graph snapshots. */
+export { createRecoderGitGraphSnapshotStore } from './recodergit-graph-snapshot.store.js';
 
 /**
  * In-process openfang run seam (path b). Re-exported from the barrel so consumer

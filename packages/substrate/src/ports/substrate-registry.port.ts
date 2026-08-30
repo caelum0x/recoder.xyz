@@ -28,8 +28,8 @@ export interface EngineSubstrate {
   /**
    * Exit code of the completed agent (0 = success, >0 = failure). `undefined`
    * while still alive, `null` when the handle is entirely gone. Used by reconcile
-   * to distinguish a clean finish from a crash. Optional — a substrate without it
-   * is treated as a clean completion.
+   * to distinguish a clean finish from an interrupted/crashed run. Optional — a
+   * substrate without it cannot prove a clean completion.
    */
   exitCode?(handle: SubstrateHandle): Promise<number | null | undefined>;
   /**

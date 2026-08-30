@@ -42,8 +42,7 @@ ZIG=$PWD/zig-aarch64-macos-0.15.2/zig cargo build --release --locked   # -> targ
 ## Integration status (Recoder engine)
 
 - [x] Source vendored + license/NOTICE compliance.
-- [x] Rust binary **builds** (`target/release/loom`, arm64, v0.8.0) with Rust 1.96.1
-      + zig 0.15.2. Restored 2 build-embedded files (`docs/next/api/loom-api.schema.json`,
+- [x] Rust binary **builds** (`target/release/loom`, arm64, v0.8.0) with Rust 1.96.1 + zig 0.15.2. Restored 2 build-embedded files (`docs/next/api/loom-api.schema.json`,
       `website/latest.json`) that the initial lean vendor dropped.
 - [x] **Phase 0** — NDJSON socket client + protocol types
       (`packages/agent-runtimes/src/adapters/loom/`), 13/13 tests. See docs/LOOM-INTEGRATION.md.
@@ -54,10 +53,9 @@ ZIG=$PWD/zig-aarch64-macos-0.15.2/zig cargo build --release --locked   # -> targ
       native worktree create+remove). Recoder now drives the real engine.
 - [x] **Phase 2 + 4** — `loom-path.ts` resolver (env → packaged → dev → PATH) +
       `loom-daemon.ts` supervisor (Recoder-owned socket, denylist-stripped env,
-      real ping-20 health, process-group reap) + `'loom'` registered as an
-      **opt-in/non-default** `WorkspaceSubstrate` (tmux stays default). 1000 tests;
-      daemon smoke PASSED via the supervisor. Activate with
-      `CONDUCTOR_LOOM_ENABLED=1` + `substrate:'loom'`.
+      real ping-20 health, process-group reap) + `'loom'` registered as the
+      **default** `WorkspaceSubstrate`. 1000 tests; daemon smoke PASSED via the
+      supervisor. `CONDUCTOR_LOOM_DISABLED=1` is the explicit tmux fallback.
 - [x] **Phase 3** — DMG packaging: electron-builder `extraResources`
       (`../engines/loom/target/release/loom` → `backend/engines/loom/loom`) + added to
       `ARCH_SENSITIVE_EXTRA_RESOURCES` (Mach-O arm64 gate) + packaging-config test (11/11).
@@ -66,5 +64,29 @@ ZIG=$PWD/zig-aarch64-macos-0.15.2/zig cargo build --release --locked   # -> targ
       592-plugin ecosystem). Renamed binary/env/`loom-plugin.toml`/socket/XDG-dir across the
       vendored source and the Recoder integration; kept LICENSE + NOTICE + ported-file
       attribution headers (Apache-2 requires attribution to herdr even after rebrand).
+- [x] **Wave terminal bridge** — public `pane.terminal.stream` frames flow through the
+      typed Node socket client and session-authenticated backend websocket into the
+      Wave `recoder-loom-terminal` block. Resize and scroll return to Loom; keyboard
+      input returns through Conductor's governed substrate-aware steer path.
+
+## Upstream sync status
+
+- Imported baseline: HERDR v0.8.0.
+- Current reviewed upstream release as of 2026-08-30: v0.8.2.
+- Selectively absorbed from v0.8.2 on 2026-08-30:
+  - configurable 120×40 headless geometry, including pre-view pane sizing and
+    no-client/live-reload fallback behavior;
+  - blocked-agent rejection for `agent.prompt` and Copilot focus-before-submit;
+  - Qwen Code npm-wrapper process detection, screen-state manifest, and native
+    `qwen --resume <session>` planning.
+- Already present in the fork before this review: startup-readiness waiting,
+  alternate-screen reads, window-title synchronization, pane/tab movement and
+  resize controls, outer pane borders, right-click routing, and hidden-pane render
+  suppression.
+- The crate remains versioned `0.8.0` because this is a selective substrate sync,
+  not a byte-for-byte import of all 133 commits/490 changed files in v0.8.2.
+- Remaining review work: classify the rest of v0.8.1/v0.8.2 into runtime fixes to
+  port, Wave-owned UI to exclude, marketplace features to exclude, and behavior
+  superseded by Recoder governance.
 
 Tracked in bd (`absorb`/`loom` labels).

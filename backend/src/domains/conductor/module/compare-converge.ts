@@ -42,7 +42,12 @@ import {
   type FileVersionsView,
 } from '../converge/converge.ops.js';
 import type { ConvergenceEvidenceRecord } from '../evidence/convergence-evidence.js';
-import { computeConvergenceTrust, type ConvergenceTrust } from '../evidence/convergence-trust.js';
+import type { ConvergenceDecisionProfile } from '../ports/convergence-feedback.port.js';
+import {
+  calibrateConvergenceTrust,
+  computeConvergenceTrust,
+  type ConvergenceTrust,
+} from '../evidence/convergence-trust.js';
 import {
   renderEvidenceExport,
   type EvidenceExport,
@@ -87,6 +92,15 @@ export type AdHocReject =
       readonly code: 'incompatible';
       readonly reason: string;
     };
+
+/** Read outcomes for the two deep-inspection views inside an ad-hoc compare. */
+export type AdHocPairwiseOutcome =
+  | { readonly ok: true; readonly pairwise: PairwiseDiffView }
+  | AdHocReject;
+
+export type AdHocFileVersionsOutcome =
+  | { readonly ok: true; readonly fileVersions: FileVersionsView }
+  | AdHocReject;
 
 /** The outcome of an ad-hoc convergence PLAN: the folded plan, or a typed reject. */
 export type AdHocPlanOutcome =
@@ -450,7 +464,33 @@ export class ConductorCompareConverge {
   ): Promise<ConvergenceTrust | null> {
     const record = await this.getConvergenceEvidence(workspaceId);
     if (!record) return null;
-    return computeConvergenceTrust(record.evidence);
+    const trust = computeConvergenceTrust(record.evidence);
+    try {
+      const profile = await this.getConvergenceDecisionProfile(workspaceId);
+      return profile
+        ? calibrateConvergenceTrust(trust, profile.flagDispositions)
+        : trust;
+    } catch (err) {
+      this.ctx.log.warn(
+        { err, workspaceId },
+        'convergence trust calibration unavailable — returning raw evidence score'
+      );
+      return trust;
+    }
+  }
+
+  /** Repository-scoped delivered convergence history; null means no store/workspace. */
+  async getConvergenceDecisionProfile(
+    workspaceId: string
+  ): Promise<ConvergenceDecisionProfile | null> {
+    if (!this.ctx.convergenceFeedback) return null;
+    const workspace = await this.ctx.engine.getWorkspace(workspaceId);
+    if (!workspace) return null;
+    const metadata = workspace.metadata as Record<string, unknown> | undefined;
+    const repoId = typeof metadata?.repoId === 'string' && metadata.repoId.trim()
+      ? metadata.repoId.trim()
+      : workspace.projectId;
+    return this.ctx.convergenceFeedback.read(repoId);
   }
 
   /**
@@ -656,6 +696,75 @@ export class ConductorCompareConverge {
     );
     if (!outcome.ok) return outcome;
     return { ok: true, view: await this.withGridHint(outcome.view) };
+  }
+
+  /**
+   * TRUE A/B line diff for an ad-hoc group. The explicit set is revalidated on
+   * every read, then the identical pairwise git operation used by task groups runs
+   * over two members of that set. A named pair outside the set is a no-oracle miss.
+   */
+  async pairwiseDiffAdHoc(
+    workspaceIds: readonly string[],
+    aId: string,
+    bId: string,
+    paths: readonly string[] | undefined,
+    principal?: Principal
+  ): Promise<AdHocPairwiseOutcome> {
+    const outcome = await compareWorkspacesOp(
+      this.compareDeps(principal),
+      workspaceIds
+    );
+    if (!outcome.ok) return outcome;
+    const view = outcome.view;
+    const aSibling = view.siblings.find(s => s.workspaceId === aId);
+    const bSibling = view.siblings.find(s => s.workspaceId === bId);
+    if (!aSibling || !bSibling) return { ok: false, code: 'not-found' };
+    const [a, b] = await Promise.all([
+      this.ctx.engine.getWorkspace(aId),
+      this.ctx.engine.getWorkspace(bId),
+    ]);
+    if (!a || !b) return { ok: false, code: 'not-found' };
+    const resolved =
+      paths && paths.length > 0
+        ? paths
+        : sharedPairPaths(aSibling, bSibling, view.contested);
+    return {
+      ok: true,
+      pairwise: await pairwiseDiffOp(
+        { logger: this.ctx.log },
+        { a, b, paths: resolved }
+      ),
+    };
+  }
+
+  /**
+   * N-up file contents for an ad-hoc group. This restores the same click-a-path
+   * inspection available to native fan-out groups without inventing a persisted
+   * taskGroup or duplicating any file-reading logic.
+   */
+  async fileVersionsAdHoc(
+    workspaceIds: readonly string[],
+    relPath: string,
+    principal?: Principal
+  ): Promise<AdHocFileVersionsOutcome> {
+    const outcome = await compareWorkspacesOp(
+      this.compareDeps(principal),
+      workspaceIds
+    );
+    if (!outcome.ok) return outcome;
+    return {
+      ok: true,
+      fileVersions: await gatherFileVersionsOp(
+        this.convergeDeps(principal),
+        {
+          siblings: outcome.view.siblings.map(s => ({
+            workspaceId: s.workspaceId,
+            agent: s.agent,
+          })),
+          relPath,
+        }
+      ),
+    };
   }
 
   /**

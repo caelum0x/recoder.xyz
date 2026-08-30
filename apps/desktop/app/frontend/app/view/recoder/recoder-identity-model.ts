@@ -3,7 +3,6 @@
 
 import { getApi, globalStore } from "@/app/store/global";
 import { atom, type PrimitiveAtom } from "jotai";
-import { applyInjectedBackendUrl } from "./recoder-endpoints";
 
 // Optional, offline-safe sign-in state for the Wave Workspaces hub. Drives the
 // existing main-process device-flow manager (recoder.xyz Google/GitHub) through
@@ -25,18 +24,6 @@ class RecoderIdentityModel {
             });
         } catch {
             // No bridge (preview/test) — sign-in simply stays unavailable.
-        }
-        // DT-7.1: adopt the embedded backend's REAL loopback URL from the main
-        // process — read it now (backend may already be READY) and subscribe for
-        // the case where it readies after this window loaded. Degrade-safe: no
-        // bridge (preview/test) or a not-ready backend leaves the default in place.
-        try {
-            applyInjectedBackendUrl(getApi().getRecoderBackendUrl?.());
-            getApi().onRecoderBackendUrl?.((url) => {
-                applyInjectedBackendUrl(url);
-            });
-        } catch {
-            // No bridge (preview/test) — keep the default/localStorage resolution.
         }
     }
 

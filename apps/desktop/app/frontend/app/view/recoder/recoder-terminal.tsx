@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createBlock } from "@/app/store/global";
+import { WaveAIModel } from "@/app/aipanel/waveai-model";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
@@ -20,8 +21,15 @@ import { openWorkspaceDetail } from "./recoder-detail-open";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { type MeteringDisplay } from "./recoder-metering";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
-import { type RunEventSeverity } from "./recoder-run-event";
+import {
+    describeRunEvent,
+    type RunEventDescriptor,
+    type RunEventLike,
+    type RunEventSeverity,
+} from "./recoder-run-event";
 import { PRIMARY_BTN, QUIET_BTN } from "./recoder-styles";
+import { RecoderSkills } from "./recoder-skills";
+import { RecoderRemoteAccess } from "./recoder-remote-access";
 import { RecoderTerminalStatus, RecoderTerminalViewModel, type UsageStripStatus } from "./recoder-terminal-model";
 
 const UsageRefreshMs = 15_000;
@@ -43,6 +51,41 @@ async function fetchWorkspaceHistory(workspaceId: string): Promise<Turn[]> {
     } catch {
         return [];
     }
+}
+
+// Coordination deliveries are already durable RunEvents. Read only those from
+// the canonical event edge so the teamwork ledger survives closing/reopening the
+// Session; ordinary run events continue to arrive through the live stream.
+async function fetchCoordinationHistory(workspaceId: string): Promise<RunEventDescriptor[]> {
+    if (workspaceId == "") return [];
+    try {
+        const url = `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/events`;
+        const res = await fetch(url);
+        if (!res.ok) return [];
+        const body = await res.json();
+        const events = Array.isArray(body?.data?.events) ? body.data.events : [];
+        return events
+            .map((event: unknown) => describeRunEvent(event as RunEventLike))
+            .filter((descriptor: RunEventDescriptor) => descriptor.coordination != null);
+    } catch {
+        return [];
+    }
+}
+
+function mergeCoordinationUpdates(
+    history: readonly RunEventDescriptor[],
+    live: readonly RunEventDescriptor[]
+): RunEventDescriptor[] {
+    const merged = new Map<string, RunEventDescriptor>();
+    for (const descriptor of [...history, ...live]) {
+        const coordination = descriptor.coordination;
+        if (coordination == null) continue;
+        const key =
+            descriptor.eventId ??
+            `${descriptor.time}:${coordination.fromWorkspaceId}:${coordination.milestone ?? "completed"}`;
+        merged.set(key, descriptor);
+    }
+    return [...merged.values()];
 }
 
 async function openWorkspaces() {
@@ -127,8 +170,8 @@ TurnLineRow.displayName = "TurnLineRow";
 // never the engine name), when, the salient lines they produced, and a quiet
 // collapsed <details> holding the raw plumbing (tool frames, ANSI paint, transport
 // frames) so the reader sees what the agent DID and SAID, not a log.
-function TurnBlock({ turn }: { turn: Turn }) {
-    const who = turn.speaker == "you" ? "You" : "Agent";
+function TurnBlock({ turn, agentName }: { turn: Turn; agentName: string }) {
+    const who = turn.speaker == "you" ? "You" : agentName;
     const noiseCount = turn.noise.length;
     return (
         <div className="flex flex-col gap-1 py-1.5">
@@ -166,7 +209,7 @@ function UsageStrip({ display, status }: { display: MeteringDisplay; status: Usa
     // so the strip states exactly what its numbers describe.
     const scopeTitle = status == "ready" ? display.scopeLabel : undefined;
     return (
-        <div className="flex items-center gap-3 px-3 py-1 border-b border-border text-xs shrink-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1 border-b border-border text-xs shrink-0">
             <span className="uppercase tracking-wide text-secondary shrink-0" title={scopeTitle}>
                 Workspace usage
             </span>
@@ -187,6 +230,32 @@ function UsageStrip({ display, status }: { display: MeteringDisplay; status: Usa
 }
 
 UsageStrip.displayName = "UsageStrip";
+
+function CoordinationStrip({ updates }: { updates: readonly RunEventDescriptor[] }) {
+    if (updates.length == 0) return null;
+    const latest = updates[updates.length - 1];
+    return (
+        <details className="shrink-0 border-b border-border px-3 py-1 text-xs">
+            <summary className="cursor-pointer text-secondary hover:text-primary">
+                <span className="font-medium text-primary">Agent coordination</span>
+                <span className="ml-2">
+                    {updates.length} context update{updates.length == 1 ? "" : "s"}
+                </span>
+                {latest?.detail != null && <span className="ml-2 text-meta">Latest: {latest.detail}</span>}
+            </summary>
+            <div className="mt-1 flex flex-col gap-1 border-l border-border pl-3">
+                {updates.map((update, index) => (
+                    <div key={update.eventId ?? `${update.time}-${index}`} className="flex items-baseline gap-2">
+                        <span className="shrink-0 text-meta">{update.time}</span>
+                        <span className="text-secondary">{update.detail}</span>
+                    </div>
+                ))}
+            </div>
+        </details>
+    );
+}
+
+CoordinationStrip.displayName = "CoordinationStrip";
 
 function statusText(status: RecoderTerminalStatus): string {
     if (status == "no-workspace") return "no workspace";
@@ -219,6 +288,8 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     const scrollRef = useRef<HTMLDivElement>(null);
     const [draft, setDraft] = useState("");
     const [history, setHistory] = useState<Turn[]>([]);
+    const [coordinationHistory, setCoordinationHistory] = useState<RunEventDescriptor[]>([]);
+    const [activePanel, setActivePanel] = useState<"skills" | "remote" | null>(null);
 
     useEffect(() => {
         model.connect();
@@ -232,9 +303,14 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     useEffect(() => {
         let cancelled = false;
         setHistory([]);
-        void fetchWorkspaceHistory(workspaceId).then((turns) => {
-            if (!cancelled) setHistory(turns);
-        });
+        setCoordinationHistory([]);
+        void Promise.all([fetchWorkspaceHistory(workspaceId), fetchCoordinationHistory(workspaceId)]).then(
+            ([turns, coordination]) => {
+                if (cancelled) return;
+                setHistory(turns);
+                setCoordinationHistory(coordination);
+            }
+        );
         return () => {
             cancelled = true;
         };
@@ -259,6 +335,12 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     // hydrated and live turns render identically. The waiting states only show
     // when there is truly nothing (no history AND no live output).
     const turns = [...history, ...deriveTranscript(entries)];
+    const coordinationUpdates = mergeCoordinationUpdates(
+        coordinationHistory,
+        entries.flatMap((entry) =>
+            entry.kind == "event" && entry.descriptor.coordination != null ? [entry.descriptor] : []
+        )
+    );
     const empty = turns.length == 0;
     const noWorkspace = workspaceId == "";
     const canSend = !noWorkspace && !sending && draft.trim() != "";
@@ -278,13 +360,14 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     // The SHARED detail frame (identity + switcher + Session·Review·Terminal
     // segments) so Session reads as one face of the same workspace-detail Review
     // shows. Identity is resolved from the SAME list edge Review uses; the state
-    // chip is this Session's live connection status; the raw-terminal segment is
-    // wired only when the bound record carries a tmux session (truthful degrade).
+    // chip is this Session's live connection status; the terminal segment is
+    // wired only when the bound record carries a substrate session (truthful degrade).
     const boundSummary = workspaces.find((w) => w.workspaceId == workspaceId) ?? null;
+    const boundAgentName = boundSummary?.runtimeId ? agentLabel(boundSummary.runtimeId) : "Agent";
     const detailIdentity = {
         branch: boundSummary?.branch ?? "",
         repo: boundSummary?.projectId,
-        agent: boundSummary?.runtimeId ? agentLabel(boundSummary.runtimeId) : undefined,
+        agent: boundSummary?.runtimeId ? boundAgentName : undefined,
         stateChip: { label: statusText(status), tone: statusTone(status) },
     };
     const detailSwitcher =
@@ -313,13 +396,32 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                   substrate: boundSummary.substrate,
               })
         : undefined;
-    // Reconnect only exists when there's a bound session to reconnect to — an
-    // unbound Session (pick a workspace from the switcher first) shows no action.
-    const reconnectBtn =
+    // Workspace actions stay quiet beside the shared navigation. Ask AI opens
+    // Wave's native panel; its focus resolver binds this exact detail workspace.
+    const sessionActions =
         workspaceId != "" ? (
-            <button className={QUIET_BTN} onClick={() => model.connect()}>
-                Reconnect
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+                <button className={QUIET_BTN} onClick={() => WaveAIModel.getInstance().focusInput()}>
+                    Ask AI
+                </button>
+                <button
+                    className={QUIET_BTN}
+                    onClick={() => setActivePanel((panel) => (panel == "skills" ? null : "skills"))}
+                    aria-expanded={activePanel == "skills"}
+                >
+                    Skills
+                </button>
+                <button
+                    className={QUIET_BTN}
+                    onClick={() => setActivePanel((panel) => (panel == "remote" ? null : "remote"))}
+                    aria-expanded={activePanel == "remote"}
+                >
+                    Remote
+                </button>
+                <button className={QUIET_BTN} onClick={() => model.connect()}>
+                    Reconnect
+                </button>
+            </div>
         ) : undefined;
 
     return (
@@ -338,9 +440,16 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                     }
                 }}
                 onOpenTerminal={onOpenTerminal}
-                primaryAction={reconnectBtn}
+                primaryAction={sessionActions}
             />
+            {activePanel == "skills" && workspaceId != "" && (
+                <RecoderSkills workspaceId={workspaceId} onClose={() => setActivePanel(null)} />
+            )}
+            {activePanel == "remote" && workspaceId != "" && (
+                <RecoderRemoteAccess workspaceId={workspaceId} onClose={() => setActivePanel(null)} />
+            )}
             <UsageStrip display={usage} status={usageStatus} />
+            <CoordinationStrip updates={coordinationUpdates} />
             {error != "" && <div className="text-error text-xs px-3 py-1 border-b border-border shrink-0">{error}</div>}
             <div ref={scrollRef} className="flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed">
                 {empty && status == "no-workspace" && (
@@ -352,7 +461,9 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                     </div>
                 )}
                 {empty && status == "connecting" && <div className="text-secondary">Connecting to session stream…</div>}
-                {empty && status == "connected" && <div className="text-secondary">Waiting for session output…</div>}
+                {empty && status == "connected" && (
+                    <div className="text-secondary">Waiting for {boundAgentName} to produce its first update…</div>
+                )}
                 {empty && status == "closed" && (
                     <div className="text-secondary">Disconnected — press Reconnect to resume the stream.</div>
                 )}
@@ -360,7 +471,7 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                     <div className="text-secondary">Not connected. Check that Recoder is running.</div>
                 )}
                 {turns.map((turn, i) => (
-                    <TurnBlock key={i} turn={turn} />
+                    <TurnBlock key={i} turn={turn} agentName={boundAgentName} />
                 ))}
             </div>
             <div className="flex flex-col gap-1 px-3 py-2 border-t border-border shrink-0">
@@ -381,7 +492,7 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                         onChange={(e) => setDraft(e.target.value)}
                         onKeyDown={onKeyDown}
                         disabled={noWorkspace}
-                        placeholder={noWorkspace ? "no workspace bound" : "Direct the agent — press Enter to send"}
+                        placeholder={noWorkspace ? "no workspace bound" : `Direct ${boundAgentName} — press Enter to send`}
                         className="flex-1 min-w-0 rounded border border-border bg-transparent px-2 py-1 text-sm outline-none focus:border-accent disabled:opacity-50"
                     />
                     <button className={PRIMARY_BTN} onClick={() => void submit()} disabled={!canSend}>

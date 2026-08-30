@@ -19,6 +19,8 @@
  * pre-merge gate without duplicating it.
  */
 import { computeCandidateVote, type CandidateVote } from './finding-vote.js';
+import type { ConvergenceFlagDisposition } from '../ports/convergence-feedback.port.js';
+import type { RequiredRuleTrustMode } from '../ports/convergence-feedback.port.js';
 
 export interface ConvergenceTrustInput {
   readonly verification: {
@@ -28,6 +30,8 @@ export interface ConvergenceTrustInput {
     readonly reason?: string;
   };
   readonly convergence?: {
+    /** Original candidate workspaces represented by this composed change. */
+    readonly sourceCount?: number;
     readonly fileCount: number;
     readonly selections?: readonly { readonly path?: string; readonly mode: string; readonly contested: boolean }[];
     readonly assisted?: readonly { readonly path: string }[];
@@ -40,6 +44,17 @@ export interface ConvergenceTrustInput {
     readonly reason?: string;
   };
   readonly candidateCount: number;
+  readonly requiredRules?: {
+    readonly mode: RequiredRuleTrustMode;
+    readonly results: readonly {
+      readonly id: string;
+      readonly text: string;
+      readonly check: string;
+      readonly status: 'pass' | 'fail' | 'error' | 'missing';
+      readonly detail?: string;
+    }[];
+    readonly unavailableReason?: string;
+  };
 }
 
 /** How a factor moved the score — for a truthful, colour-free breakdown. */
@@ -78,6 +93,11 @@ export interface ConvergenceTrust {
   readonly reviewFlags: readonly string[];
   /** One-line human summary. */
   readonly summary: string;
+  /** Exact prior human decisions that matched this assessment's review flags. */
+  readonly calibration?: {
+    readonly accepted: readonly string[];
+    readonly dismissed: readonly string[];
+  };
 }
 
 const BASE = 100;
@@ -135,6 +155,12 @@ export function computeConvergenceTrust(evidence: ConvergenceTrustInput): Conver
   //    3-way synthesize or an uncontested pick; contested picks are a human decision
   //    (fine, but there WAS conflict); an LLM-written region is always a review flag.
   const c = evidence.convergence;
+  // A composed workspace is intentionally a singleton after composition, so the
+  // merge-time sibling read often reports one candidate (the composed workspace).
+  // Its immutable convergence provenance retains the real N source workspaces.
+  // Prefer the larger truthful count or the cross-candidate vote collapses to
+  // `solo` precisely when a real N-way convergence reaches delivery.
+  const effectiveCandidateCount = Math.max(evidence.candidateCount, c?.sourceCount ?? 0);
   if (c && c.fileCount > 0) {
     const selections = c.selections ?? [];
     const clean = selections.filter(
@@ -172,7 +198,7 @@ export function computeConvergenceTrust(evidence: ConvergenceTrustInput): Conver
   //     value is truthful surfacing: its verdict as a factor, its SPECIFIC review flags
   //     for the diverged files, and the `vote` object the Checks surface renders.
   const vote = computeCandidateVote({
-    candidateCount: evidence.candidateCount,
+    candidateCount: effectiveCandidateCount,
     selections: (c?.selections ?? []).map((s) => ({
       ...(s.path ? { path: s.path } : {}),
       mode: s.mode,
@@ -199,9 +225,35 @@ export function computeConvergenceTrust(evidence: ConvergenceTrustInput): Conver
     add('approval', 'caution', 0, g.approvalId ? `required approval (${g.approvalId})` : 'required approval');
   }
 
+  // 3b) REQUIRED REPOSITORY RULES — influence trust only under the explicit,
+  // repository-scoped operator policy. A committed rule file cannot enable this.
+  const required = evidence.requiredRules;
+  if (required && required.mode !== 'off') {
+    const failed = required.results.filter(result => result.status !== 'pass');
+    if (failed.length > 0) {
+      const shown = failed.slice(0, 3).map(result => `${result.id} (${result.check}: ${result.status})`).join('; ');
+      add(
+        'required-rules',
+        'negative',
+        -Math.min(30, failed.length * 10),
+        `${failed.length} required check-backed rule(s) did not pass: ${shown}`,
+      );
+      reviewFlags.push(`Required repository rules need attention: ${shown}`);
+      if (required.mode === 'block') hardCap = Math.min(hardCap, BLOCKED_CAP);
+    } else if (required.results.length > 0) {
+      add('required-rules', 'positive', 0, `${required.results.length} required check-backed rule(s) passed`);
+    } else if (required.unavailableReason) {
+      add('required-rules', 'caution', -8, required.unavailableReason);
+      reviewFlags.push(`Required repository-rule evidence unavailable: ${required.unavailableReason}`);
+      if (required.mode === 'block') hardCap = Math.min(hardCap, BLOCKED_CAP);
+    } else {
+      add('required-rules', 'positive', 0, 'no required check-backed rules declared');
+    }
+  }
+
   // 4) BREADTH — converging 2+ real candidates is more thorough than a lone run.
-  if (evidence.candidateCount >= 2) {
-    add('breadth', 'positive', +5, `converged ${evidence.candidateCount} parallel candidate runs`);
+  if (effectiveCandidateCount >= 2) {
+    add('breadth', 'positive', +5, `converged ${effectiveCandidateCount} parallel candidate runs`);
   }
 
   score = clamp(Math.min(score, hardCap));
@@ -216,4 +268,62 @@ export function computeConvergenceTrust(evidence: ConvergenceTrustInput): Conver
         : `Low trust (${score}/100): do not merge until the flagged issues are resolved.`;
 
   return { score, tier, unjudgeable, vote, factors, reviewFlags, summary };
+}
+
+function normalizedFlag(flag: string): string {
+  return flag.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US');
+}
+
+/**
+ * Apply explicit repository feedback to a freshly-computed trust assessment.
+ * Accepted flags remain visible and receive a small bounded deduction because a
+ * human confirmed the signal matters. Dismissed exact matches stop repeating as
+ * review prompts, but NEVER restore points or remove the underlying evidence
+ * factor. Thus feedback improves signal without laundering a risky merge.
+ */
+export function calibrateConvergenceTrust(
+  trust: ConvergenceTrust,
+  rules: readonly ConvergenceFlagDisposition[],
+): ConvergenceTrust {
+  if (trust.reviewFlags.length === 0 || rules.length === 0) return trust;
+  const active = new Map(rules.map(rule => [normalizedFlag(rule.flag), rule] as const));
+  const accepted: string[] = [];
+  const dismissed: string[] = [];
+  const reviewFlags = trust.reviewFlags.filter(flag => {
+    const rule = active.get(normalizedFlag(flag));
+    if (!rule) return true;
+    if (rule.disposition === 'dismissed') {
+      dismissed.push(flag);
+      return false;
+    }
+    accepted.push(flag);
+    return true;
+  });
+  if (accepted.length === 0 && dismissed.length === 0) return trust;
+  const deduction = Math.min(12, accepted.length * 3);
+  const score = clamp(trust.score - deduction);
+  const tier = tierOf(score);
+  const factors = [
+    ...trust.factors,
+    {
+      label: 'human-calibration',
+      impact: accepted.length > 0 ? 'negative' as const : 'caution' as const,
+      delta: -deduction,
+      detail: `${accepted.length} prior accepted flag(s) retained; ${dismissed.length} prior dismissed exact match(es) suppressed`,
+    },
+  ].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  const summary = tier === 'high'
+    ? `High trust (${score}/100): verified merge, ${reviewFlags.length === 0 ? 'no active review flags' : `${reviewFlags.length} thing(s) to review`}.`
+    : tier === 'medium'
+      ? `Medium trust (${score}/100): mergeable but review ${reviewFlags.length || 'the flagged'} item(s) first.`
+      : `Low trust (${score}/100): do not merge until the active flagged issues are resolved.`;
+  return {
+    ...trust,
+    score,
+    tier,
+    factors,
+    reviewFlags,
+    summary,
+    calibration: { accepted, dismissed },
+  };
 }

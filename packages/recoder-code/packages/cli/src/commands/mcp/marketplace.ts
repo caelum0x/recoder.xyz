@@ -8,7 +8,7 @@ import { loadSettings, SettingScope } from '../../config/settings.js';
 import type { MCPServerConfig } from 'recoder-code-core';
 import * as readline from 'readline';
 
-// Marketplace catalog (shared with recoder-web)
+// Marketplace catalog shared across Recoder clients.
 type MarketplaceCategory =
   | 'browser'
   | 'database'

@@ -104,7 +104,10 @@ No cert or key is stored in the repo. `git`-check any release commit:
 [`.github/workflows/desktop-release.yml`](.github/workflows/desktop-release.yml):
 
 - **`validate`** job (Linux, no certs) runs on every trigger: desktop typecheck,
-  packaging-config tests, and `release-desktop.sh dry-run`. Cheap gate.
+  artifact-independent packaging-config tests, and `release-desktop.sh dry-run`.
+  It is intentionally clean-checkout safe: required native artifact existence is
+  tested with fixtures here and enforced against real paths by `beforePack` only
+  after the macOS build job creates those artifacts.
 - **`build-sign-notarize`** job (macOS `arm64` runner) runs on a `v*` tag push or
   an explicit non-dry-run manual dispatch: builds engines/server, stages the
   self-contained backend `node_modules`, imports the signing cert into a

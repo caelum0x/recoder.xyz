@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "servers": [
+    {
+      "id": "typescript",
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "extensions": [".ts", ".tsx", ".js", ".jsx"]
+    }
+  ]
+}

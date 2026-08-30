@@ -14,7 +14,7 @@ vi.mock("./recoder-runs", () => ({
 
 import { globalStore } from "@/app/store/global";
 import type { WorkspaceCorrelation } from "./recoder-runs-correlation";
-import { RecoderRunsViewModel, type RecoderRun } from "./recoder-runs-model";
+import { parseRunHistory, RecoderRunsViewModel, type RecoderRun } from "./recoder-runs-model";
 
 function makeModel(): RecoderRunsViewModel {
     return new RecoderRunsViewModel({ blockId: "b1" } as ViewModelInitType);
@@ -103,7 +103,12 @@ function refreshFetch(previews: Record<string, unknown>) {
             return okJson([]);
         }
         if (path.endsWith("/api/conductor/workspaces")) {
-            return okJson({ workspaces: [workspace({ workspaceId: "w1", runId: "r1" }), workspace({ workspaceId: "w2", runId: "r2" })] });
+            return okJson({
+                workspaces: [
+                    workspace({ workspaceId: "w1", runId: "r1" }),
+                    workspace({ workspaceId: "w2", runId: "r2" }),
+                ],
+            });
         }
         if (path.endsWith("/api/conductor/reconcile/findings")) {
             return okJson([]);
@@ -112,7 +117,11 @@ function refreshFetch(previews: Record<string, unknown>) {
         if (preview) {
             const value = previews[decodeURIComponent(preview[1])];
             if (value == null) {
-                return Promise.resolve({ ok: false, status: 404, json: async () => ({ message: "preview not verified" }) });
+                return Promise.resolve({
+                    ok: false,
+                    status: 404,
+                    json: async () => ({ message: "preview not verified" }),
+                });
             }
             if (value instanceof Error) {
                 return Promise.reject(value);
@@ -156,34 +165,82 @@ describe("RecoderRunsViewModel preview verification", () => {
         vi.stubGlobal("fetch", fetchMock);
         const model = makeModel();
 
-        const statuses = await model.fetchPreviewStatuses(new Map([["r1", "w1"], ["r2", "w2"], ["r3", "w2"]]));
+        const statuses = await model.fetchPreviewStatuses(
+            new Map([
+                ["r1", "w1"],
+                ["r2", "w2"],
+                ["r3", "w2"],
+            ])
+        );
 
-        expect(statuses).toEqual(new Map([
-            ["r1", "passed"],
-            ["r2", "degraded"],
-            ["r3", "degraded"],
-        ]));
+        expect(statuses).toEqual(
+            new Map([
+                ["r1", "passed"],
+                ["r2", "degraded"],
+                ["r3", "degraded"],
+            ])
+        );
         expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/preview-verification"))).toHaveLength(2);
     });
 
     it("keeps absent and unreachable records distinct from a failed preview", async () => {
         vi.stubGlobal(
             "fetch",
-            refreshFetch({ w2: { status: "failed", degraded: false }, w3: new Error("ECONNREFUSED") }),
+            refreshFetch({ w2: { status: "failed", degraded: false }, w3: new Error("ECONNREFUSED") })
         );
         const model = makeModel();
 
-        const statuses = await model.fetchPreviewStatuses(new Map([["r1", "w1"], ["r2", "w2"], ["r3", "w3"]]));
+        const statuses = await model.fetchPreviewStatuses(
+            new Map([
+                ["r1", "w1"],
+                ["r2", "w2"],
+                ["r3", "w3"],
+            ])
+        );
 
-        expect(statuses).toEqual(new Map([
-            ["r1", "not-verified"],
-            ["r2", "failed"],
-            ["r3", "unavailable"],
-        ]));
+        expect(statuses).toEqual(
+            new Map([
+                ["r1", "not-verified"],
+                ["r2", "failed"],
+                ["r3", "unavailable"],
+            ])
+        );
     });
 });
 
 describe("RecoderRunsViewModel.selectRun", () => {
+    it("uses canonical Agent OS history without requiring a workspace correlation", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue(
+                okBody({
+                    items: [
+                        {
+                            itemId: "github_delivery:delivery-1",
+                            kind: "github_delivery_link",
+                            taskId: "t1",
+                            runId: "r1",
+                            createdAt: "2026-08-01T10:00:00Z",
+                            title: "GitHub delivery: pr_open",
+                            summary: "recoder/recoder#42",
+                            severity: "success",
+                            refs: { pullRequestUrl: "https://github.com/recoder/recoder/pull/42" },
+                        },
+                    ],
+                })
+            )
+        );
+        const model = makeModel();
+        seed(model, [run({ runId: "r1" })], []);
+
+        await model.selectRun("r1");
+
+        expect(globalStore.get(model.selectedStatusAtom)).toBe("ready");
+        expect(globalStore.get(model.selectedHistoryAtom)).toHaveLength(1);
+        expect(globalStore.get(model.selectedHistoryAtom)[0].refs?.pullRequestUrl).toContain("/pull/42");
+        expect(globalStore.get(model.selectedEventsAtom)).toEqual([]);
+    });
+
     it("selects a run and loads its correlated workspace events (ready)", async () => {
         vi.stubGlobal("fetch", eventsFetch({ w1: () => Promise.resolve(eventsBody([evt("e1")])) }));
         const model = makeModel();
@@ -222,11 +279,44 @@ describe("RecoderRunsViewModel.selectRun", () => {
     });
 });
 
+describe("parseRunHistory", () => {
+    it("drops malformed items and normalizes untrusted severity", () => {
+        expect(
+            parseRunHistory({
+                data: {
+                    items: [
+                        { itemId: "bad" },
+                        {
+                            itemId: "artifact:a1",
+                            kind: "artifact",
+                            taskId: "t1",
+                            createdAt: "2026-08-01T10:00:00Z",
+                            title: "Artifact: pull_request",
+                            severity: "invented",
+                            refs: { url: "https://example.test/pr/1", unsafe: 42 },
+                        },
+                    ],
+                },
+            })
+        ).toEqual([
+            {
+                itemId: "artifact:a1",
+                kind: "artifact",
+                taskId: "t1",
+                createdAt: "2026-08-01T10:00:00Z",
+                title: "Artifact: pull_request",
+                severity: "info",
+                refs: { url: "https://example.test/pr/1" },
+            },
+        ]);
+    });
+});
+
 describe("RecoderRunsViewModel.refreshSelectedEvents null-vs-empty semantics", () => {
     it("maps a null events read (transport/backend failure) to 'not-connected'", async () => {
         vi.stubGlobal(
             "fetch",
-            eventsFetch({ w1: () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) }) }),
+            eventsFetch({ w1: () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) }) })
         );
         const model = makeModel();
         seed(model, [run({ runId: "r1" })], [workspace({ workspaceId: "w1", runId: "r1" })]);
@@ -260,10 +350,7 @@ describe("RecoderRunsViewModel.refreshSelectedEvents null-vs-empty semantics", (
     });
 
     it("treats a transport throw as not-connected (degrade-safe)", async () => {
-        vi.stubGlobal(
-            "fetch",
-            eventsFetch({ w1: () => Promise.reject(new Error("ECONNREFUSED")) }),
-        );
+        vi.stubGlobal("fetch", eventsFetch({ w1: () => Promise.reject(new Error("ECONNREFUSED")) }));
         const model = makeModel();
         seed(model, [run({ runId: "r1" })], [workspace({ workspaceId: "w1", runId: "r1" })]);
 
@@ -281,20 +368,13 @@ describe("RecoderRunsViewModel SelectedRunStatus machine", () => {
             eventsFetch({
                 w2: () => Promise.resolve(eventsBody([])),
                 w3: () => Promise.resolve(eventsBody([evt("e3")])),
-            }),
+            })
         );
         const model = makeModel();
         seed(
             model,
-            [
-                run({ runId: "r1", taskId: "t9", spaceId: "s9" }),
-                run({ runId: "r2" }),
-                run({ runId: "r3" }),
-            ],
-            [
-                workspace({ workspaceId: "w2", runId: "r2" }),
-                workspace({ workspaceId: "w3", runId: "r3" }),
-            ],
+            [run({ runId: "r1", taskId: "t9", spaceId: "s9" }), run({ runId: "r2" }), run({ runId: "r3" })],
+            [workspace({ workspaceId: "w2", runId: "r2" }), workspace({ workspaceId: "w3", runId: "r3" })]
         );
 
         await model.selectRun("r1");
@@ -311,7 +391,7 @@ describe("RecoderRunsViewModel SelectedRunStatus machine", () => {
     it("never fabricates 'ready' when the events read is disconnected", async () => {
         vi.stubGlobal(
             "fetch",
-            eventsFetch({ w1: () => Promise.resolve({ ok: false, status: 503, json: async () => ({}) }) }),
+            eventsFetch({ w1: () => Promise.resolve({ ok: false, status: 503, json: async () => ({}) }) })
         );
         const model = makeModel();
         seed(model, [run({ runId: "r1" })], [workspace({ workspaceId: "w1", runId: "r1" })]);
@@ -331,16 +411,13 @@ describe("RecoderRunsViewModel stale-fetch guard", () => {
             eventsFetch({
                 w1: () => oldGate.promise,
                 w2: () => Promise.resolve(eventsBody([evt("e2-new")])),
-            }),
+            })
         );
         const model = makeModel();
         seed(
             model,
             [run({ runId: "r1" }), run({ runId: "r2" })],
-            [
-                workspace({ workspaceId: "w1", runId: "r1" }),
-                workspace({ workspaceId: "w2", runId: "r2" }),
-            ],
+            [workspace({ workspaceId: "w1", runId: "r1" }), workspace({ workspaceId: "w2", runId: "r2" })]
         );
 
         globalStore.set(model.selectedRunIdAtom, "r1");

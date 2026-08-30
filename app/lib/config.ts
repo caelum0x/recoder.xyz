@@ -16,10 +16,6 @@ export const config = {
          process.env.NEXT_PUBLIC_SITE_URL ||
          (process.env.NODE_ENV === 'production' ? 'https://recoder.xyz' : 'http://localhost:3000'),
 
-    // Bolt-like IDE app
-    app: process.env.NEXT_PUBLIC_WEB_APP_URL ||
-         (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173'),
-
     // Docker backend API gateway
     api: process.env.NEXT_PUBLIC_API_URL ||
          (process.env.NODE_ENV === 'production' ? 'https://docker.recoder.xyz' : 'http://localhost:3100'),
@@ -276,13 +272,6 @@ export function getWebUrl(path: string = ''): string {
 }
 
 /**
- * Helper to get IDE app URL
- */
-export function getAppUrl(path: string = ''): string {
-  return `${config.urls.app}${path.startsWith('/') ? path : '/' + path}`;
-}
-
-/**
  * Validate required environment variables
  */
 export function validateConfig(): { valid: boolean; errors: string[] } {
@@ -330,7 +319,6 @@ export function getConfigSummary() {
     environment: config.env,
     urls: {
       web: config.urls.web,
-      app: config.urls.app,
       api: config.urls.api,
     },
     features: config.features,

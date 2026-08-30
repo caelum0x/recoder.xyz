@@ -131,14 +131,13 @@ async function resolveConductorTmuxBin(): Promise<string> {
 }
 
 // Fire-and-forget from event handlers; a failed open must never crash the view.
-// A caller-provided (trusted) tmuxBin attaches with that binary alone — the
-// default hub path, unchanged. Without one, the explicit attach-conductor-session
-// affordance sources binary+socket from health so it hits the conductor's server.
+// Canonical Recoder workspaces open the shared authenticated `/terminal` surface
+// regardless of substrate. The cmd/tmux block remains only as a compatibility
+// path for older callers that know a session name but not its durable workspace.
 async function openWorkspaceTerminal(payload: OpenWorkspaceTerminalPayload, tmuxBin?: string): Promise<void> {
     try {
-        if (payload.substrate == "loom") {
-            const workspaceId = payload.workspaceId?.trim() ?? "";
-            if (workspaceId == "") return;
+        const workspaceId = payload.workspaceId?.trim() ?? "";
+        if (workspaceId != "") {
             // Build meta as a Record (not a fresh inline literal) so the custom
             // `recoder:workspaceid` key does not trip MetaType's excess-property
             // check — mirrors buildAttachBlockMeta / workspaceDetailMeta.
@@ -149,6 +148,9 @@ async function openWorkspaceTerminal(payload: OpenWorkspaceTerminalPayload, tmux
             await createBlock({ meta });
             return;
         }
+        // Loom is not attachable by tmux, and the authenticated renderer needs a
+        // workspace id for authorization. Refuse rather than opening the wrong PTY.
+        if (payload.substrate == "loom") return;
         if (tmuxBin != null && tmuxBin.trim() != "") {
             await createBlock({ meta: buildAttachBlockMeta(payload, tmuxBin.trim()) });
             return;

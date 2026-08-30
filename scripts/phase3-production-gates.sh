@@ -17,7 +17,6 @@ PHASE3_MODE="${PHASE3_MODE:-production}"
 DRY_RUN="${DRY_RUN:-false}"
 CONTINUE_ON_FAIL="${CONTINUE_ON_FAIL:-true}"
 BILLING_ACTIONS_ENABLED="${BILLING_ACTIONS_ENABLED:-false}"
-RECODER_WEB_URL="${RECODER_WEB_URL:-https://web.recoder.xyz}"
 BACKEND_URL="${BACKEND_URL:-https://docker.recoder.xyz}"
 BASE_URL="${BASE_URL:-https://recoder.xyz}"
 EXPECTED_QUEUE_BACKEND="${EXPECTED_QUEUE_BACKEND:-redis}"
@@ -191,11 +190,11 @@ else
 fi
 
 if [[ "$PHASE3_MODE" == "production" ]]; then
-  run_step "P3.4 phase1 smoke gate" required network env BILLING_ACTIONS_ENABLED="$BILLING_ACTIONS_ENABLED" RECODER_WEB_URL="$RECODER_WEB_URL" BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT" run smoke:phase1 || [[ $? -eq 2 ]] && true
+  run_step "P3.4 phase1 smoke gate" required network env BILLING_ACTIONS_ENABLED="$BILLING_ACTIONS_ENABLED" BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT" run smoke:phase1 || [[ $? -eq 2 ]] && true
   run_step "P3.5 docker backend queue smoke" required network env BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT/backend" run smoke:queue || [[ $? -eq 2 ]] && true
   run_step "P3.6 static asset smoke" required network env BASE_URL="$BASE_URL" pnpm -C "$REPO_ROOT/app" run smoke:static || [[ $? -eq 2 ]] && true
 else
-  run_step "P3.4 phase1 smoke gate (local-dev advisory)" optional network env BILLING_ACTIONS_ENABLED="$BILLING_ACTIONS_ENABLED" RECODER_WEB_URL="$RECODER_WEB_URL" BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT" run smoke:phase1 || true
+  run_step "P3.4 phase1 smoke gate (local-dev advisory)" optional network env BILLING_ACTIONS_ENABLED="$BILLING_ACTIONS_ENABLED" BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT" run smoke:phase1 || true
   run_step "P3.5 docker backend queue smoke (local-dev advisory)" optional network env BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT/backend" run smoke:queue || true
   run_step "P3.6 static asset smoke (local-dev advisory)" optional network env BASE_URL="$BASE_URL" pnpm -C "$REPO_ROOT/app" run smoke:static || true
 fi
@@ -252,7 +251,7 @@ fi
 if [[ "$A2A_RUNTIME_DIAGNOSTICS_CHECK" == "true" ]]; then
   A2A_RUNTIME_REQUIRED="required"
   if [[ "$AUTO_DEGRADE_A2A_MISSING_ROUTE" == "true" ]]; then
-    runtime_endpoint="${RECODER_A2A_RUNTIME_ENDPOINT:-${RECODER_WEB_URL%/}/api/a2a/runtime}"
+    runtime_endpoint="${RECODER_A2A_RUNTIME_ENDPOINT:-${BACKEND_URL%/}/api/a2a/health}"
     runtime_probe_code="$(curl -s -o /dev/null -w "%{http_code}" "$runtime_endpoint" || echo "000")"
     if [[ "$runtime_probe_code" == "404" || "$runtime_probe_code" == "000" ]]; then
       A2A_RUNTIME_REQUIRED="optional"
@@ -262,36 +261,30 @@ if [[ "$A2A_RUNTIME_DIAGNOSTICS_CHECK" == "true" ]]; then
   fi
 
   if [[ "$PHASE3_MODE" == "production" ]]; then
-    run_step "P3.8 A2A runtime diagnostics endpoint" "$A2A_RUNTIME_REQUIRED" network env RECODER_WEB_URL="$RECODER_WEB_URL" /bin/zsh -lc '
+    run_step "P3.8 A2A runtime diagnostics endpoint" "$A2A_RUNTIME_REQUIRED" network env BACKEND_URL="$BACKEND_URL" /bin/zsh -lc '
       set -euo pipefail
-      endpoint="${RECODER_A2A_RUNTIME_ENDPOINT:-${RECODER_WEB_URL%/}/api/a2a/runtime}"
+      endpoint="${RECODER_A2A_RUNTIME_ENDPOINT:-${BACKEND_URL%/}/api/a2a/health}"
       body="$(curl -fsS "$endpoint")"
       printf "%s" "$body" | python3 -c "
 import json,sys
 data=json.load(sys.stdin)
-if data.get(\"ok\") is not True:
-  raise RuntimeError(\"runtime diagnostics returned ok=false\")
-if data.get(\"persistence\") == \"error\":
-  raise RuntimeError(\"runtime diagnostics persistence=error\")
-connector=data.get(\"connectorStatus\")
-if connector is None:
-  print(\"runtime diagnostics connectorStatus unavailable (accepted in schema-compat mode)\")
-elif isinstance(connector, dict):
-  if connector.get(\"available\") is False:
-    print(\"runtime diagnostics connectorStatus.available=false (advisory)\")
+health=(data.get(\"data\") or {}).get(\"health\") or {}
+if health.get(\"status\") not in (\"up\", \"degraded\"):
+  raise RuntimeError(\"A2A health is not up/degraded\")
 "
       echo "runtime diagnostics endpoint healthy: $endpoint"
     ' || [[ $? -eq 2 ]] && true
   else
-    run_step "P3.8 A2A runtime diagnostics endpoint (local-dev advisory)" optional network env RECODER_WEB_URL="$RECODER_WEB_URL" /bin/zsh -lc '
+    run_step "P3.8 A2A runtime diagnostics endpoint (local-dev advisory)" optional network env BACKEND_URL="$BACKEND_URL" /bin/zsh -lc '
       set -euo pipefail
-      endpoint="${RECODER_A2A_RUNTIME_ENDPOINT:-${RECODER_WEB_URL%/}/api/a2a/runtime}"
+      endpoint="${RECODER_A2A_RUNTIME_ENDPOINT:-${BACKEND_URL%/}/api/a2a/health}"
       body="$(curl -fsS "$endpoint")"
       printf "%s" "$body" | python3 -c "
 import json,sys
 data=json.load(sys.stdin)
-if data.get(\"ok\") is not True:
-  raise RuntimeError(\"runtime diagnostics returned ok=false\")
+health=(data.get(\"data\") or {}).get(\"health\") or {}
+if health.get(\"status\") not in (\"up\", \"degraded\"):
+  raise RuntimeError(\"A2A health is not up/degraded\")
 "
       echo "runtime diagnostics endpoint reachable: $endpoint"
     ' || true

@@ -12,38 +12,27 @@
  * unauthenticated / no PR) and a THROWING facet both fold into a truthful
  * `available:false` + reason — never a fabricated review, never a throw across
  * the readiness read. The RAW DIFF never leaves this adapter: the projection
- * carries only the truncation flag and a CAPPED top-symbols blast radius.
+ * carries only the truncation flag and the already-bounded shared impact ledger.
  */
 import type { Logger } from '../../../shared/logger.js';
+import type { CodeImpactLedger } from '../../../shared/code-impact-ledger.js';
 import type {
   PrReviewEvidenceView,
   PrReviewImpactView,
   PrReviewPort,
 } from '../ports/pr-review.port.js';
 
-/** Cap the top-symbols projection so a huge PR never bloats the readiness payload. */
-export const MAX_TOP_SYMBOLS = 5;
-
 /**
  * The `reviewPR` success payload (structural mirror of the engines shape —
- * `github-module.ts` `reviewPR`; per-symbol readings stay UNKNOWN-shaped).
+ * `github-module.ts` `reviewPR`). The normalized impact ledger is the shared
+ * cross-domain contract; raw per-symbol engine readings are deliberately absent.
  */
 export interface GithubReviewValue {
   readonly pr: unknown;
   readonly diff: string | null;
   readonly diffTruncated: boolean;
   readonly diffUnavailable?: string;
-  readonly impact: {
-    readonly available: boolean;
-    readonly reason?: string;
-    readonly changedSymbols: readonly string[];
-    readonly symbols: readonly {
-      readonly symbol: string;
-      readonly references: unknown;
-      readonly callGraph: unknown;
-      readonly reason?: string;
-    }[];
-  };
+  readonly impact: CodeImpactLedger;
 }
 
 /** Structural slice of the engines `InvokeResult` (no cross-domain value import). */
@@ -65,39 +54,20 @@ export interface GithubPrReviewAdapterDeps {
   readonly logger: Logger;
 }
 
-/**
- * Count the upstream references out of the engine's UNKNOWN-shaped
- * `find_references` reading. Truthful floor: an unreadable shape counts 0 —
- * never a fabricated blast radius.
- */
-export function countReferences(value: unknown): number {
-  if (Array.isArray(value)) return value.length;
-  if (value === null || typeof value !== 'object') return 0;
-  const record = value as Record<string, unknown>;
-  for (const key of ['references', 'results', 'items', 'matches']) {
-    const nested = record[key];
-    if (Array.isArray(nested)) return nested.length;
-  }
-  for (const key of ['count', 'total']) {
-    const nested = record[key];
-    if (typeof nested === 'number' && Number.isFinite(nested) && nested >= 0) {
-      return nested;
-    }
-  }
-  return 0;
-}
-
-/** Project the engine impact annotation into the bounded top-symbols view. */
+/** Copy the shared ledger without leaking the raw per-symbol engine readings. */
 function projectImpact(impact: GithubReviewValue['impact']): PrReviewImpactView {
-  const topSymbols = impact.symbols
-    .map((s) => ({ symbol: s.symbol, references: countReferences(s.references) }))
-    .sort((a, b) => b.references - a.references)
-    .slice(0, MAX_TOP_SYMBOLS);
   return {
     available: impact.available,
     ...(impact.reason ? { reason: impact.reason } : {}),
-    symbolCount: impact.symbols.length,
-    topSymbols,
+    source: impact.source,
+    scope: impact.scope,
+    risk: impact.risk,
+    partial: impact.partial,
+    files: impact.files,
+    tests: impact.tests,
+    processes: impact.processes,
+    consumers: impact.consumers,
+    summary: impact.summary,
   };
 }
 

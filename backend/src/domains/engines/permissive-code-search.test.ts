@@ -11,10 +11,15 @@ import { join } from 'node:path';
 import {
   createPermissiveSymbolSearch,
   createPermissiveSymbolSearchFallback,
+  createPermissiveImpactFallback,
   embeddingPortFrom,
   vectorStorePortFrom,
   type QdrantLikeStore,
 } from './permissive-code-search.js';
+import { buildDependencyGraph, type DependencyGraph } from '@recoder/recodergit';
+import { createRecoderGitRepositoryNetwork } from './recodergit-repository-network.store.js';
+import type { RecoderGitStateKv } from './recodergit-index-state.store.js';
+import { createRecoderGitService } from './recodergit-service.js';
 
 /** A trivial deterministic "embedder": bag-of-chars vector, so similar text ⇒ near. */
 function fakeEmbed(texts: string[]): Promise<number[][]> {
@@ -131,5 +136,156 @@ describe('createPermissiveSymbolSearch', () => {
     expect(await bad.embed(['a', 'b'])).toBeNull();
     const thrower = embeddingPortFrom(async () => { throw new Error('boom'); });
     expect(await thrower.embed(['a'])).toBeNull();
+  });
+
+  it('impact fallback reuses the MIT import graph for both directions and test reach', async () => {
+    await writeFile(join(repo, 'leaf.ts'), 'export const leaf = 1;\n', 'utf8');
+    await writeFile(join(repo, 'middle.ts'), "import { leaf } from './leaf';\nexport const middle = leaf;\n", 'utf8');
+    await writeFile(join(repo, 'top.ts'), "import { middle } from './middle';\nexport const top = middle;\n", 'utf8');
+    await writeFile(join(repo, 'leaf.test.ts'), "import { leaf } from './leaf';\nexport const checked = leaf;\n", 'utf8');
+    const fallback = createPermissiveImpactFallback({ ttlMs: 60_000 });
+    const upstream = await fallback({
+      repoRoot: repo,
+      symbol: 'leaf',
+      filePath: 'leaf.ts',
+      direction: 'upstream',
+      maxDepth: 3,
+      limit: 20,
+      includeTests: true,
+    });
+    expect(upstream).toMatchObject({ engine: 'permissive-mit', scope: 'file-import-graph', direction: 'upstream' });
+    expect(Object.values(upstream?.byDepth ?? {}).flat().map((item) => item.filePath)).toEqual([
+      'leaf.test.ts',
+      'middle.ts',
+      'top.ts',
+    ]);
+
+    const downstream = await fallback({
+      repoRoot: repo,
+      symbol: 'top',
+      filePath: 'top.ts',
+      direction: 'downstream',
+      maxDepth: 3,
+      limit: 20,
+      includeTests: true,
+    });
+    expect(Object.values(downstream?.byDepth ?? {}).flat().map((item) => item.filePath)).toEqual([
+      'middle.ts',
+      'leaf.ts',
+    ]);
+  });
+
+  it('registers indexed repos and returns exact cross-repository consumer files after restart', async () => {
+    const rows = new Map<string, unknown>();
+    const kv: RecoderGitStateKv = {
+      getJson: async <T>(namespace: string, key: string): Promise<T | null> =>
+        (rows.get(`${namespace}:${key}`) as T | undefined) ?? null,
+      setJson: async (namespace, key, value) => void rows.set(`${namespace}:${key}`, value),
+    };
+    const provider = buildDependencyGraph('/repos/provider', ['src/charge.ts'], [], undefined, {
+      symbols: [{ filePath: 'src/charge.ts', name: 'charge', kind: 'function' }],
+      packages: [{
+        ecosystem: 'npm',
+        name: '@acme/payments',
+        root: '',
+        importNames: ['@acme/payments'],
+      }],
+    });
+    const consumer = buildDependencyGraph('/repos/consumer', ['src/checkout.ts'], [], undefined, {
+      externalImports: [{
+        from: 'src/checkout.ts',
+        ecosystem: 'npm',
+        specifier: '@acme/payments/charge',
+      }],
+    });
+    const graphFor = async (root: string): Promise<DependencyGraph> =>
+      root === provider.repoRoot ? provider : consumer;
+
+    const beforeRestart = createPermissiveImpactFallback({
+      repositoryNetwork: createRecoderGitRepositoryNetwork(kv),
+      buildGraph: graphFor,
+    });
+    await beforeRestart.indexRepo?.({
+      repoRoot: consumer.repoRoot,
+      repoId: 'acme__checkout',
+      revision: 'consumer-sha',
+    });
+
+    const afterRestart = createPermissiveImpactFallback({
+      repositoryNetwork: createRecoderGitRepositoryNetwork(kv),
+      buildGraph: graphFor,
+    });
+    const impact = await afterRestart({
+      repoRoot: provider.repoRoot,
+      repoId: 'acme__payments',
+      revision: 'provider-sha',
+      symbol: 'charge',
+      filePath: 'src/charge.ts',
+      direction: 'upstream',
+      maxDepth: 3,
+      limit: 20,
+      includeTests: true,
+    });
+    expect(impact).toMatchObject({
+      scope: 'symbol-call-graph',
+      impactedCount: 1,
+      summary: { cross_repository_files: 1, consumer_repositories: 1 },
+      crossRepository: [{
+        repoId: 'acme__checkout',
+        filePath: 'src/checkout.ts',
+        packageName: '@acme/payments',
+        relationType: 'CONSUMED_BY',
+      }],
+    });
+  });
+
+  it('uses the packaged graph as the indexed product when the donor analyzer is absent', async () => {
+    const rows = new Map<string, unknown>();
+    const kv: RecoderGitStateKv = {
+      getJson: async <T>(namespace: string, key: string): Promise<T | null> =>
+        (rows.get(`${namespace}:${key}`) as T | undefined) ?? null,
+      setJson: async (namespace, key, value) => void rows.set(`${namespace}:${key}`, value),
+    };
+    const provider = buildDependencyGraph('/repos/provider', ['src/charge.ts'], [], undefined, {
+      symbols: [{ filePath: 'src/charge.ts', name: 'charge', kind: 'function' }],
+      packages: [{ ecosystem: 'npm', name: '@acme/payments', root: '', importNames: ['@acme/payments'] }],
+    });
+    const consumer = buildDependencyGraph('/repos/consumer', ['src/checkout.ts'], [], undefined, {
+      externalImports: [{ from: 'src/checkout.ts', ecosystem: 'npm', specifier: '@acme/payments/charge' }],
+    });
+    const network = createRecoderGitRepositoryNetwork(kv);
+    const fallback = createPermissiveImpactFallback({
+      repositoryNetwork: network,
+      buildGraph: async (root) => root === provider.repoRoot ? provider : consumer,
+    });
+    const service = createRecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib: async () => null,
+      exec: async () => ({ stdout: '', stderr: 'donor missing', code: 1 }),
+      git: {
+        headSha: async (root) => root === provider.repoRoot ? 'provider-head' : 'consumer-head',
+        currentBranch: async () => 'main',
+        sourceRevision: async (root) => root === provider.repoRoot ? 'provider-revision' : 'consumer-revision',
+      },
+      fallbackImpact: fallback,
+      logger: { error() {} },
+    });
+
+    const consumerIndex = await service.indexRepo({ repoRoot: consumer.repoRoot, repoId: 'acme__checkout' });
+    const providerIndex = await service.indexRepo({ repoRoot: provider.repoRoot, repoId: 'acme__payments' });
+    expect(consumerIndex).toMatchObject({ enabled: true, state: { status: 'indexed', nodes: 1 } });
+    expect(providerIndex).toMatchObject({ enabled: true, state: { status: 'indexed', nodes: 1 } });
+
+    const impact = await service.codeIntel('find_references', 'acme__payments', {
+      symbol: 'charge',
+      filePath: 'src/charge.ts',
+    });
+    expect(impact).toMatchObject({
+      enabled: true,
+      available: true,
+      result: {
+        crossRepository: [{ repoId: 'acme__checkout', filePath: 'src/checkout.ts' }],
+      },
+    });
   });
 });

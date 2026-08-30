@@ -13,7 +13,7 @@ import {
 export const metadata: Metadata = {
   title: "Download Recoder",
   description:
-    "Download Recoder for macOS (Apple Silicon). Windows and Linux builds haven't shipped yet — join the waitlist. Runs your own Claude Code, Codex, and opencode, coordinated. Your agents, your keys.",
+    "Get the Recoder desktop app for macOS (Apple Silicon). Windows and Linux are on the way. Runs your own Claude Code, Codex, and opencode, coordinated. Your agents, your keys.",
 };
 
 const GETTING_STARTED: { title: string; body: string }[] = [
@@ -59,7 +59,7 @@ export default function Download() {
       <Nav />
       <main className="mx-auto max-w-3xl px-6 py-24 text-center">
         <h1 className="text-balance text-4xl font-semibold tracking-tight md:text-5xl">
-          {isLive ? "Download Recoder" : "Get early access to Recoder"}
+          {isLive ? "Download Recoder" : "Get the Recoder desktop app"}
         </h1>
         <p className="text-balance mx-auto mt-4 max-w-lg text-muted">
           Local-first. It drives the Claude Code and Codex you already have

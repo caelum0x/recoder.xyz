@@ -224,40 +224,6 @@ async function testAgents(browser) {
   }
 }
 
-async function testWeb(browser) {
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
-  const page = await context.newPage();
-
-  const networkErrors = [];
-  page.on("response", (resp) => {
-    if (resp.status() >= 500) {
-      networkErrors.push(`${resp.status()} ${resp.url()}`);
-    }
-  });
-
-  try {
-    const response = await page.goto("https://web.recoder.xyz", {
-      waitUntil: "domcontentloaded",
-      timeout: TIMEOUT,
-    });
-    const status = response?.status();
-    log("Web", status < 500 ? "PASS" : "FAIL", `Loaded (HTTP ${status}), URL: ${page.url()}`);
-    await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
-    await page.screenshot({ path: "web-e2e.png", fullPage: true });
-    log("Web", "PASS", "Screenshot saved: web-e2e.png");
-
-    if (networkErrors.length > 0) {
-      log("Web", "WARN", `${networkErrors.length} 5xx: ${networkErrors.slice(0, 5).join(" | ")}`);
-    } else {
-      log("Web", "PASS", "Zero 5xx network responses");
-    }
-  } catch (err) {
-    log("Web", "FAIL", `Exception: ${err.message}`);
-  } finally {
-    await context.close();
-  }
-}
-
 async function testMainSite(browser) {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
@@ -288,8 +254,6 @@ async function testMainSite(browser) {
   await testAgency(browser);
   console.log("");
   await testAgents(browser);
-  console.log("");
-  await testWeb(browser);
   console.log("");
   await testMainSite(browser);
 

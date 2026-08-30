@@ -77,6 +77,17 @@ export interface RemoteAttachAuditPort {
   }): Promise<{ readonly id: string } | null>;
 }
 
+/** Restart-survivable session storage. Implementations enforce the session TTL. */
+export interface RemoteAttachSessionStore {
+  get(sessionId: string): Promise<RemoteAttachSession | null>;
+  set(session: RemoteAttachSession, ttlMs: number): Promise<void>;
+  delete(sessionId: string): Promise<void>;
+  /** Revoke every live remote session bound to one authenticated owner. */
+  deleteByPrincipal(principalId: string): Promise<number>;
+  /** Truthful persistence capability surfaced to the remote client. */
+  isDurable(): boolean;
+}
+
 /** Injected wiring for {@link RemoteAttachService}. */
 export interface RemoteAttachDeps {
   /** Durable ownership read — re-checked on EVERY call (never trusted from the scope). */
@@ -94,6 +105,8 @@ export interface RemoteAttachDeps {
   readonly deliver?: RemoteAttachDeliverPort;
   /** The steer audit sink; absent ⇒ a delivered steer returns `auditId:null` (truthful). */
   readonly audit?: RemoteAttachAuditPort;
+  /** Durable shared store; absent keeps the legacy process-local behavior. */
+  readonly sessionStore?: RemoteAttachSessionStore;
   /**
    * OPTIONAL taskGroup → workspace-id resolver (for a `taskGroup`-scoped session). Absent
    * ⇒ a `taskGroup` scope cannot be verified and is refused `SERVICE_UNAVAILABLE`.
@@ -203,8 +216,7 @@ export class RemoteAttachService {
   private readonly now: () => number;
   private readonly ttlMs: number;
   private readonly newSessionId: () => string;
-  /** The live session store — an in-memory map keyed by session id. */
-  private readonly sessions = new Map<string, RemoteAttachSession>();
+  private readonly sessionStore: RemoteAttachSessionStore;
 
   constructor(deps: RemoteAttachDeps) {
     this.deps = deps;
@@ -212,6 +224,7 @@ export class RemoteAttachService {
     this.now = deps.now ?? (() => Date.now());
     this.ttlMs = deps.ttlMs && deps.ttlMs > 0 ? deps.ttlMs : DEFAULT_TTL_MS;
     this.newSessionId = deps.newSessionId ?? (() => randomUUID());
+    this.sessionStore = deps.sessionStore ?? new MemoryRemoteAttachSessionStore(this.now);
   }
 
   /**
@@ -252,8 +265,11 @@ export class RemoteAttachService {
       capabilities,
       issuedAt: new Date(issuedAtMs).toISOString(),
       expiresAt: new Date(issuedAtMs + this.ttlMs).toISOString(),
+      durable: this.sessionStore.isDurable(),
     };
-    this.sessions.set(session.sessionId, session);
+    // A durable-store fault aborts minting. Returning an unpersisted token while
+    // claiming cross-device continuity would be a false success.
+    await this.sessionStore.set(session, this.ttlMs);
     this.logger.info('remote-attach session minted', {
       sessionId: session.sessionId,
       principalId: session.principalId,
@@ -261,6 +277,28 @@ export class RemoteAttachService {
       workspaces: resolvedIds.size,
     });
     return session;
+  }
+
+  /**
+   * Describe a live session to its authenticated owner. This is the receiver's
+   * product handshake: it exposes the immutable scope, capability, durability,
+   * and expiry contract without granting any authority beyond the signed-in
+   * principal. The opaque id alone is still never sufficient.
+   */
+  async describe(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<RemoteAttachSession> {
+    return this.lookup(input.sessionId, input.principal);
+  }
+
+  /** Resolve the session's current, still-owned monitor scope for live fan-out. */
+  async workspaceIds(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<readonly string[]> {
+    const session = await this.authorize(input.sessionId, input.principal, 'monitor');
+    return [...await this.reverifyOwnedScope(session, input.principal)].sort();
   }
 
   /**
@@ -274,7 +312,7 @@ export class RemoteAttachService {
     readonly sessionId: string;
     readonly principal: Principal;
   }): Promise<StatusBoardSnapshot> {
-    const session = this.authorize(input.sessionId, input.principal, 'monitor');
+    const session = await this.authorize(input.sessionId, input.principal, 'monitor');
     const allowed = await this.reverifyOwnedScope(session, input.principal);
 
     // Read the caller's OWN board (owner scope pins to the caller), narrowed by the
@@ -300,7 +338,7 @@ export class RemoteAttachService {
     readonly workspaceId: string;
     readonly input: string;
   }): Promise<RemoteSteerResult> {
-    const session = this.authorize(input.sessionId, input.principal, 'steer');
+    const session = await this.authorize(input.sessionId, input.principal, 'steer');
 
     const workspaceId = input.workspaceId?.trim();
     if (!workspaceId) {
@@ -398,6 +436,32 @@ export class RemoteAttachService {
     return { status: 'delivered', workspaceId, auditId };
   }
 
+  /** Explicitly revoke a session owned by the authenticated caller. */
+  async revoke(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<void> {
+    const session = await this.lookup(input.sessionId, input.principal);
+    await this.sessionStore.delete(session.sessionId);
+    this.logger.info('remote-attach session revoked', {
+      sessionId: session.sessionId,
+      principalId: session.principalId,
+    });
+  }
+
+  /** Global sign-out hook: revoke every remote session owned by this principal. */
+  async revokeAll(input: { readonly principal: Principal }): Promise<number> {
+    if (!input.principal || !input.principal.userId?.trim()) {
+      throw createError(ErrorCode.AUTH_REQUIRED, 'remote-attach: an authenticated caller is required');
+    }
+    const revoked = await this.sessionStore.deleteByPrincipal(input.principal.userId);
+    this.logger.info('remote-attach sessions revoked for principal', {
+      principalId: input.principal.userId,
+      revoked,
+    });
+    return revoked;
+  }
+
   // --- internals -------------------------------------------------------------
 
   /**
@@ -405,16 +469,29 @@ export class RemoteAttachService {
    * (wrong-principal ⇒ 403), refuse an expired session, and require the capability. The
    * session id is only a lookup key — authority always comes from the live `principal`.
    */
-  private authorize(
+  private async authorize(
     sessionId: string,
     principal: Principal,
     capability: RemoteAttachCapability
-  ): RemoteAttachSession {
+  ): Promise<RemoteAttachSession> {
+    const session = await this.lookup(sessionId, principal);
+    // CAPABILITY: cannot be escalated — a monitor-only session can never steer.
+    if (!session.capabilities.includes(capability)) {
+      deny(`session lacks the '${capability}' capability`);
+    }
+    return session;
+  }
+
+  /** Resolve a live session and re-bind it to the authenticated caller. */
+  private async lookup(
+    sessionId: string,
+    principal: Principal
+  ): Promise<RemoteAttachSession> {
     if (!principal || !principal.userId?.trim()) {
       throw createError(ErrorCode.AUTH_REQUIRED, 'remote-attach: an authenticated caller is required');
     }
     const id = typeof sessionId === 'string' ? sessionId.trim() : '';
-    const session = id ? this.sessions.get(id) : undefined;
+    const session = id ? await this.sessionStore.get(id) : null;
     // An unknown session is refused as an authz failure (never disclose existence).
     if (!session) deny('unknown or expired session');
     // WRONG-PRINCIPAL: the caller must BE the owner the session was minted for.
@@ -423,12 +500,8 @@ export class RemoteAttachService {
     }
     // EXPIRED: a stale token grants nothing.
     if (this.now() >= Date.parse(session.expiresAt)) {
-      this.sessions.delete(session.sessionId);
+      await this.sessionStore.delete(session.sessionId);
       deny('session has expired');
-    }
-    // CAPABILITY: cannot be escalated — a monitor-only session can never steer.
-    if (!session.capabilities.includes(capability)) {
-      deny(`session lacks the '${capability}' capability`);
     }
     return session;
   }
@@ -507,6 +580,44 @@ export class RemoteAttachService {
       ...(workspaceIds.length > 0 ? { workspaceIds } : {}),
       ...(taskGroup ? { taskGroup } : {}),
     };
+  }
+}
+
+/** Legacy/degraded process-local store used only when no persistence seam is wired. */
+class MemoryRemoteAttachSessionStore implements RemoteAttachSessionStore {
+  private readonly sessions = new Map<string, RemoteAttachSession>();
+
+  constructor(private readonly now: () => number) {}
+
+  async get(sessionId: string): Promise<RemoteAttachSession | null> {
+    const session = this.sessions.get(sessionId) ?? null;
+    if (session && this.now() >= Date.parse(session.expiresAt)) {
+      this.sessions.delete(sessionId);
+      return null;
+    }
+    return session;
+  }
+
+  async set(session: RemoteAttachSession): Promise<void> {
+    this.sessions.set(session.sessionId, session);
+  }
+
+  async delete(sessionId: string): Promise<void> {
+    this.sessions.delete(sessionId);
+  }
+
+  async deleteByPrincipal(principalId: string): Promise<number> {
+    let deleted = 0;
+    for (const [sessionId, session] of this.sessions) {
+      if (session.principalId !== principalId) continue;
+      this.sessions.delete(sessionId);
+      deleted += 1;
+    }
+    return deleted;
+  }
+
+  isDurable(): boolean {
+    return false;
   }
 }
 

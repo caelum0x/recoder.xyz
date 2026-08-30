@@ -173,7 +173,7 @@ function authorize(headers: Headers): NextResponse | null {
   const providedBytes = Buffer.from(provided, "utf8");
   if (
     expectedBytes.length !== providedBytes.length ||
-    !timingSafeEqual(expectedBytes, providedBytes)
+    !timingSafeEqual(new Uint8Array(expectedBytes), new Uint8Array(providedBytes))
   ) {
     return jsonError("Unauthorized.", 401);
   }

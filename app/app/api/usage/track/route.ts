@@ -114,13 +114,10 @@ export async function POST(request: NextRequest) {
     let detectedPlatform = platform;
     if (!platform || platform === 'web') {
       const userAgent = request.headers.get('user-agent') || '';
-      const referer = request.headers.get('referer') || '';
 
       // Check if request is from CLI
       if (userAgent.includes('recoder-cli') || userAgent.includes('recoder-code')) {
         detectedPlatform = 'cli';
-      } else if (referer.includes('web.recoder.xyz') || referer.includes('localhost:5173')) {
-        detectedPlatform = 'web';
       }
     }
 

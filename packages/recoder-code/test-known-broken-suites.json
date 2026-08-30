@@ -6,7 +6,6 @@
   "packages/cli/src/config/extension.test.ts",
   "packages/cli/src/config/settings.test.ts",
   "packages/cli/src/services/FileCommandLoader.test.ts",
-  "packages/cli/src/services/RecoderWebService.test.ts",
   "packages/cli/src/services/prompt-processors/atFileProcessor.test.ts",
   "packages/cli/src/ui/commands/bugCommand.test.ts",
   "packages/cli/src/ui/commands/docsCommand.test.ts",

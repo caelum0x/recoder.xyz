@@ -115,7 +115,10 @@ describe('tmux_worktree substrate adapter', () => {
       c => c.bin === 'tmux' && c.args[0] === 'new-session'
     );
     expect(newSession?.args).toContain('recoder-ws_abc123');
-    expect(newSession?.args).toContain('claude --headless');
+    const launchedCommand = newSession?.args.at(-1) ?? '';
+    expect(launchedCommand).toContain('( claude --headless )');
+    expect(launchedCommand).toContain('.run-state/recoder-ws_abc123.exit');
+    expect(launchedCommand).toContain('exit "$__recoder_exit_code"');
     // Injected env is forwarded on the new-session exec (never read from process.env).
     expect(newSession?.options?.env).toEqual({ RECODER_A2A_URL: 'http://x' });
   });
@@ -131,6 +134,31 @@ describe('tmux_worktree substrate adapter', () => {
     expect(
       calls.some(c => c.bin === 'tmux' && c.args[0] === 'new-session')
     ).toBe(false);
+  });
+
+  it('refuses a false-zero new-session when the named tmux session never materializes', async () => {
+    const { exec, calls } = makeExec({
+      // macOS tmux can return zero from new-session after a denied socket create;
+      // the authoritative follow-up probe then cannot find the session.
+      fail: (bin, args) => bin === 'tmux' && args[0] === 'has-session',
+    });
+    const sub = createTmuxSubstrate({ config: CONFIG, exec });
+
+    await expect(sub.launch(LAUNCH_INPUT)).rejects.toThrow(
+      /did not materialize after launch/
+    );
+    expect(
+      calls.some(c => c.bin === 'tmux' && c.args[0] === 'new-session')
+    ).toBe(true);
+    expect(
+      calls.some(
+        c =>
+          c.bin === 'git' &&
+          c.args.includes('worktree') &&
+          c.args.includes('remove') &&
+          c.args.includes('--force')
+      )
+    ).toBe(true);
   });
 
   it('capture strips the dead-pane banner; returns null when the handle is gone', async () => {
@@ -171,6 +199,51 @@ describe('tmux_worktree substrate adapter', () => {
     expect(await sub.exitCode!(handle)).toBeUndefined(); // alive → unknown, never 0
     paneDead.value = '1';
     expect(await sub.exitCode!(handle)).toBe(3); // dead → truthful code
+  });
+
+  it('recovers the real exit code from the durable marker after tmux already vanished', async () => {
+    const root = mkdtempSync(nodePath.join(os.tmpdir(), 'recoder-tmux-exit-'));
+    try {
+      const stateDir = nodePath.join(root, '.run-state');
+      mkdirSync(stateDir, { recursive: true });
+      writeFileSync(
+        nodePath.join(stateDir, 'recoder-ws_fast.exit'),
+        '17\n'
+      );
+      const { exec } = makeExec({
+        fail: (bin, args) => bin === 'tmux' && args[0] === 'has-session',
+      });
+      const sub = createTmuxSubstrate({
+        config: { tmuxBin: null, worktreeRoot: root },
+        exec,
+      });
+      const handle = {
+        ref: 'ws_fast',
+        sessionName: 'recoder-ws_fast',
+      };
+
+      expect(await sub.alive(handle)).toBe(false);
+      expect(await sub.exitCode!(handle)).toBe(17);
+    } finally {
+      fsRmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('never fabricates zero when tmux returns an invalid dead-pane status', async () => {
+    const { exec } = makeExec({
+      stdout: (bin, args) => {
+        if (args.includes('#{pane_dead}')) return '1';
+        if (args.includes('#{pane_dead_status}')) return 'not-a-status';
+        return '';
+      },
+    });
+    const sub = createTmuxSubstrate({ config: CONFIG, exec });
+    expect(
+      await sub.exitCode!({
+        ref: 'ws_invalid',
+        sessionName: 'recoder-ws_invalid',
+      })
+    ).toBeUndefined();
   });
 
   // --- Git-hygiene safety (absorb herdr #6, clean-room) -------------------------

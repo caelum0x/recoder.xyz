@@ -25,6 +25,7 @@ import type { PrincipalService } from './principal.service.js';
 import type { AuthMiddleware } from './middleware/authenticate.middleware.js';
 import type { AuthUserReader, IdentityReadModel } from './repositories/identity.repository.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
+import type { Principal } from './types.js';
 
 /** Dependencies injected by bootstrap. */
 export interface IdentityModuleDeps {
@@ -49,6 +50,8 @@ export interface IdentityModuleDeps {
    * identity lookups degrade to `null` (truthful, never faked).
    */
   readonly authUserReader?: AuthUserReader;
+  /** Runs before Better Auth invalidates a signed-in browser session. */
+  readonly onSignOut?: (principal: Principal) => Promise<void>;
 }
 
 /** The public surface every other domain consumes. */

@@ -1,7 +1,7 @@
 /**
  * All Settings API
  * GET - Fetch all settings in one request
- * Useful for settings dashboard and recoder-web initialization
+ * Useful for the settings dashboard and client initialization.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
