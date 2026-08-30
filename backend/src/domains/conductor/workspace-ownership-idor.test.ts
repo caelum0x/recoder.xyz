@@ -57,11 +57,13 @@ function makeModule(rows: WorkspaceRow[]): {
   steered: string[];
   stopped: string[];
   merged: string[];
+  feedback: string[];
 } {
   const byId = new Map(rows.map((r) => [r.workspaceId, r]));
   const steered: string[] = [];
   const stopped: string[] = [];
   const merged: string[] = [];
+  const feedback: string[] = [];
   const module = {
     async getWorkspace(id: string) {
       return byId.get(id) ?? null;
@@ -91,8 +93,12 @@ function makeModule(rows: WorkspaceRow[]): {
       merged.push(id);
       return { ok: true, verdict: allowVerdict, value: { merged: true } };
     },
+    async sendBlockerFeedback(id: string) {
+      feedback.push(id);
+      return { ok: true, verdict: allowVerdict, value: { delivery: 'steer', blockers: ['x'] } };
+    },
   } as unknown as ConductorModule;
-  return { module, steered, stopped, merged };
+  return { module, steered, stopped, merged, feedback };
 }
 
 interface Harness {
@@ -218,7 +224,7 @@ describe('workspace-access predicate', () => {
 
 describe('conductor cross-tenant IDOR guard', () => {
   it('(a) user B gets an identical 404 (never a 403 oracle) on user A workspace read/writes', async () => {
-    const { module, steered, stopped, merged } = makeModule(ROWS);
+    const { module, steered, stopped, merged, feedback } = makeModule(ROWS);
     const h = await serve(module, { soloMode: false });
     try {
       h.setPrincipal(principal('user_b'));
@@ -237,10 +243,18 @@ describe('conductor cross-tenant IDOR guard', () => {
       expect(stop.status).toBe(404);
       const merge = await request(h.base, 'POST', '/api/conductor/workspaces/ws_a/merge', {});
       expect(merge.status).toBe(404);
+      const blockerFeedback = await request(
+        h.base,
+        'POST',
+        '/api/conductor/workspaces/ws_a/blocker-feedback',
+        {},
+      );
+      expect(blockerFeedback.status).toBe(404);
       // The guard blocked BEFORE any module mutation ran.
       expect(steered).toHaveLength(0);
       expect(stopped).toHaveLength(0);
       expect(merged).toHaveLength(0);
+      expect(feedback).toHaveLength(0);
     } finally {
       await h.close();
     }

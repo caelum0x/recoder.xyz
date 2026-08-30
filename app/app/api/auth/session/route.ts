@@ -3,7 +3,7 @@
  * GET /api/auth/session
  *
  * Returns the current user session if authenticated
- * Used by recoder-web to verify cross-subdomain sessions
+ * Used by Recoder clients to verify cross-subdomain sessions.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

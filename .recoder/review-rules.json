@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "backend-types",
+      "level": "required",
+      "text": "Backend changes must preserve the Recoder backend type contract.",
+      "check": "Backend types"
+    },
+    {
+      "id": "wave-types",
+      "level": "required",
+      "text": "Wave changes must preserve the desktop renderer type contract.",
+      "check": "Wave types"
+    }
+  ]
+}

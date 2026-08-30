@@ -1,18 +1,23 @@
 /**
  * The FIRST-PARTY built-in skill manifest — `recoder.workspace`, a signed,
  * capability-typed, READ-ONLY worktree-introspection skill. It is the reference
- * `recoder.skill.json` and the first skill a deployment can enable: its two actions
+ * `recoder.skill.json` and the first skill a deployment can enable: its four actions
  * map 1:1 to the built-in read-only capability handlers
  * ({@link builtinReadOnlyWorkspaceCapabilities}).
  *
  * This module exports only the UNSIGNED body (id/version/publisherKeyId/actions).
- * The signature is stamped at DEPLOY time by the publisher's private key
- * ({@link signManifest}) and verified at load by the trusted PUBLIC key — the
- * private key never lives in the repo. `publisherKeyId` names the trust anchor a
- * deployment must resolve to a real ed25519 public key (config/env allow-list).
+ * The committed signature is stamped outside the repository by the publisher's
+ * private key and verified at load by the trusted PUBLIC key — the private key
+ * never lives in the repo. `publisherKeyId` names the trust anchor resolved by
+ * the built-in or operator-managed publisher registry.
  */
 import type { SkillManifest } from './skill.types.js';
-import { CAP_WORKSPACE_READ_FILE, CAP_WORKSPACE_LIST_FILES } from './skill-capabilities.js';
+import {
+  CAP_WORKSPACE_LIST_FILES,
+  CAP_WORKSPACE_READ_DIFF,
+  CAP_WORKSPACE_READ_FILE,
+  CAP_WORKSPACE_SEARCH_TEXT,
+} from './skill-capabilities.js';
 
 /** The publisher key id the first-party manifest is signed under (trust-anchor name). */
 export const RECODER_BUILTIN_PUBLISHER_KEY_ID = 'recoder-builtin';
@@ -24,7 +29,7 @@ export const RECODER_BUILTIN_PUBLISHER_KEY_ID = 'recoder-builtin';
  * by the publisher and used only to re-sign the manifest when it changes.
  */
 export const RECODER_BUILTIN_PUBLIC_KEY_HEX =
-  '32dcfc3e305a1100790c012fd64fc5641c02a3bab168e49c8da8bd1f637497ba';
+  'ebb2c141b35d79e51be798c5910d2119c9f6bc8c6f2d84faeab0ed98c4756b52';
 
 /**
  * The committed ed25519 signature over the first-party manifest's canonical body
@@ -32,11 +37,11 @@ export const RECODER_BUILTIN_PUBLIC_KEY_HEX =
  * verifies against {@link RECODER_BUILTIN_PUBLIC_KEY_HEX}; a locked test proves it.
  */
 export const RECODER_WORKSPACE_SIGNATURE =
-  'fa79cde3774666c25baeb15558cf2702c63619dca8ba5438d9228340081e1bf26aad575f7f39ea89f504852e458d96bd05065979c46edc8fa37c636781b32803';
+  'e9a944bdcaf0bc2ed317dfb171ca7b00172b72f4a91b0a9371b36454627b0bb60895627a4239de18bfe87ec8d1f988c39cd0b06ee5b827eae11a1f0d7b9e4d05';
 
 /** The pinned id + version of the first-party workspace skill. */
 export const RECODER_WORKSPACE_SKILL_ID = 'recoder.workspace';
-export const RECODER_WORKSPACE_SKILL_VERSION = '1.0.0';
+export const RECODER_WORKSPACE_SKILL_VERSION = '1.1.0';
 
 /**
  * The UNSIGNED first-party manifest body. Stamp a signature with the publisher's
@@ -60,6 +65,26 @@ export function recoderWorkspaceSkillBody(): Omit<SkillManifest, 'signature'> {
         title: 'List entries under a directory inside the workspace',
         paramsSchema: { dir: { type: 'string' } },
         requiredCapabilities: [CAP_WORKSPACE_LIST_FILES],
+      },
+      {
+        id: 'search_text',
+        title: 'Search workspace text with file and line evidence',
+        paramsSchema: {
+          query: { type: 'string', required: true },
+          dir: { type: 'string' },
+          caseSensitive: { type: 'boolean' },
+          maxResults: { type: 'number' },
+        },
+        requiredCapabilities: [CAP_WORKSPACE_SEARCH_TEXT],
+      },
+      {
+        id: 'read_diff',
+        title: 'Read the working or staged Git diff',
+        paramsSchema: {
+          path: { type: 'string' },
+          scope: { type: 'string', enum: ['working', 'staged'] },
+        },
+        requiredCapabilities: [CAP_WORKSPACE_READ_DIFF],
       },
     ],
   };

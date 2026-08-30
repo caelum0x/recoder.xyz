@@ -3,7 +3,7 @@
  * #3). When a fanned Loom pane goes native-Blocked, this service RESOLVES the
  * blocking question from Recoder-only sources and, by DEFAULT, ESCALATES it through
  * the governance approval gate. An auto-answer is a narrow, opt-in exception -- it
- * fires ONLY when the caller's policy allows it AND a high-confidence, low-risk,
+ * fires ONLY when the workspace's policy allows it AND a high-confidence, low-risk,
  * evidenced answer exists AND the deterministic policy gate returns `allow`.
  *
  * THIN COMPOSITION over already-shipped ops -- every heavy op is an INJECTED SEAM
@@ -178,7 +178,7 @@ export interface SwarmUnblockDeps {
 
 // --- input / result ----------------------------------------------------------
 
-/** The caller's unblock policy -- escalate-by-default; auto-answer is opt-in. */
+/** The workspace's unblock policy -- escalate-by-default; auto-answer is opt-in. */
 export interface SwarmUnblockPolicy {
   /** When `true`, an auto-answer MAY fire (still gated). Default posture: escalate. */
   readonly autoAnswer: boolean;

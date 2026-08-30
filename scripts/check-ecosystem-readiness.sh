@@ -218,25 +218,13 @@ fi
 
 # --------------------------------------------------
 echo ""
-echo "=== Track 2: Main Branch (app + recoder-web + backend) ==="
+echo "=== Track 2: Main Branch (app + backend) ==="
 echo ""
 
-WEB_ENV="$REPO_ROOT/recoder-web/.env.local"
-WEB_ENV_ALT="$REPO_ROOT/recoder-web/.env"
 DOCKER_ENV="$REPO_ROOT/backend/.env"
-
-if [[ -f "$WEB_ENV" ]]; then
-  WEB_ACTIVE="$WEB_ENV"
-elif [[ -f "$WEB_ENV_ALT" ]]; then
-  WEB_ACTIVE="$WEB_ENV_ALT"
-else
-  WEB_ACTIVE=""
-  warn "Main branch — No recoder-web env file found (retired surface optional)"
-fi
 
 ISK_FILES=()
 [[ -n "$APP_ACTIVE" ]] && ISK_FILES+=("$APP_ACTIVE")
-[[ -n "$WEB_ACTIVE" ]] && ISK_FILES+=("$WEB_ACTIVE")
 [[ -f "$DOCKER_ENV" ]] && ISK_FILES+=("$DOCKER_ENV")
 if [[ "${#ISK_FILES[@]}" -ge 2 ]]; then
   check_env_match "INTERNAL_SERVICE_KEY" "Service auth" "${ISK_FILES[@]}"
@@ -265,8 +253,6 @@ elif [[ -n "$AGENCY_ACTIVE" ]]; then
   check_env_var_optional_in_local "$AGENCY_ACTIVE" "POLAR_PRO_PRODUCT_ID" "Agency billing"
   check_env_var_optional_in_local "$AGENCY_ACTIVE" "POLAR_WEBHOOK_SECRET" "Agency billing"
   check_env_var_optional_in_local "$AGENCY_ACTIVE" "POLAR_ORGANIZATION_ID" "Agency billing"
-  check_env_var "$AGENCY_ACTIVE" "RECODER_WEB_URL" "Agency integration"
-  check_env_var_optional_in_local "$AGENCY_ACTIVE" "RECODER_WEB_API_KEY" "Agency integration"
   check_env_var "$AGENCY_ACTIVE" "COOKIE_SECRET" "Agency security"
   check_env_var "$AGENCY_ACTIVE" "TOKEN_ENCRYPTION_KEY" "Agency security"
 fi
@@ -343,7 +329,6 @@ else
 fi
 
 if [[ -n "$OPENCLAW_ACTIVE_ENV" ]]; then
-  check_env_var_optional_in_local "$OPENCLAW_ACTIVE_ENV" "RECODER_WEB_URL" "OpenClaw Recoder"
   check_env_var_optional_in_local "$OPENCLAW_ACTIVE_ENV" "RECODER_DOCKER_URL" "OpenClaw Recoder"
   check_env_var_optional_in_local "$OPENCLAW_ACTIVE_ENV" "RECODER_API_URL" "OpenClaw Recoder"
 fi

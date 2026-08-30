@@ -1,11 +1,17 @@
 # Loom to Recoder Integration Specification
 
-Status: 2026-08-15. Source engine:
+Status: 2026-08-30. Source engine:
 `apps/desktop/engines/loom` (Apache-2.0, attribution preserved in `NOTICE`).
 
-The integration goal is not “all Loom features in the desktop.” Loom is the default
-headless execution substrate. Recoder consumes the minimum governed capability set
-needed for isolated agent work, live control, review, convergence, and recovery.
+Recoder follows the same foundation strategy as Cursor-on-VS Code: the desktop is a
+Wave Terminal fork, and the default headless execution substrate is Loom, Recoder's
+vendored and rebranded HERDR engine. Recoder owns the differentiated convergence,
+governance, memory, and evidence layer above those foundations.
+
+The integration goal is not “all Loom features in the desktop.” It is to rely on Loom
+for agent-aware terminal execution and Wave for desktop terminal interaction, while
+consuming the minimum governed capability set needed for isolated agent work, live
+control, review, convergence, and recovery.
 
 ## 1. Engine contract
 
@@ -26,27 +32,36 @@ The shared client and narrow protocol types live under
 
 ## 2. Production mapping
 
-| Recoder port/action | Loom method | Contract |
-|---|---|---|
-| availability | `ping` | Require protocol 20; any failure is unavailable. |
-| launch isolation | `worktree.create` | Loom creates branch/worktree/root pane. |
-| launch runtime | `agent.start` | Start the chosen native agent kind in the root pane. |
-| persisted handle | response `root_pane.pane_id` | Agent verbs accept pane id/name, not internal terminal id. |
-| capture | `agent.read` | Recent stripped output feeds the poll tailer; this is not a PTY byte stream. |
-| liveness/exit state | `agent.get` | Done maps to success; live remains unknown, never fabricated success. |
-| continue/submit steer | `agent.prompt` | Deliver into the existing agent session. |
-| non-submit steer | `pane.send_text` | Send text without Enter. |
-| attention/status | `session.snapshot`, `events.subscribe` | Attribute panes through Recoder workspace records; unknown panes are dropped, not guessed. |
-| teardown | `worktree.remove { force:true }` | Best effort; removes Loom worktree and live panes. |
-| diff/review/merge | host `git` | Loom has no authority over Recoder's review/merge truth. |
+| Recoder port/action   | Loom method                            | Contract                                                                                   |
+| --------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| availability          | `ping`                                 | Require protocol 20; any failure is unavailable.                                           |
+| launch isolation      | `worktree.create`                      | Loom creates branch/worktree/root pane.                                                    |
+| launch runtime        | `agent.start`                          | Start the chosen native agent kind in the root pane.                                       |
+| persisted handle      | response `root_pane.pane_id`           | Agent verbs accept pane id/name, not internal terminal id.                                 |
+| capture               | `agent.read`                           | Recent stripped output feeds the poll tailer; this is not a PTY byte stream.               |
+| liveness/exit state   | `agent.get`                            | Done maps to success; live remains unknown, never fabricated success.                      |
+| continue/submit steer | `agent.prompt`                         | Deliver into the existing agent session.                                                   |
+| non-submit steer      | `pane.send_text`                       | Send text without Enter.                                                                   |
+| attention/status      | `session.snapshot`, `events.subscribe` | Attribute panes through Recoder workspace records; unknown panes are dropped, not guessed. |
+| teardown              | `worktree.remove { force:true }`       | Best effort; removes Loom worktree and live panes.                                         |
+| diff/review/merge     | host `git`                             | Loom has no authority over Recoder's review/merge truth.                                   |
 
 `agent.query`, `agent.wait`, and `worktree.status` are typed extension points but are
 not required by the core composition. Every other Loom method is unadopted unless the
 product roadmap explicitly says otherwise.
 
-The missing core edge is `recoder-wtlm`: Loom needs a backend-owned bidirectional
-terminal adapter compatible with Wave rendering, backpressure, replay, and governed
-input. React must not connect to Loom's private TUI socket.
+The `recoder-wtlm` core edge is shipped:
+
+- Loom exposes the bounded public `pane.terminal.stream` renderer on its owner-only
+  control socket; Recoder never connects React to Loom's private TUI socket.
+- `LoomSocketClient.terminalStream` translates the acknowledged NDJSON stream into
+  typed ANSI frames and explicit resize/scroll/control messages.
+- `TerminalStreamService` resolves and authorizes the workspace, attaches the live
+  pane, and exposes it on the session-authenticated `/terminal` websocket.
+- The Wave block `recoder-loom-terminal` renders those frames with xterm and sends
+  viewport changes back through the backend.
+- Keyboard input does not use the renderer's direct input path. It travels through
+  Conductor's governed steer router and then the workspace's canonical substrate.
 
 ## 3. Lifecycle and packaging
 
@@ -88,10 +103,15 @@ the audit boundary without improving the core product.
 
 ## 6. Runtime coverage
 
-Loom natively recognizes Claude, Codex, Cursor, opencode, pi, and Gemini. A runtime
-without a Loom agent kind must not be presented as having native Loom status/resume.
-Recoder may add an explicit raw-pane adapter later, but it must report the reduced
-capability set and remain governed by the same workspace lifecycle.
+Loom carries native agent kinds and detection for the upstream HERDR set plus
+Recoder-specific launch kinds. The Recoder sync now includes Qwen Code process
+detection through npm/node wrappers, an evidence-backed screen manifest, and native
+session resume planning. Recoder Code and Crush remain launchable native kinds but
+do not claim screen-manifest status detection until real pane evidence supports it.
+
+A runtime without a Loom agent kind must not be presented as having native Loom
+status/resume. An eventual raw-pane adapter must report the reduced capability set
+and remain governed by the same workspace lifecycle.
 
 ## 7. Expansion gates
 
@@ -115,3 +135,32 @@ capability set and remain governed by the same workspace lifecycle.
 - expose arbitrary plugin argv outside governance;
 - make Loom layout compete with Wave layout;
 - claim full Loom support from vendored source presence alone.
+
+## 9. OSS foundation gates
+
+“Built on HERDR and Wave” is a testable ownership contract, not a branding claim:
+
+1. **Wave is the shell.** New desktop layout, blocks, terminal rendering, input, and
+   window behavior extend the Wave fork unless a documented incompatibility prevents
+   it. Recoder does not build a second desktop shell beside Wave.
+2. **Loom/HERDR is the runtime.** New PTY, pane, worktree-process, agent-detection,
+   restore, and terminal-stream behavior extends Loom unless it belongs to policy or
+   durable product truth. Recoder does not build a parallel agent multiplexer beside
+   Loom.
+3. **Recoder is the convergence layer.** Workspace identity, policy, approvals,
+   memory, review, compatible-set comparison, synthesis, evidence, and merge remain
+   Recoder-owned and must not be delegated to either foundation.
+4. **Every cross-layer edge is executable.** Protocol types, authorization, failure
+   behavior, and at least one contract test are required before a capability is called
+   integrated.
+5. **Upstream drift is explicit.** `RECODER-VENDOR.md` records the imported tag and
+   local patch policy. Each upstream release is reviewed for substrate fixes; UI,
+   marketplace, or governance features are absorbed only when they preserve the
+   ownership split above.
+
+The imported Loom vendor baseline remains HERDR v0.8.0. The 2026-08-30 review has
+selectively absorbed v0.8.2's configurable 120×40 headless geometry, blocked-prompt
+safety, Copilot focus-before-submit, and Qwen detection/restore changes. Recoder is
+foundation-complete for the capabilities above but does not claim byte-for-byte
+v0.8.2 parity; the remaining upstream delta is still classified feature by feature
+under the ownership gates in this document.

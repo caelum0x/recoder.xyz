@@ -14,9 +14,10 @@
  *  - the actor is deny-biased (no file/network/shell/git/pr/secrets rights), so an
  *    un-ruled action defaults to `allow` ONLY for a benign, capability-typed call.
  */
-import type { AgentProfile } from '@recoder/agent-os';
+import type { AgentProfile, WorkspacePolicyProfile } from '@recoder/agent-os';
 import type { PolicyInput } from '@recoder/agent-policy';
 import type { SkillAction } from './skill.types.js';
+import { defaultWorkspacePolicyProfile, policyToolRules } from '../policy/workspace-policy.js';
 
 /** The fully-qualified policy tool name for a skill action (stable, greppable). */
 export function qualifiedSkillToolName(skillId: string, actionId: string): string {
@@ -28,6 +29,8 @@ export function buildSkillActor(
   actorId: string,
   action: SkillAction,
   workspace: string,
+  profile: WorkspacePolicyProfile = defaultWorkspacePolicyProfile(),
+  toolName = qualifiedSkillToolName('workspace', action.id),
 ): AgentProfile {
   const now = new Date().toISOString();
   return {
@@ -48,7 +51,7 @@ export function buildSkillActor(
     permissions: {
       defaultFileEffect: 'deny',
       pathRules: [],
-      toolRules: [],
+      toolRules: policyToolRules(profile, toolName),
       allowNetwork: false,
       allowShell: false,
       // No standing high-risk rights — those must be governed/approved.
@@ -76,12 +79,21 @@ export function buildSkillPolicyInput(input: {
   readonly action: SkillAction;
   readonly workspace: string;
   readonly now?: string;
+  readonly profile?: WorkspacePolicyProfile;
 }): PolicyInput {
+  const toolName = qualifiedSkillToolName(input.skillId, input.action.id);
+  const actor = buildSkillActor(
+    input.actorId,
+    input.action,
+    input.workspace,
+    input.profile ?? defaultWorkspacePolicyProfile(),
+    toolName,
+  );
   return {
-    actor: buildSkillActor(input.actorId, input.action, input.workspace),
+    actor,
     action: 'tool.call',
     target: {
-      toolName: qualifiedSkillToolName(input.skillId, input.action.id),
+      toolName,
       environment: input.workspace,
     },
     ...(input.now ? { now: input.now } : {}),

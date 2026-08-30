@@ -40,12 +40,20 @@
  */
 
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
-import { existsSync, mkdirSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync } from 'node:fs';
+import { lstat, readlink } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { SOURCE_EXTENSIONS } from '@recoder/recodergit';
 import { assertEgressAllowedResolved, type HostResolver } from '../../shared/egress-guard.js';
-import type { PermissiveSymbolHit } from './permissive-code-search.js';
+import {
+  legacyRepoId,
+  parseRepositoryRemote,
+  repoIdFromRemote,
+} from '../../shared/repo-identity.js';
+import type { PermissiveImpactFallback, PermissiveSymbolHit } from './permissive-code-search.js';
 
 // Resolve every address for a host so the egress guard can block a name that maps
 // into private/metadata space (SSRF via a public-looking clone URL).
@@ -59,6 +67,28 @@ const RECODERGIT_BIN_ENV = 'RECODERGIT_BIN';
 const MCP_PORT_ENV = 'RECODER_CODE_GRAPH_MCP_PORT';
 const DEFAULT_MCP_PORT = 7337;
 const MCP_HOST = '127.0.0.1';
+const SOURCE_REVISION_CACHE_MS = 1_000;
+const GRAPH_CONFIG_NAMES = new Set([
+  'Cargo.toml',
+  'go.mod',
+  'go.work',
+  'pyproject.toml',
+  'pyrightconfig.json',
+  'setup.cfg',
+]);
+const GRAPH_REVISION_PATHS = [
+  ...(SOURCE_EXTENSIONS as readonly string[]).map(extension => `*${extension}`),
+  '*tsconfig*.json',
+  '*jsconfig*.json',
+  ...GRAPH_CONFIG_NAMES,
+];
+
+function affectsPackagedGraph(relativePath: string): boolean {
+  const basename = path.posix.basename(relativePath);
+  return (SOURCE_EXTENSIONS as readonly string[]).includes(path.posix.extname(relativePath).toLowerCase()) ||
+    GRAPH_CONFIG_NAMES.has(basename) ||
+    /^(?:tsconfig|jsconfig).*\.json$/i.test(basename);
+}
 
 // Vendored engine entrypoints, relative to backend/ (this file lives at
 // backend/src/agent-os/recodergit-service.ts -> ../../.. = repo root).
@@ -150,6 +180,8 @@ export type CodeIntelOp =
 export interface CodeIntelParams {
   /** Explicit repo root/path override (else resolved from the indexed state). */
   repo?: string;
+  /** Prior deterministic ids that may own persisted state/snapshots. */
+  repoAliases?: readonly string[];
   /** `symbol_search`: the search query (concept / name / phrase). */
   query?: string;
   /** `find_references` / `call_graph` / `definition`: the target symbol name. */
@@ -163,6 +195,8 @@ export interface CodeIntelParams {
   limit?: number;
   maxSymbols?: number;
   maxDepth?: number;
+  /** Include test/spec nodes in impact traversal (off by default in the engine). */
+  includeTests?: boolean;
   includeContent?: boolean;
 }
 
@@ -336,6 +370,8 @@ export type EngineExec = (
 export interface GitProvider {
   headSha: (repoRoot: string) => Promise<string | null>;
   currentBranch: (repoRoot: string) => Promise<string | null>;
+  /** HEAD plus tracked/untracked worktree content, used for snapshot validity. */
+  sourceRevision?: (repoRoot: string) => Promise<string | null>;
   /**
    * Clone `cloneUrl` into `dest` (optionally at `ref`). Optional so existing
    * injected providers stay valid; connectRepo degrades safely when absent.
@@ -377,19 +413,17 @@ export interface RecoderGitServiceDeps {
   /** Fail-safe error sink. Defaults to console.error. */
   logger?: RecoderGitServiceLogger;
   /**
-   * PERMISSIVE (MIT) symbol-search fallback (recoder-rxn0 Path B). When the vendored
-   * PolyForm engine lib is ABSENT, `codeIntel('symbol_search', …)` routes here (over
-   * the MIT `@recoder/recodergit` semantic index) instead of returning 'unavailable',
-   * so semantic symbol search still works in the shipped DMG. Returns `null` (or is
-   * absent) ⇒ the existing truthful 'unavailable' degrade holds. `find_references` /
-   * `call_graph` / `definition` are NOT rerouted — they need the heavy engine's
-   * tree-sitter scope resolution and keep degrading truthfully.
+   * PERMISSIVE (MIT) semantic-search fallback. The separate `fallbackImpact`
+   * serves upstream/downstream reach from the MIT file-import graph. Definition
+   * still needs the donor engine's symbol resolution.
    */
   fallbackSymbolSearch?: (input: {
     readonly repoRoot: string;
     readonly query: string;
     readonly limit: number;
   }) => Promise<readonly PermissiveSymbolHit[] | null>;
+  /** MIT file-import graph fallback for upstream/downstream impact. */
+  fallbackImpact?: PermissiveImpactFallback;
   /**
    * Root dir for cloned repos (connectRepo). Each repo lands in
    * `<workdirRoot>/<repoId>`. Defaults to `<DATA_DIR>/code-graph`.
@@ -460,10 +494,8 @@ export function assertSafeRepoId(repoId: string): void {
  * -> `owner__repo`), guaranteeing no separators or parent refs survive.
  */
 export function repoIdFromFullName(fullName: string): string {
-  return fullName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '__');
+  const remote = parseRepositoryRemote(fullName);
+  return remote ? repoIdFromRemote(remote) : legacyRepoId(fullName);
 }
 
 /** Default clone workdir root: `<DATA_DIR or cwd/data>/code-graph`. */
@@ -764,6 +796,45 @@ function makeDefaultGit(): GitProvider {
     headSha: repoRoot => run(['rev-parse', 'HEAD'], repoRoot),
     currentBranch: repoRoot =>
       run(['rev-parse', '--abbrev-ref', 'HEAD'], repoRoot),
+    sourceRevision: async repoRoot => {
+      try {
+        const [head, diff, untracked] = await Promise.all([
+          spawnCapture('git', ['rev-parse', 'HEAD'], repoRoot),
+          spawnCapture('git', [
+            'diff',
+            '--no-ext-diff',
+            '--binary',
+            'HEAD',
+            '--',
+            ...GRAPH_REVISION_PATHS,
+          ], repoRoot),
+          spawnCapture('git', ['ls-files', '--others', '--exclude-standard', '-z'], repoRoot),
+        ]);
+        if (head.code !== 0 || diff.code !== 0 || untracked.code !== 0) return null;
+        const headSha = head.stdout.trim();
+        if (!headSha) return null;
+        const digest = createHash('sha256');
+        digest.update(diff.stdout);
+        const root = path.resolve(repoRoot);
+        const untrackedPaths = untracked.stdout.split('\0').filter(affectsPackagedGraph).sort();
+        for (const relative of untrackedPaths) {
+          const absolute = path.resolve(root, relative);
+          if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`)) return null;
+          digest.update('\0').update(relative).update('\0');
+          const entry = await lstat(absolute);
+          if (entry.isSymbolicLink()) {
+            digest.update(`symlink:${await readlink(absolute)}`);
+          } else if (entry.isFile()) {
+            for await (const chunk of createReadStream(absolute)) digest.update(chunk as Buffer);
+          } else {
+            digest.update(`entry:${entry.mode}:${entry.size}`);
+          }
+        }
+        return `${headSha}:${digest.digest('hex')}`;
+      } catch {
+        return null;
+      }
+    },
     clone: async (cloneUrl, dest, ref) => {
       // SSRF boundary: refuse a non-http(s) scheme or a URL that resolves into
       // loopback/private/link-local/metadata space before spawning git.
@@ -894,6 +965,11 @@ export class RecoderGitService {
   private readonly readinessProbe: ServerReadinessProbe;
   private readonly serverReadyTimeoutMs: number;
   private readonly serverReadyIntervalMs: number;
+  /** Coalesces the many impact reads in one review onto one worktree digest. */
+  private readonly sourceRevisionCache = new Map<string, {
+    expiresAt: number;
+    value: Promise<string | null>;
+  }>();
 
   // Supervision state for the `recodergit mcp --http` process. Mutated only by
   // ensureServer()/stopServer() and the child's exit/error callbacks.
@@ -929,14 +1005,30 @@ export class RecoderGitService {
     this.serverReadyIntervalMs =
       deps.serverReadyIntervalMs ?? SERVER_READY_INTERVAL_MS;
     if (deps.fallbackSymbolSearch) this.fallbackSymbolSearch = deps.fallbackSymbolSearch;
+    if (deps.fallbackImpact) this.fallbackImpact = deps.fallbackImpact;
   }
 
   /** The permissive (MIT) symbol-search fallback for the engine-absent path. */
   private readonly fallbackSymbolSearch?: RecoderGitServiceDeps['fallbackSymbolSearch'];
+  /** The permissive (MIT) file-import impact fallback for the engine-absent path. */
+  private readonly fallbackImpact?: RecoderGitServiceDeps['fallbackImpact'];
 
   /** True unless the gate env var is an explicit falsy token. Default ON. */
   isEnabled(): boolean {
     return this.isEnabledFn();
+  }
+
+  private sourceRevision(repoRoot: string): Promise<string | null> {
+    const cached = this.sourceRevisionCache.get(repoRoot);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const value = (this.git.sourceRevision
+      ? this.git.sourceRevision(repoRoot)
+      : this.git.headSha(repoRoot)).catch(() => null);
+    this.sourceRevisionCache.set(repoRoot, {
+      expiresAt: Date.now() + SOURCE_REVISION_CACHE_MS,
+      value,
+    });
+    return value;
   }
 
   /**
@@ -1221,8 +1313,10 @@ export class RecoderGitService {
   }
 
   /**
-   * Build (or rebuild) the per-repo graph via analyze (in-process first, CLI
-   * fallback), record node/edge counts and HEAD sha into the state store.
+   * Build (or rebuild) the per-repo graph through donor analyze when present,
+   * then use the packaged MIT graph when the donor is absent. Record node/edge
+   * counts and HEAD sha in the state store. The packaged index also registers
+   * repository packages and external consumers.
    * Fail-safe -> status:'unavailable' (logged, never thrown). No-op when the
    * flag is off.
    */
@@ -1233,11 +1327,29 @@ export class RecoderGitService {
 
     const { repoRoot, repoId } = input;
     try {
-      const stats = await this.runAnalyze(repoRoot);
-      const [lastIndexedSha, branch] = await Promise.all([
+      const [lastIndexedSha, branch, sourceRevision] = await Promise.all([
         this.git.headSha(repoRoot),
         this.git.currentBranch(repoRoot),
+        this.sourceRevision(repoRoot),
       ]);
+      const packagedRevision = sourceRevision ?? lastIndexedSha;
+      let stats: { nodes: number; edges: number; clusters?: number; flows?: number };
+      try {
+        stats = await this.runAnalyze(repoRoot);
+        if (packagedRevision && this.fallbackImpact?.indexRepo) {
+          await this.fallbackImpact.indexRepo({ repoRoot, repoId, revision: packagedRevision });
+        }
+      } catch (donorError) {
+        const packaged = packagedRevision && this.fallbackImpact?.indexRepo
+          ? await this.fallbackImpact.indexRepo({ repoRoot, repoId, revision: packagedRevision })
+          : null;
+        if (!packaged) throw donorError;
+        stats = {
+          nodes: packaged.nodes.length,
+          edges: packaged.edges.length,
+          flows: packaged.processes?.length ?? 0,
+        };
+      }
       const state: IndexState = {
         repoId,
         repoRoot,
@@ -1514,7 +1626,8 @@ export class RecoderGitService {
   ): Promise<ServiceResult<CodeIntelResult>> {
     if (!this.isEnabled()) return { enabled: false };
 
-    const repoRoot = await this.resolveCodeIntelRepoRoot(repoId, params.repo);
+    const repoAliases = normalizeRepoAliases(params.repoAliases, repoId);
+    const repoRoot = await this.resolveCodeIntelRepoRoot(repoId, params.repo, repoAliases);
     if (!repoRoot) {
       return {
         enabled: true,
@@ -1528,9 +1641,8 @@ export class RecoderGitService {
 
     const lib = await this.engineLib();
     if (!lib?.callTool) {
-      // PERMISSIVE (MIT) PATH B: the heavy PolyForm engine is absent, but a semantic
-      // `symbol_search` still works over the MIT semantic index when the fallback is
-      // wired. Only symbol_search reroutes; the scope-resolved ops keep degrading.
+      // PERMISSIVE (MIT) PATH B: semantic search and file-import impact remain
+      // available when the richer PolyForm symbol graph is absent.
       const query = typeof params.query === 'string' ? params.query.trim() : '';
       if (op === 'symbol_search' && query && this.fallbackSymbolSearch) {
         try {
@@ -1552,13 +1664,38 @@ export class RecoderGitService {
           this.logger.error('[recodergit-service] permissive symbol_search fallback failed', error);
         }
       }
+      const symbol = typeof params.symbol === 'string' ? params.symbol.trim() : '';
+      if ((op === 'find_references' || op === 'call_graph') && symbol && this.fallbackImpact) {
+        try {
+          const revision = await this.sourceRevision(repoRoot);
+          const result = await this.fallbackImpact({
+            repoRoot,
+            repoId,
+            ...(repoAliases.length > 0 ? { repoAliases } : {}),
+            ...(revision ? { revision } : {}),
+            symbol,
+            ...(typeof params.filePath === 'string' && params.filePath.trim()
+              ? { filePath: params.filePath.trim() }
+              : {}),
+            direction: op === 'find_references' ? 'upstream' : 'downstream',
+            maxDepth: typeof params.maxDepth === 'number' && params.maxDepth > 0 ? params.maxDepth : 3,
+            limit: typeof params.limit === 'number' && params.limit > 0 ? params.limit : 20,
+            includeTests: params.includeTests === true,
+          });
+          if (result) {
+            return { enabled: true, op, repoId, available: true, result };
+          }
+        } catch (error) {
+          this.logger.error(`[recodergit-service] permissive ${op} fallback failed`, error);
+        }
+      }
       return {
         enabled: true,
         ...unavailableCodeIntel(
           op,
           repoId,
-          'code-intel needs the in-process engine lib (build the vendored recodergit dist; ' +
-            'RECODERGIT_BIN CLI-only mode exposes no structured code-intel surface)'
+          'no structured result from the permissive code-intel fallback; the richer symbol graph ' +
+            'needs the in-process engine lib from vendored recodergit'
         ),
       };
     }
@@ -1688,14 +1825,42 @@ export class RecoderGitService {
    */
   private async resolveCodeIntelRepoRoot(
     repoId: string,
-    explicit?: string
+    explicit?: string,
+    repoAliases: readonly string[] = [],
   ): Promise<string | null> {
+    let state = await this.store.get(repoId);
+    if (!state) {
+      for (const alias of repoAliases) {
+        const legacy = await this.store.get(alias);
+        if (!legacy) continue;
+        state = { ...legacy, repoId };
+        await this.store.set(repoId, state);
+        break;
+      }
+    }
     const override = explicit?.trim();
     if (override) return override;
-    const state = await this.store.get(repoId);
     const root = state?.repoRoot?.trim();
     return root ? root : null;
   }
+}
+
+function normalizeRepoAliases(
+  values: readonly string[] | undefined,
+  canonical: string,
+): string[] {
+  const aliases = new Set<string>();
+  for (const raw of values ?? []) {
+    const alias = raw.trim();
+    if (!alias || alias === canonical) continue;
+    try {
+      assertSafeRepoId(alias);
+      aliases.add(alias);
+    } catch {
+      // Compatibility hints are untrusted input; unsafe keys are ignored.
+    }
+  }
+  return [...aliases];
 }
 
 /** Truthful unavailable code-intel result (never a fabricated payload). */
@@ -1737,6 +1902,7 @@ function buildCodeIntelCall(
       put('kind', params.kind);
       put('maxDepth', params.maxDepth);
       put('limit', params.limit);
+      put('includeTests', params.includeTests);
       return { method: 'impact', callParams: base };
     case 'definition':
       put('name', params.symbol);

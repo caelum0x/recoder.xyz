@@ -24,7 +24,8 @@ import {
   extractSiblingAnswer,
   type SwarmUnblockWiringDeps,
 } from './swarm-unblock-wiring.js';
-import { composeConductor } from '../__fixtures__/harness.js';
+import { createWorkspaceRepository } from './workspace-repository.adapter.js';
+import { composeConductor, makeExecutor } from '../__fixtures__/harness.js';
 import type { ConductorSwarmUnblockSurface } from '../swarm/swarm-unblock-tool.js';
 import type {
   ResolveBlockedInput,
@@ -498,12 +499,22 @@ describe('conductor module boundary — injecting the bundle un-refuses the tool
         },
       },
     };
-    const { module } = composeConductor({ swarmUnblock });
+    const repository = createWorkspaceRepository({ executor: makeExecutor(false) });
+    await repository.upsertWorkspace(workspace({
+      policyProfile: {
+        version: 1,
+        revision: 1,
+        defaultToolEffect: 'allow',
+        toolRules: [],
+        swarm: { autoAnswer: true, minConfidence: 0.8 },
+      },
+    }));
+    const { module } = composeConductor({ swarmUnblock, repository });
     const surface = module as unknown as ConductorSwarmUnblockSurface;
     const result = await surface.resolveSwarmUnblock({
       workspaceId: 'ws-1',
       taskGroup: 'grp',
-      policy: { autoAnswer: true },
+      policy: { autoAnswer: false },
       actor: ACTOR,
     });
     expect(result.action).toBe('answered');

@@ -135,7 +135,7 @@ describe('conductor launch folds the recodergit code-map into the openfang promp
 
     expect(command).toBe('MEM\n\nCODEBLOCK');
     // queryContext saw the SAME deterministic repoId `startCodeIntel` indexes under
-    // (repoIdFromRepoRef(projectId||repoPath) === 'project_1') + the derived seeds.
+    // canonical repository identity ('project_1' for this non-remote fixture) + seeds.
     expect(codeIntel.queries).toHaveLength(1);
     expect(codeIntel.queries[0]!.repoId).toBe('project_1');
     expect(codeIntel.queries[0]!.seedTerms).toEqual(

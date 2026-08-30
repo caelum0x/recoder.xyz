@@ -1,0 +1,18 @@
+{
+  "checks": [
+    {
+      "name": "Backend types",
+      "command": "pnpm",
+      "args": ["--dir", "backend", "exec", "tsc", "--noEmit"],
+      "autofix": true,
+      "fixPrompt": "Preserve domain boundaries and existing public contracts while correcting the reported TypeScript errors."
+    },
+    {
+      "name": "Wave types",
+      "command": "pnpm",
+      "args": ["--dir", "apps/desktop/app", "exec", "tsc", "--noEmit"],
+      "autofix": true,
+      "fixPrompt": "Preserve Wave's existing interaction and visual language while correcting the reported TypeScript errors."
+    }
+  ]
+}

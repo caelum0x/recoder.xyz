@@ -56,6 +56,34 @@ export const TERMINAL_WORKSPACE_STATES: readonly WorkspaceState[] = [
 export type WorkspaceSubstrate =
   'tmux_worktree' | 'daytona' | 'in_process' | 'ssh' | 'acp' | 'loom';
 
+/** Policy effects available to a workspace-owned governed tool call. */
+export type WorkspaceToolPolicyEffect = 'allow' | 'needs_approval' | 'deny';
+
+/** One exact governed tool override; unmatched tools use `defaultToolEffect`. */
+export type WorkspaceToolPolicyRule = {
+  toolName: string;
+  effect: WorkspaceToolPolicyEffect;
+  reason?: string;
+};
+
+/**
+ * Durable policy constitution for one workspace. It is deliberately action-level:
+ * signed skill actions and `swarm.unblock` both resolve to exact governed tool
+ * names, so one profile becomes their shared authority without free-form code.
+ */
+export type WorkspacePolicyProfile = {
+  version: 1;
+  revision: number;
+  defaultToolEffect: WorkspaceToolPolicyEffect;
+  toolRules: WorkspaceToolPolicyRule[];
+  swarm: {
+    autoAnswer: boolean;
+    minConfidence: number;
+  };
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
 export type Workspace = {
   workspaceId: string;
   spaceId: string;
@@ -79,6 +107,8 @@ export type Workspace = {
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
+  /** Durable per-workspace authority for governed skills and swarm auto-unblock. */
+  policyProfile?: WorkspacePolicyProfile;
   metadata?: Record<string, unknown>;
   /** Tenancy binding. Absent on legacy/embedded records (resolves to LOCAL_TENANT). */
   tenant?: TenantContext;

@@ -7,12 +7,12 @@ import type { RecoderApproval } from "../recoder-approvals/recoder-approvals-mod
 import { decideApproval } from "../recoder/recoder-approval-action";
 import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
-import { readErrorReason, readFetchError } from "../recoder/recoder-errors";
+import { readErrorOutcome, readErrorReason, readFetchError } from "../recoder/recoder-errors";
 import { fetchWorkspacePrStatusView, PrStatusRefreshMs, type RecoderPrStatus } from "../recoder/recoder-pr-status";
+import { RecoderDiffView } from "./recoder-diff";
 import { selectWorkspaceApproval, shouldShowInlineApproval } from "./recoder-diff-approval";
 import type { ReviewCommentDraft } from "./recoder-diff-comments";
 import { fetchPreviewVerification, previewVerificationStateAtom } from "./recoder-evidence-logic";
-import { RecoderDiffView } from "./recoder-diff";
 
 // `taskId`/`runId` ride on the canonical conductor Workspace record the list edge
 // returns (packages/agent-os Workspace); they correlate this run to its pending
@@ -31,6 +31,9 @@ type RecoderWorkspace = {
     // (truthful degrade), never a fabricated attach target.
     sessionName?: string;
     worktreePath?: string;
+    // Selects the terminal authority consistently with Session: Loom workspaces
+    // open the bounded Loom stream; legacy tmux workspaces use tmux attach.
+    substrate?: string;
 };
 
 const WorkspaceIdMetaKey = "recoder:workspaceid";
@@ -60,6 +63,21 @@ type RecoderCheckRow = {
     name: string;
     status: string;
     conclusion: string;
+    source?: "github" | "recoder";
+    detail?: string;
+    autofix?: {
+        prompt: string;
+    };
+    remediation?: {
+        attemptId: string;
+        state: "running" | "passed" | "failed" | "error";
+        requestedAt: string;
+        attestedAt?: string;
+        beforeStatus: "fail" | "error";
+        afterStatus?: "pass" | "fail" | "error";
+        afterDetail?: string;
+        agentOutcome?: "completed" | "failed";
+    };
 };
 
 // Shape of GET /api/conductor/workspaces/:id/checks → data (see conductor
@@ -71,6 +89,87 @@ type RecoderWorkspaceChecks = {
     mergeable?: string;
     reviewDecision?: string;
     checks?: RecoderCheckRow[];
+    githubAvailable?: boolean;
+    githubReason?: string;
+    localRan?: boolean;
+};
+
+type RecoderPrReviewEvidence = {
+    available: boolean;
+    reason?: string;
+    pr: number;
+    diffTruncated: boolean;
+    impact?: {
+        available: boolean;
+        reason?: string;
+        source: "recodergit";
+        scope: "symbol" | "file" | "mixed" | "unavailable";
+        risk: "UNKNOWN" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+        partial: boolean;
+        files: RecoderImpactFile[];
+        tests: RecoderImpactFile[];
+        processes: { label: string }[];
+        consumers: RecoderImpactConsumer[];
+        summary: {
+            impactedFiles: number;
+            affectedTests: number;
+            upstreamFiles: number;
+            downstreamFiles: number;
+            affectedProcesses: number;
+            coChangedFiles: number;
+            crossRepositoryFiles: number;
+            consumerRepositories: number;
+        };
+    };
+};
+
+type RecoderImpactConsumer = {
+    repoId: string;
+    path: string;
+    ecosystem: "npm" | "python" | "go" | "cargo";
+    packageName: string;
+    importSpecifier: string;
+};
+
+type RecoderImpactFile = {
+    path: string;
+    isTest: boolean;
+    minDepth: number;
+    directions: ("upstream" | "downstream")[];
+    changedSymbols: string[];
+    symbols: string[];
+    relationTypes: string[];
+    processes: string[];
+    coChange?: { commits: number; confidence: number };
+};
+
+type RecoderReviewFinding = {
+    file: string;
+    line: number;
+    severity: "critical" | "high" | "medium" | "low" | "info";
+    message: string;
+    evidence: string;
+    confidence?: number;
+};
+
+type RecoderReviewFindings = {
+    kept: RecoderReviewFinding[];
+    dropped: number;
+    summary: string;
+};
+
+// Canonical GET …/readiness projection. `available:false` means the endpoint or
+// payload could not be trusted; callers may fall back to the older PR-only view
+// but must never fabricate a blocker from an unavailable readiness result.
+type RecoderReadinessView = {
+    available: boolean;
+    verdict?: string;
+    blockers: string[];
+    // Older backends omit this field, so consumers treat absence as no
+    // advisory evidence rather than making the readiness view unusable.
+    advisories?: string[];
+    reason?: string;
+    review?: RecoderPrReviewEvidence | null;
 };
 
 // gh conclusions that mean the check actually failed. Single source of truth for
@@ -131,11 +230,258 @@ function suggestReviewAction(checks: RecoderWorkspaceChecks): RecoderReviewSugge
     return null;
 }
 
+// Only hard blockers the server can independently re-probe earn the feedback
+// action. Requested review changes still use the line-anchored comment queue;
+// pending/unknown checks never become invented blocker prose.
+function canSendBlockerFeedback(checks: RecoderWorkspaceChecks, readiness?: RecoderReadinessView | null): boolean {
+    if (readiness?.available) {
+        return readiness.blockers.length > 0;
+    }
+    if (checks == null || !checks.available) {
+        return false;
+    }
+    if ((checks.mergeable ?? "").toUpperCase() == "CONFLICTING") {
+        return true;
+    }
+    return (checks.checks ?? []).some((row) => isFailedConclusion(row.conclusion));
+}
+
+function parseReadinessData(data: unknown): RecoderReadinessView {
+    if (data == null || typeof data != "object" || Array.isArray(data)) {
+        return { available: false, blockers: [], reason: "readiness unavailable" };
+    }
+    const d = data as Record<string, unknown>;
+    if (!Array.isArray(d.blockers)) {
+        return { available: false, blockers: [], reason: "readiness unavailable" };
+    }
+    const blockers = d.blockers
+        .filter((value): value is string => typeof value == "string")
+        .map((value) => value.trim())
+        .filter((value) => value != "");
+    const advisories = (Array.isArray(d.advisories) ? d.advisories : [])
+        .filter((value): value is string => typeof value == "string")
+        .map((value) => value.trim())
+        .filter((value) => value != "");
+    const review = parsePrReviewEvidence(d.review);
+    return {
+        available: true,
+        verdict: typeof d.verdict == "string" ? d.verdict : "",
+        blockers,
+        advisories,
+        ...(review ? { review } : {}),
+    };
+}
+
+function parsePrReviewEvidence(value: unknown): RecoderPrReviewEvidence | null {
+    if (value == null || typeof value != "object" || Array.isArray(value)) return null;
+    const row = value as Record<string, unknown>;
+    if (typeof row.pr != "number") return null;
+    const impactRow = row.impact != null && typeof row.impact == "object" && !Array.isArray(row.impact)
+        ? row.impact as Record<string, unknown>
+        : null;
+    const impact = impactRow ? parseImpactLedger(impactRow) : null;
+    return {
+        available: row.available === true,
+        ...(typeof row.reason == "string" ? { reason: row.reason } : {}),
+        pr: row.pr,
+        diffTruncated: row.diffTruncated === true,
+        ...(impact ? { impact } : {}),
+    };
+}
+
+function stringList(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item == "string") : [];
+}
+
+function impactFiles(value: unknown): RecoderImpactFile[] {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item): RecoderImpactFile[] => {
+        if (item == null || typeof item != "object" || Array.isArray(item)) return [];
+        const row = item as Record<string, unknown>;
+        if (typeof row.path != "string" || typeof row.minDepth != "number") return [];
+        const rawCoChange = row.coChange != null && typeof row.coChange == "object" && !Array.isArray(row.coChange)
+            ? row.coChange as Record<string, unknown>
+            : null;
+        const coChange = rawCoChange &&
+            typeof rawCoChange.commits == "number" && Number.isInteger(rawCoChange.commits) && rawCoChange.commits > 0 &&
+            typeof rawCoChange.confidence == "number" && Number.isFinite(rawCoChange.confidence) &&
+            rawCoChange.confidence >= 0 && rawCoChange.confidence <= 1
+            ? { commits: rawCoChange.commits, confidence: rawCoChange.confidence }
+            : null;
+        return [{
+            path: row.path,
+            isTest: row.isTest === true,
+            minDepth: Math.max(1, Math.floor(row.minDepth)),
+            directions: stringList(row.directions).filter(
+                (direction): direction is "upstream" | "downstream" => direction == "upstream" || direction == "downstream"
+            ),
+            changedSymbols: stringList(row.changedSymbols),
+            symbols: stringList(row.symbols),
+            relationTypes: stringList(row.relationTypes),
+            processes: stringList(row.processes),
+            ...(coChange ? { coChange } : {}),
+        }];
+    });
+}
+
+function finiteCount(value: unknown, fallback: number): number {
+    return typeof value == "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
+}
+
+function impactConsumers(value: unknown): RecoderImpactConsumer[] {
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((item): RecoderImpactConsumer[] => {
+        if (item == null || typeof item != "object" || Array.isArray(item)) return [];
+        const row = item as Record<string, unknown>;
+        const ecosystem = row.ecosystem;
+        if (
+            typeof row.repoId != "string" || typeof row.path != "string" ||
+            typeof row.packageName != "string" || typeof row.importSpecifier != "string" ||
+            (ecosystem != "npm" && ecosystem != "python" && ecosystem != "go" && ecosystem != "cargo")
+        ) return [];
+        return [{
+            repoId: row.repoId,
+            path: row.path,
+            ecosystem: ecosystem as RecoderImpactConsumer["ecosystem"],
+            packageName: row.packageName,
+            importSpecifier: row.importSpecifier,
+        }];
+    });
+}
+
+function parseImpactLedger(row: Record<string, unknown>): NonNullable<RecoderPrReviewEvidence["impact"]> | null {
+    const scope = row.scope;
+    const risk = row.risk;
+    if (
+        row.source != "recodergit" ||
+        (scope != "symbol" && scope != "file" && scope != "mixed" && scope != "unavailable") ||
+        (risk != "UNKNOWN" && risk != "LOW" && risk != "MEDIUM" && risk != "HIGH" && risk != "CRITICAL")
+    ) return null;
+    const normalizedScope = scope as NonNullable<RecoderPrReviewEvidence["impact"]>["scope"];
+    const normalizedRisk = risk as NonNullable<RecoderPrReviewEvidence["impact"]>["risk"];
+    const files = impactFiles(row.files);
+    const tests = impactFiles(row.tests);
+    const processes = Array.isArray(row.processes)
+        ? row.processes.flatMap((item): { label: string }[] => {
+              if (item == null || typeof item != "object" || Array.isArray(item)) return [];
+              const label = (item as Record<string, unknown>).label;
+              return typeof label == "string" && label.trim() ? [{ label: label.trim() }] : [];
+          })
+        : [];
+    const consumers = impactConsumers(row.consumers);
+    const rawSummary = row.summary != null && typeof row.summary == "object" && !Array.isArray(row.summary)
+        ? row.summary as Record<string, unknown>
+        : {};
+    return {
+        available: row.available === true,
+        ...(typeof row.reason == "string" ? { reason: row.reason } : {}),
+        source: "recodergit",
+        scope: normalizedScope,
+        risk: normalizedRisk,
+        partial: row.partial === true,
+        files,
+        tests,
+        processes,
+        consumers,
+        summary: {
+            impactedFiles: finiteCount(rawSummary.impactedFiles, files.length),
+            affectedTests: finiteCount(rawSummary.affectedTests, tests.length),
+            upstreamFiles: finiteCount(rawSummary.upstreamFiles, files.filter((file) => file.directions.includes("upstream")).length),
+            downstreamFiles: finiteCount(rawSummary.downstreamFiles, files.filter((file) => file.directions.includes("downstream")).length),
+            affectedProcesses: finiteCount(rawSummary.affectedProcesses, processes.length),
+            coChangedFiles: finiteCount(rawSummary.coChangedFiles, files.filter((file) => file.coChange != null).length),
+            crossRepositoryFiles: finiteCount(rawSummary.crossRepositoryFiles, consumers.length),
+            consumerRepositories: finiteCount(rawSummary.consumerRepositories, new Set(consumers.map((item) => item.repoId)).size),
+        },
+    };
+}
+
+function parseGeneratedReviewFindings(value: unknown): RecoderReviewFindings {
+    if (value == null || typeof value != "object" || Array.isArray(value)) {
+        return { kept: [], dropped: 0, summary: "No evidence-backed findings returned." };
+    }
+    const row = value as Record<string, unknown>;
+    const kept = Array.isArray(row.kept)
+        ? row.kept.flatMap((item): RecoderReviewFinding[] => {
+              if (item == null || typeof item != "object") return [];
+              const finding = item as Record<string, unknown>;
+              const severity = finding.severity;
+              if (
+                  typeof finding.file != "string" ||
+                  typeof finding.line != "number" ||
+                  typeof finding.message != "string" ||
+                  typeof finding.evidence != "string" ||
+                  (severity != "critical" && severity != "high" && severity != "medium" && severity != "low" && severity != "info")
+              ) return [];
+              return [{
+                  file: finding.file,
+                  line: finding.line,
+                  severity: severity as RecoderReviewFinding["severity"],
+                  message: finding.message,
+                  evidence: finding.evidence,
+                  ...(typeof finding.confidence == "number" ? { confidence: finding.confidence } : {}),
+              }];
+          })
+        : [];
+    return {
+        kept,
+        dropped: typeof row.dropped == "number" ? row.dropped : 0,
+        summary: typeof row.summary == "string" ? row.summary : "Review completed.",
+    };
+}
+
+// The merge edge returns convergence-trust evidence inside `data.merge`. A clean
+// merge must still surface a warn-mode advisory at the decision point; replacing it
+// with a bare "Merged." would make the backend's default advisory posture invisible.
+function formatMergeSuccess(data: unknown): string {
+    if (data == null || typeof data != "object" || Array.isArray(data)) {
+        return "Merged.";
+    }
+    const merge = data as Record<string, unknown>;
+    const warning = typeof merge.trustWarning == "string" ? merge.trustWarning.trim() : "";
+    if (warning == "") {
+        return "Merged.";
+    }
+    const tier =
+        merge.trustTier == "high" || merge.trustTier == "medium" || merge.trustTier == "low" ? merge.trustTier : "";
+    const score =
+        typeof merge.trustScore == "number" && Number.isFinite(merge.trustScore) ? Math.round(merge.trustScore) : null;
+    const trust =
+        tier != "" && score != null
+            ? ` (${tier}, ${score}/100)`
+            : tier != ""
+              ? ` (${tier})`
+              : score != null
+                ? ` (${score}/100)`
+                : "";
+    return `Merged. Trust advisory${trust}: ${warning}`;
+}
+
+function suggestEffectiveReviewAction(
+    checks: RecoderWorkspaceChecks,
+    readiness?: RecoderReadinessView | null
+): RecoderReviewSuggestion | null {
+    const githubSuggestion = suggestReviewAction(checks);
+    if (readiness?.available && readiness.blockers.length > 0) {
+        if (githubSuggestion?.action == "resolve-conflicts" || githubSuggestion?.action == "address-feedback") {
+            return githubSuggestion;
+        }
+        return { action: "address-feedback", label: "Recoder found hard blockers in this workspace" };
+    }
+    return githubSuggestion;
+}
+
 // While any check is still running (or gh hasn't finished computing
 // mergeability) the strip would otherwise sit on a stale PENDING forever, since
 // the 6s refresh poll deliberately skips the gh-shelling checks edge. This lets
 // refresh() re-probe on a slow cadence — but ONLY while genuinely pending.
 const CHECKS_REPOLL_MS = 45000;
+
+// Canonical readiness can include local commands, a trial merge, and a secret
+// scan, so it must not ride every 6s workspace-list tick. While a real blocker is
+// present, re-probe on a bounded slow cadence so an async agent remediation can
+// clear the Review surface without requiring a manual refresh.
+const READINESS_REPOLL_MS = 30000;
 
 // True when the checks view has work still in flight: a not-yet-completed check
 // row, or a mergeability GitHub is still computing ("UNKNOWN"). A stable result
@@ -148,7 +494,9 @@ function checksArePending(checks: RecoderWorkspaceChecks): boolean {
     if (typeof checks.mergeable == "string" && checks.mergeable.toUpperCase() == "UNKNOWN") {
         return true;
     }
-    return (checks.checks ?? []).some((row) => row.status.toLowerCase() != "completed");
+    return (checks.checks ?? []).some((row) =>
+        row.status.toLowerCase() != "completed" || row.remediation?.state == "running"
+    );
 }
 
 // Coerce the checks payload into the view shape without ever trusting it.
@@ -173,16 +521,60 @@ function parseChecksData(data: unknown): RecoderWorkspaceChecks {
         if (typeof e.name != "string" || e.name == "") {
             continue;
         }
+        const source = e.source === "github" ? "github" as const : e.source === "recoder" ? "recoder" as const : undefined;
+        const rawAutofix = e.autofix != null && typeof e.autofix == "object"
+            ? e.autofix as Record<string, unknown>
+            : null;
+        const autofix = rawAutofix && typeof rawAutofix.prompt == "string" && rawAutofix.prompt.trim() != ""
+            ? { prompt: rawAutofix.prompt }
+            : undefined;
+        const rawRemediation = e.remediation != null && typeof e.remediation == "object"
+            ? e.remediation as Record<string, unknown>
+            : null;
+        const remediationState = rawRemediation && ["running", "passed", "failed", "error"].includes(String(rawRemediation.state))
+            ? rawRemediation.state as "running" | "passed" | "failed" | "error"
+            : undefined;
+        const beforeStatus: "fail" | "error" | undefined = rawRemediation?.beforeStatus == "fail"
+            ? "fail"
+            : rawRemediation?.beforeStatus == "error" ? "error" : undefined;
+        const afterStatus: "pass" | "fail" | "error" | undefined = rawRemediation?.afterStatus == "pass"
+            ? "pass"
+            : rawRemediation?.afterStatus == "fail"
+              ? "fail"
+              : rawRemediation?.afterStatus == "error" ? "error" : undefined;
+        const agentOutcome: "completed" | "failed" | undefined = rawRemediation?.agentOutcome == "completed"
+            ? "completed"
+            : rawRemediation?.agentOutcome == "failed" ? "failed" : undefined;
+        const remediation = rawRemediation && remediationState && beforeStatus &&
+            typeof rawRemediation.attemptId == "string" && typeof rawRemediation.requestedAt == "string"
+            ? {
+                attemptId: rawRemediation.attemptId,
+                state: remediationState,
+                requestedAt: rawRemediation.requestedAt,
+                beforeStatus,
+                ...(typeof rawRemediation.attestedAt == "string" ? { attestedAt: rawRemediation.attestedAt } : {}),
+                ...(afterStatus ? { afterStatus } : {}),
+                ...(typeof rawRemediation.afterDetail == "string" ? { afterDetail: rawRemediation.afterDetail } : {}),
+                ...(agentOutcome ? { agentOutcome } : {}),
+            }
+            : undefined;
         checks.push({
             name: e.name,
             status: typeof e.status == "string" ? e.status : "",
             conclusion: typeof e.conclusion == "string" ? e.conclusion : "",
+            ...(source ? { source } : {}),
+            ...(typeof e.detail == "string" ? { detail: e.detail } : {}),
+            ...(autofix ? { autofix } : {}),
+            ...(remediation ? { remediation } : {}),
         });
     }
     return {
         available: true,
         mergeable: typeof d.mergeable == "string" ? d.mergeable : "",
         reviewDecision: typeof d.reviewDecision == "string" ? d.reviewDecision : "",
+        ...(typeof d.githubAvailable == "boolean" ? { githubAvailable: d.githubAvailable } : {}),
+        ...(typeof d.githubReason == "string" ? { githubReason: d.githubReason } : {}),
+        ...(typeof d.localRan == "boolean" ? { localRan: d.localRan } : {}),
         checks,
     };
 }
@@ -198,7 +590,11 @@ function summarizeDiscardOutcome(data: unknown): string {
     }
     const view = raw as Record<string, unknown>;
     const isHunkView = Array.isArray(view.hunks);
-    const rows = isHunkView ? (view.hunks as unknown[]) : Array.isArray(view.results) ? (view.results as unknown[]) : [];
+    const rows = isHunkView
+        ? (view.hunks as unknown[])
+        : Array.isArray(view.results)
+          ? (view.results as unknown[])
+          : [];
     const noun = isHunkView ? "hunk" : "file";
     let discarded = 0;
     const failures: string[] = [];
@@ -223,7 +619,9 @@ function summarizeDiscardOutcome(data: unknown): string {
     }
     if (failures.length > 0) {
         const failText = `could not discard ${failures.join("; ")}`;
-        return discarded > 0 ? `Discarded ${discarded} ${noun}${discarded == 1 ? "" : "s"}; ${failText}.` : `Could not discard ${failures.join("; ")}.`;
+        return discarded > 0
+            ? `Discarded ${discarded} ${noun}${discarded == 1 ? "" : "s"}; ${failText}.`
+            : `Could not discard ${failures.join("; ")}.`;
     }
     if (discarded == 0) {
         return "Nothing to discard — already matches the review base.";
@@ -257,6 +655,8 @@ class RecoderDiffViewModel implements ViewModel {
     prViewAtom: PrimitiveAtom<RecoderPrStatus>;
     checksAtom: PrimitiveAtom<RecoderWorkspaceChecks>;
     checksLoadingAtom: PrimitiveAtom<boolean>;
+    readinessAtom: PrimitiveAtom<RecoderReadinessView | null>;
+    readinessLoadingAtom: PrimitiveAtom<boolean>;
     // Draft line-anchored review comments, queued client-side until the reviewer
     // sends them to the agent (POST …/review-comments). Cleared on a successful send.
     discardingAtom: PrimitiveAtom<boolean>;
@@ -266,6 +666,8 @@ class RecoderDiffViewModel implements ViewModel {
     commentSendingAtom: PrimitiveAtom<boolean>;
     // Human result of the last send ("Sent 3 comments to the agent.", reason, …).
     commentStatusAtom: PrimitiveAtom<string>;
+    blockerFeedbackSendingAtom: PrimitiveAtom<boolean>;
+    blockerFeedbackStatusAtom: PrimitiveAtom<string>;
     // The ONE pending governance approval the selected run is blocked on (null =
     // none). Populated ONLY when the workspace is awaiting_approval AND a real
     // pending record correlates to it — never a fabricated card.
@@ -278,6 +680,8 @@ class RecoderDiffViewModel implements ViewModel {
     // re-probing gh (the checks edge shells out per call) unless the selection
     // actually changed.
     checksWorkspaceId: string;
+    readinessWorkspaceId: string;
+    readinessProbedAtMs: number;
     // Wall-clock of the last checks probe, so the pending re-poll fires at most
     // once per CHECKS_REPOLL_MS instead of on every 6s tick.
     checksProbedAtMs: number;
@@ -315,15 +719,21 @@ class RecoderDiffViewModel implements ViewModel {
         this.prViewAtom = atom(null) as PrimitiveAtom<RecoderPrStatus>;
         this.checksAtom = atom(null) as PrimitiveAtom<RecoderWorkspaceChecks>;
         this.checksLoadingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.readinessAtom = atom(null) as PrimitiveAtom<RecoderReadinessView | null>;
+        this.readinessLoadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.discardingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.discardStatusAtom = atom("") as PrimitiveAtom<string>;
         this.pendingCommentsAtom = atom([]) as PrimitiveAtom<ReviewCommentDraft[]>;
         this.commentSendingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.commentStatusAtom = atom("") as PrimitiveAtom<string>;
+        this.blockerFeedbackSendingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.blockerFeedbackStatusAtom = atom("") as PrimitiveAtom<string>;
         this.inlineApprovalAtom = atom(null) as PrimitiveAtom<RecoderApproval | null>;
         this.approvalDecidingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.approvalErrorAtom = atom("") as PrimitiveAtom<string>;
         this.checksWorkspaceId = "";
+        this.readinessWorkspaceId = "";
+        this.readinessProbedAtMs = 0;
         this.checksProbedAtMs = 0;
         this.previewWorkspaceId = "";
         this.prViewWorkspaceId = "";
@@ -375,6 +785,10 @@ class RecoderDiffViewModel implements ViewModel {
             globalStore.set(this.diffStatusAtom, "");
             globalStore.set(this.checksAtom, null);
             this.checksWorkspaceId = "";
+            globalStore.set(this.readinessAtom, null);
+            globalStore.set(this.readinessLoadingAtom, false);
+            this.readinessWorkspaceId = "";
+            this.readinessProbedAtMs = 0;
             globalStore.set(previewVerificationStateAtom, null);
             this.previewWorkspaceId = "";
             globalStore.set(this.prViewAtom, null);
@@ -390,6 +804,13 @@ class RecoderDiffViewModel implements ViewModel {
             !checksStale &&
             checksArePending(globalStore.get(this.checksAtom)) &&
             Date.now() - this.checksProbedAtMs >= CHECKS_REPOLL_MS;
+        const readinessStale = this.readinessWorkspaceId != selected;
+        const readiness = globalStore.get(this.readinessAtom);
+        const readinessRepollDue =
+            !readinessStale &&
+            readiness?.available === true &&
+            readiness.blockers.length > 0 &&
+            Date.now() - this.readinessProbedAtMs >= READINESS_REPOLL_MS;
         const previewStale = this.previewWorkspaceId != selected;
         const prStale = this.prViewWorkspaceId != selected;
         // Re-probe gh for the PR view only on a selection change or once the slow
@@ -398,6 +819,7 @@ class RecoderDiffViewModel implements ViewModel {
         await Promise.all([
             this.loadDiff(selected),
             checksStale || repollDue ? this.fetchChecks(selected) : Promise.resolve(),
+            readinessStale || readinessRepollDue ? this.fetchReadiness(selected) : Promise.resolve(),
             previewStale ? this.loadPreviewVerification(selected) : Promise.resolve(),
             prStale || prRepollDue ? this.fetchPrStatus(selected) : Promise.resolve(),
             this.refreshInlineApproval(selected),
@@ -412,11 +834,75 @@ class RecoderDiffViewModel implements ViewModel {
         if (!selected) {
             return;
         }
-        await this.fetchChecks(selected);
+        await Promise.all([this.fetchChecks(selected), this.fetchReadiness(selected)]);
+    }
+
+    // Canonical hard blockers (merge conflicts, GitHub/local checks, and secret
+    // findings). Loaded on selection, explicitly refreshed with the checks strip,
+    // and slowly re-probed only while blockers remain; never polled every six seconds.
+    async fetchReadiness(workspaceId: string) {
+        const id = workspaceId.trim();
+        if (id == "") {
+            this.readinessWorkspaceId = "";
+            globalStore.set(this.readinessAtom, null);
+            globalStore.set(this.readinessLoadingAtom, false);
+            return;
+        }
+        const selectionChanged = this.readinessWorkspaceId != id;
+        this.readinessWorkspaceId = id;
+        // Keep the last blocker verdict visible during a same-workspace slow
+        // re-probe. Clearing it would briefly re-promote Merge while the request
+        // is in flight — exactly when Recoder still knows the workspace is blocked.
+        if (selectionChanged) globalStore.set(this.readinessAtom, null);
+        globalStore.set(this.readinessLoadingAtom, true);
+        const current = () => this.readinessWorkspaceId == id;
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(id)}/readiness`
+            );
+            if (!current()) return;
+            if (!res.ok) {
+                const detail = await readFetchError(res);
+                if (!current()) return;
+                // A missing edge means an older backend: retain the latch so the
+                // 6s refresh never hammers it. Transient errors drop the latch and
+                // get one normal retry on the next refresh.
+                if (res.status != 404) this.readinessWorkspaceId = "";
+                globalStore.set(this.readinessAtom, {
+                    available: false,
+                    blockers: [],
+                    reason: detail || "readiness endpoint not available",
+                });
+                return;
+            }
+            const body = await res.json();
+            if (!current()) return;
+            this.readinessProbedAtMs = Date.now();
+            globalStore.set(this.readinessAtom, parseReadinessData(body?.data));
+        } catch {
+            if (!current()) return;
+            this.readinessWorkspaceId = "";
+            globalStore.set(this.readinessAtom, {
+                available: false,
+                blockers: [],
+                reason: "readiness endpoint not available",
+            });
+        } finally {
+            if (current() || this.readinessWorkspaceId == "") {
+                globalStore.set(this.readinessLoadingAtom, false);
+            }
+        }
     }
 
     async selectWorkspace(workspaceId: string) {
         globalStore.set(this.selectedIdAtom, workspaceId);
+        this.readinessWorkspaceId = workspaceId;
+        this.readinessProbedAtMs = 0;
+        globalStore.set(this.readinessAtom, null);
+        globalStore.set(this.readinessLoadingAtom, false);
+        // Delivery copy belongs to the workspace it was produced for; never let a
+        // success/failure from the previous selection appear under the next one.
+        globalStore.set(this.blockerFeedbackStatusAtom, "");
         if (!workspaceId) {
             globalStore.set(this.diffAtom, null);
             globalStore.set(this.diffStatusAtom, "");
@@ -527,6 +1013,36 @@ class RecoderDiffViewModel implements ViewModel {
         }
     }
 
+    // Ask the governed named-check remediation edge to reproduce the failure,
+    // continue the SAME isolated Session/worktree, and register a durable attempt
+    // for independent post-agent attestation. Wave sends identity, never a prompt.
+    async requestCheckAutofix(workspaceId: string, row: RecoderCheckRow): Promise<string> {
+        if (!workspaceId || row.source != "recoder" || !row.autofix?.prompt) {
+            return "This check is advisory; its repository did not enable agent remediation.";
+        }
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/checks/remediate`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ checkName: row.name }),
+                }
+            );
+            if (!res.ok) {
+                const detail = await readFetchError(res);
+                return detail || `Could not start remediation (${res.status}).`;
+            }
+            // Re-read immediately so the durable `running` attempt appears in
+            // the row; checksArePending then keeps the slow poll alive until the
+            // terminal hook replaces it with independent attestation evidence.
+            await this.fetchChecks(workspaceId);
+            return `Agent is fixing ${row.name}; Recoder will rerun it independently when the Session settles.`;
+        } catch {
+            return "Could not start remediation — Recoder isn’t reachable.";
+        }
+    }
+
     // The workspace's live PR view (gh-backed pr-status edge): folds into the PR
     // chip once one exists and gates the Create PR action with a truthful reason
     // when a PR can't be opened. Like fetchChecks it's a real gh call, so the
@@ -592,11 +1108,20 @@ class RecoderDiffViewModel implements ViewModel {
             );
             const body = await res.json().catch(() => null);
             if (res.ok) {
-                globalStore.set(this.mergeStatusAtom, "Merged.");
+                globalStore.set(this.mergeStatusAtom, formatMergeSuccess(body?.data?.merge));
                 await this.refresh();
                 return;
             }
             const reason = readErrorReason(body);
+            const outcome = readErrorOutcome(body);
+            if (res.status == 409 && outcome == "escalated") {
+                globalStore.set(this.mergeStatusAtom, `Human review required — ${reason || "convergence trust could not be judged"}.`);
+                return;
+            }
+            if (res.status == 409 && outcome == "trust_blocked") {
+                globalStore.set(this.mergeStatusAtom, `Merge blocked by convergence trust — ${reason || "review the trust evidence"}.`);
+                return;
+            }
             if (res.status == 403) {
                 globalStore.set(this.mergeStatusAtom, reason || "Merge blocked — needs approval.");
                 return;
@@ -684,7 +1209,10 @@ class RecoderDiffViewModel implements ViewModel {
         if (index < 0 || index >= current.length) {
             return;
         }
-        globalStore.set(this.pendingCommentsAtom, current.filter((_, i) => i != index));
+        globalStore.set(
+            this.pendingCommentsAtom,
+            current.filter((_, i) => i != index)
+        );
     }
 
     // Send the queued comments to the live agent (POST …/review-comments — the
@@ -729,6 +1257,54 @@ class RecoderDiffViewModel implements ViewModel {
             globalStore.set(this.commentStatusAtom, "Send unavailable — Recoder isn’t reachable.");
         } finally {
             globalStore.set(this.commentSendingAtom, false);
+        }
+    }
+
+    // Ask the backend to re-run canonical readiness probes and send the resulting
+    // hard blockers through the governed review loop. No blocker text crosses
+    // from this client, so a stale or modified UI cannot forge agent instructions.
+    async sendBlockerFeedback() {
+        const workspaceId = globalStore.get(this.selectedIdAtom);
+        if (!workspaceId) {
+            return;
+        }
+        globalStore.set(this.blockerFeedbackSendingAtom, true);
+        globalStore.set(this.blockerFeedbackStatusAtom, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/blocker-feedback`,
+                { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+            );
+            const body = await res.json().catch(() => null);
+            if (res.ok) {
+                const feedback = body?.data?.feedback;
+                const count = Array.isArray(feedback?.blockers) ? feedback.blockers.length : 0;
+                globalStore.set(
+                    this.blockerFeedbackStatusAtom,
+                    count > 0
+                        ? `Sent ${count} blocker${count == 1 ? "" : "s"} to the agent.`
+                        : "Blockers sent to the agent."
+                );
+                await this.refreshChecks();
+                return;
+            }
+            const reason = readErrorReason(body);
+            if (res.status == 403) {
+                globalStore.set(this.blockerFeedbackStatusAtom, reason || "Blocked — needs approval.");
+                return;
+            }
+            if (res.status == 503) {
+                globalStore.set(
+                    this.blockerFeedbackStatusAtom,
+                    `Could not send blockers — ${reason || "operation failed"}.`
+                );
+                return;
+            }
+            globalStore.set(this.blockerFeedbackStatusAtom, reason || `Send failed (${res.status}).`);
+        } catch {
+            globalStore.set(this.blockerFeedbackStatusAtom, "Send unavailable — Recoder isn’t reachable.");
+        } finally {
+            globalStore.set(this.blockerFeedbackSendingAtom, false);
         }
     }
 
@@ -786,7 +1362,10 @@ class RecoderDiffViewModel implements ViewModel {
                 return;
             }
             if (res.status == 503) {
-                globalStore.set(this.discardStatusAtom, `Discard could not complete — ${reason || "operation failed"}.`);
+                globalStore.set(
+                    this.discardStatusAtom,
+                    `Discard could not complete — ${reason || "operation failed"}.`
+                );
                 return;
             }
             globalStore.set(this.discardStatusAtom, reason || `Discard failed (${res.status}).`);
@@ -875,13 +1454,22 @@ class RecoderDiffViewModel implements ViewModel {
 }
 
 export {
+    canSendBlockerFeedback,
     checksArePending,
+    formatMergeSuccess,
     isFailedConclusion,
     parseChecksData,
+    parseGeneratedReviewFindings,
+    parseReadinessData,
     RecoderDiffViewModel,
+    suggestEffectiveReviewAction,
     suggestReviewAction,
     summarizeDiscardOutcome,
     type RecoderCheckRow,
+    type RecoderReadinessView,
+    type RecoderPrReviewEvidence,
+    type RecoderReviewFinding,
+    type RecoderReviewFindings,
     type RecoderReviewActionId,
     type RecoderReviewSuggestion,
     type RecoderWorkspace,

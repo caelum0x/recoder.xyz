@@ -101,6 +101,15 @@ type FanoutView = {
     perAgent: FanoutAgentResult[];
 };
 
+// A replacement launch inside the SAME group. It never claims convergence; the
+// cockpit recomputes all old + new siblings and owns the eventual compose action.
+type FanoutRetryView = {
+    taskGroup: string;
+    workspaceIds: string[];
+    reviewableWorkspaceIds: string[];
+    perAgent: FanoutAgentResult[];
+};
+
 // A truthfully-composed converged branch, surfaced ONLY after a real post-launch-settle
 // compose succeeds (workspaceId from the governed compose edge — never fabricated).
 type ConvergedBranch = {
@@ -119,6 +128,11 @@ type CockpitOutcome = {
 // The normalized outcome of ONE governed fan-out launch.
 type FanoutOutcome = {
     result: FanoutView | null;
+    notice: string;
+};
+
+type FanoutRetryOutcome = {
+    result: FanoutRetryView | null;
     notice: string;
 };
 
@@ -189,6 +203,9 @@ class RecoderFanoutViewModel implements ViewModel {
     launchingAtom: PrimitiveAtom<boolean>;
     launchNoticeAtom: PrimitiveAtom<string>;
     launchResultAtom: PrimitiveAtom<FanoutView | null>;
+    retryingAtom: PrimitiveAtom<boolean>;
+    retryNoticeAtom: PrimitiveAtom<string>;
+    retryResultAtom: PrimitiveAtom<FanoutRetryView | null>;
 
     refanTaskAtom: PrimitiveAtom<string>;
     refanKindsAtom: PrimitiveAtom<string[]>;
@@ -231,6 +248,9 @@ class RecoderFanoutViewModel implements ViewModel {
         this.launchingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.launchNoticeAtom = atom("") as PrimitiveAtom<string>;
         this.launchResultAtom = atom(null) as PrimitiveAtom<FanoutView | null>;
+        this.retryingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.retryNoticeAtom = atom("") as PrimitiveAtom<string>;
+        this.retryResultAtom = atom(null) as PrimitiveAtom<FanoutRetryView | null>;
 
         this.refanTaskAtom = atom("") as PrimitiveAtom<string>;
         this.refanKindsAtom = atom([]) as PrimitiveAtom<string[]>;
@@ -379,6 +399,8 @@ class RecoderFanoutViewModel implements ViewModel {
         const kinds = dedupeKinds(agentKinds, this.knownKinds);
         globalStore.set(this.launchNoticeAtom, "");
         globalStore.set(this.launchResultAtom, null);
+        globalStore.set(this.retryNoticeAtom, "");
+        globalStore.set(this.retryResultAtom, null);
         this.resetConverge();
         if (trimmedTask == "") {
             globalStore.set(this.launchNoticeAtom, "A task description is required to fan out.");
@@ -433,6 +455,8 @@ class RecoderFanoutViewModel implements ViewModel {
         const kinds = dedupeKinds(agentKinds, this.knownKinds);
         globalStore.set(this.launchNoticeAtom, "");
         globalStore.set(this.launchResultAtom, null);
+        globalStore.set(this.retryNoticeAtom, "");
+        globalStore.set(this.retryResultAtom, null);
         this.resetConverge();
         if (trimmedIssue == "") {
             globalStore.set(this.launchNoticeAtom, "A bd issue id is required to fan out from an issue.");
@@ -471,6 +495,58 @@ class RecoderFanoutViewModel implements ViewModel {
             globalStore.set(this.connectedAtom, false);
         } finally {
             globalStore.set(this.launchingAtom, false);
+        }
+    }
+
+    // Recover an incomplete first-round launch without abandoning its healthy
+    // siblings. Only failed/unsettled/not-created kinds are replaced; if every
+    // pane settled but compose still produced no branch, all original kinds get a
+    // fresh attempt. The backend reuses the server-recorded original task when the
+    // issue-driven flow has no task text in this form.
+    async retryIncomplete(result: FanoutView) {
+        if (globalStore.get(this.retryingAtom)) {
+            return;
+        }
+        const taskGroup = result.taskGroup.trim();
+        const agentKinds = fanoutRecoveryKinds(result);
+        const repoPath = globalStore.get(this.repoPathAtom).trim();
+        const spaceId = globalStore.get(this.spaceIdAtom).trim();
+        const projectId = globalStore.get(this.projectIdAtom).trim();
+        globalStore.set(this.retryNoticeAtom, "");
+        globalStore.set(this.retryResultAtom, null);
+        if (taskGroup == "" || agentKinds.length == 0) {
+            globalStore.set(this.retryNoticeAtom, "No fan-out agents are available to retry.");
+            return;
+        }
+        if (repoPath == "" || spaceId == "" || projectId == "") {
+            globalStore.set(this.retryNoticeAtom, MissingContextNotice);
+            return;
+        }
+        const task = globalStore.get(this.launchTaskAtom).trim();
+        globalStore.set(this.retryingAtom, true);
+        this.resetConverge();
+        try {
+            const outcome = await fetchFanoutRetry(getRecoderBackendUrl(), {
+                taskGroup,
+                agentKinds,
+                repoPath,
+                spaceId,
+                projectId,
+                ...(task == "" ? {} : { task }),
+            });
+            globalStore.set(this.retryResultAtom, outcome.result);
+            globalStore.set(this.retryNoticeAtom, outcome.notice);
+            globalStore.set(this.connectedAtom, true);
+            if (outcome.result != null) {
+                globalStore.set(this.taskGroupAtom, outcome.result.taskGroup);
+                await this.loadCockpit(outcome.result.taskGroup);
+            }
+        } catch {
+            globalStore.set(this.retryResultAtom, null);
+            globalStore.set(this.retryNoticeAtom, "Not connected.");
+            globalStore.set(this.connectedAtom, false);
+        } finally {
+            globalStore.set(this.retryingAtom, false);
         }
     }
 
@@ -613,13 +689,17 @@ class RecoderFanoutViewModel implements ViewModel {
     // createBlock affordance the hub's openReview uses, so the composed branch stops
     // dead-ending and flows into review + createPr. Fire-and-forget + degrade-safe:
     // an empty id opens nothing, a failed open never crashes the cockpit.
-    openConvergedReview(workspaceId: string) {
+    openWorkspace(workspaceId: string, view: "session" | "review") {
         const id = typeof workspaceId == "string" ? workspaceId.trim() : "";
         if (id == "") {
             return;
         }
-        const meta = workspaceDetailMeta("review", id);
+        const meta = workspaceDetailMeta(view, id);
         void createBlock({ meta }).catch(() => {});
+    }
+
+    openConvergedReview(workspaceId: string) {
+        this.openWorkspace(workspaceId, "review");
     }
 
     // The delay (ms) until the next cockpit poll, from the CURRENT snapshot/converged
@@ -937,6 +1017,63 @@ function projectPerAgent(value: unknown): FanoutAgentResult[] {
     return out;
 }
 
+// Select only outcomes that never became trustworthy review candidates. When all
+// outcomes settled but launch-time composition still failed (for example no diff
+// or an unresolved merge), rerun the full original set as the useful recovery.
+function fanoutRecoveryKinds(result: FanoutView): string[] {
+    const incomplete = result.perAgent
+        .filter((agent) => agent.workspaceId == null || !agent.settled || agent.state == "error")
+        .map((agent) => agent.kind);
+    const candidates = incomplete.length > 0 ? incomplete : result.perAgent.map((agent) => agent.kind);
+    return dedupeKinds(candidates, KnownAgentKinds).slice(0, MaxFanoutAgents);
+}
+
+// Run ONE governed recovery launch into an existing group. The server validates
+// ownership/context and recovers the original task from SoR when `task` is absent.
+async function fetchFanoutRetry(
+    base: string,
+    args: {
+        taskGroup: string;
+        task?: string;
+        agentKinds: string[];
+        repoPath: string;
+        spaceId: string;
+        projectId: string;
+    }
+): Promise<FanoutRetryOutcome> {
+    const res = await fetch(`${base}/api/mcp/tools/conductor/recoder_fanout_retry/call`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ args }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+        return { result: null, notice: readErrorReason(body) || `Fan-out recovery unavailable (${res.status})` };
+    }
+    const data = asRecord((body as { data?: unknown } | null)?.data);
+    const status = typeof data.status == "string" ? data.status : "";
+    if (status != "completed") {
+        return { result: null, notice: gateDegradeNotice(status, data.reason) };
+    }
+    const result = asRecord(data.result);
+    if (result.ok === false && typeof result.error == "string") {
+        return { result: null, notice: result.error };
+    }
+    if (typeof result.taskGroup != "string" || result.taskGroup == "") {
+        return { result: null, notice: "Fan-out recovery returned no task group." };
+    }
+    const view: FanoutRetryView = {
+        taskGroup: result.taskGroup,
+        workspaceIds: strings(result.workspaceIds),
+        reviewableWorkspaceIds: strings(result.reviewableWorkspaceIds),
+        perAgent: projectPerAgent(result.perAgent),
+    };
+    return {
+        result: view,
+        notice: `Launched ${view.workspaceIds.length} replacement workspace${view.workspaceIds.length == 1 ? "" : "s"}.`,
+    };
+}
+
 // --- re-fan projection -------------------------------------------------------
 
 // Run ONE governed re-fan. A non-2xx yields a truthful notice; otherwise the wire is
@@ -1048,6 +1185,10 @@ function num(value: unknown): number {
     return typeof value == "number" && Number.isFinite(value) ? value : 0;
 }
 
+function strings(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item == "string") : [];
+}
+
 // Dedupe (preserving order) + drop unknown kinds — mirrors the tool's own normalize so
 // the form never posts a set the backend will only reject.
 function dedupeKinds(kinds: readonly string[], known: readonly string[]): string[] {
@@ -1077,8 +1218,10 @@ export {
     type ConvergedBranch,
     type FanoutAgentResult,
     type FanoutView,
+    type FanoutRetryView,
     type FileVersionEntry,
     type FileVersionsView,
     type ReFanProvenanceLink,
     type ReFanView,
+    fanoutRecoveryKinds,
 };

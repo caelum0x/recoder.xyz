@@ -28,7 +28,6 @@ export const APP_ENDPOINTS = [
   { app: "agents", url: "https://agents.recoder.xyz/api/platform/activity" },
   { app: "agency", url: "https://agency.recoder.xyz/api/platform/activity" },
   { app: "pm", url: "https://pm.recoder.xyz/api/platform/activity" },
-  { app: "web", url: "https://web.recoder.xyz/api/platform/activity" },
 ];
 
 const TIMEOUT_MS = 3000;

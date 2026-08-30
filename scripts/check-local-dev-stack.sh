@@ -23,15 +23,6 @@ run_step() {
 run_step "Ecosystem local readiness" \
   pnpm -C "$REPO_ROOT" run check:ecosystem:local
 
-if [[ -d "$REPO_ROOT/recoder-web" ]]; then
-  run_step "recoder-web unit tests" \
-    pnpm -C "$REPO_ROOT/recoder-web" test
-else
-  echo ""
-  echo "=== recoder-web unit tests ==="
-  echo "SKIP: recoder-web unit tests (retired surface missing)"
-fi
-
 run_step "backend unit tests" \
   pnpm -C "$REPO_ROOT/backend" test -- --runInBand
 

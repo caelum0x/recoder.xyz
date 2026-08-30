@@ -23,8 +23,14 @@ import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js'
 import type { RunEventBusPort } from './ports/run-event.port.js';
 import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
-import type { SquadIssuePort, SquadReadyIssue } from './ports/squad-issue.port.js';
+import type {
+  SquadIssueCreateInput,
+  SquadIssuePort,
+  SquadReadyIssue,
+} from './ports/squad-issue.port.js';
 import type { SquadAutopilotService } from './services/squad-autopilot.service.js';
+import type { PullRequestReviewAgentService } from './services/pr-review-agent.service.js';
+import type { PullRequestReviewConductorPort } from './ports/pr-review-agent.port.js';
 import type { PolicyUpdatedListener } from './services/policy-update.emitter.js';
 import type { AgentOsDeps } from './types.js';
 
@@ -33,11 +39,30 @@ export type {
   PolicyUpdatedEvent,
   PolicyUpdatedListener,
 } from './services/policy-update.emitter.js';
-export type { SquadConductorPort, SquadDispatchRequest, SquadDispatchResult } from './ports/squad-autopilot.port.js';
+export type {
+  SquadAutopilotLaunchProfile,
+  SquadConductorPort,
+  SquadDispatchRequest,
+  SquadDispatchResult,
+} from './ports/squad-autopilot.port.js';
+export type {
+  PullRequestCandidate,
+  PullRequestReviewApprovalPort,
+  PullRequestReviewContext,
+  PullRequestReviewConductorPort,
+  PullRequestReviewDispatchRequest,
+  PullRequestReviewWorkspaceRef,
+  PullRequestReviewPublisherPort,
+  PullRequestReviewEvent,
+  PullRequestReviewTarget,
+  PullRequestSourcePort,
+} from './ports/pr-review-agent.port.js';
+export type { JiraRequirement, JiraRequirementPort } from './ports/jira-requirement.port.js';
 export type {
   SquadIssuePort,
   SquadReadyIssue,
   SquadIssueDetail,
+  SquadIssueCreateInput,
   SquadStaleIssue,
 } from './ports/squad-issue.port.js';
 export type {
@@ -70,17 +95,21 @@ export interface AgentOsModule {
   internalRoutes(): Router;
   /** Read-only MCP introspection tools (summary / tasks / runs). */
   mcp(): readonly McpToolRegistration[];
-  /** The squad autopilot loop (null when squads/autopilot are disabled). */
+  /** The squad autopilot loop (null only when squads are disabled). */
   squadAutopilot(): SquadAutopilotService | null;
   /**
    * Late-bind the conductor dispatch seam onto the autopilot (bootstrap builds
-   * the conductor AFTER agent-os). No-op (logged) when the autopilot is off.
+   * the conductor AFTER agent-os). No-op (logged) when squads are off.
    */
   attachSquadAutopilotConductor(port: SquadConductorPort): void;
+  /** The installed-app pull-request watcher (always composed, paused by default). */
+  pullRequestReviewAgents(): PullRequestReviewAgentService;
+  /** Late-bind canonical Conductor workspace dedupe + dispatch. */
+  attachPullRequestReviewConductor(port: PullRequestReviewConductorPort): void;
   /**
    * Late-bind the issue-graph read seam onto the autopilot (bootstrap builds
    * the MEMORY module — the owner of the beads issue-graph facet — AFTER
-   * agent-os). No-op (logged) when the autopilot is off.
+   * agent-os). No-op (logged) when squads are off.
    */
   attachIssueGraph(port: SquadIssuePort): void;
   /**
@@ -89,6 +118,11 @@ export interface AgentOsModule {
    * Degrade-truthful: `[]` when no seam is attached or the graph is down.
    */
   readyIssues(): Promise<readonly SquadReadyIssue[]>;
+  /** File work into the memory-owned Beads issue graph. */
+  createIssue(
+    input: SquadIssueCreateInput,
+    actor: string,
+  ): Promise<{ id: string } | null>;
   /**
    * Register a `policy.updated` listener (§4c). Fired when a forbidden/secret-path
    * or approval policy artifact changes (a space upsert / policy PUT); bootstrap

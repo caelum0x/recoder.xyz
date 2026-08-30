@@ -623,6 +623,7 @@ impl App {
             outer_terminal_focus: None,
             prefix_code,
             prefix_mods,
+            headless_size: config.headless_size(),
             default_sidebar_width: config.ui.sidebar_width,
             sidebar_width,
             sidebar_min_width,
@@ -1517,6 +1518,14 @@ impl App {
                 }
                 self.state.sound = config.ui.sound.clone();
                 self.state.toast_config = config.ui.toast.clone();
+            }
+        }
+
+        if !invalid_section("server") {
+            if let Some(diagnostic) = config.invalid_headless_size_diagnostic() {
+                diagnostics.push(format!("{diagnostic}; keeping current [server] settings"));
+            } else {
+                self.state.headless_size = config.headless_size();
             }
         }
 

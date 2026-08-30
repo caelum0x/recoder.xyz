@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Pure projection + fetch helper for the TRUE line-level A/B pairwise diff
-// (GET /api/conductor/workspaces/compare/:taskGroup/pairwise?a=&b=), the backend
-// edge the PairwisePanel renders. Everything here is jotai-free; the fetch seam
+// (task-group or explicit-id ad-hoc edge), the backend read the PairwisePanel
+// renders. Everything here is jotai-free; the fetch seam
 // is injectable so tests stub it. Degrade-safe throughout: an unrecognized
 // payload, a non-2xx, or an unreachable backend yields a truthful { ok:false }
 // with the backend's verbatim reason — the panel then keeps its client-side
@@ -11,6 +11,7 @@
 
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { readErrorReason } from "./recoder-errors";
+import { adHocWorkspaceIds } from "./recoder-ad-hoc-group";
 
 // One file's projected row. `lines` is the unified patch split into lines
 // (trailing blank dropped); [] for an identical, binary, or unavailable file.
@@ -129,8 +130,13 @@ async function fetchPairwiseDiff(
         `a=${encodeURIComponent(aId)}&b=${encodeURIComponent(bId)}` +
         (paths != null && paths.length > 0 ? `&paths=${encodeURIComponent(paths.join(","))}` : "");
     try {
+        const adHocIds = adHocWorkspaceIds(tg);
+        const url =
+            adHocIds.length > 0
+                ? `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/ad-hoc/pairwise?ids=${encodeURIComponent(adHocIds.join(","))}&${query}`
+                : `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/${encodeURIComponent(tg)}/pairwise?${query}`;
         const res = await fetchImpl(
-            `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/${encodeURIComponent(tg)}/pairwise?${query}`
+            url
         );
         const body = await res.json().catch(() => null);
         if (!res.ok) {

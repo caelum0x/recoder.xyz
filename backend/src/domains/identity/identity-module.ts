@@ -53,11 +53,13 @@ export class IdentityModuleImpl implements IdentityModule {
   private readonly principalSvc: PrincipalService;
   private readonly authMiddleware: AuthMiddleware;
   private readonly identityRepo?: IdentityRepositoryImpl;
+  private readonly signOutHook?: IdentityModuleDeps['onSignOut'];
 
   constructor(deps: IdentityModuleDeps) {
     this.cfg = sliceIdentityConfig(deps.config);
     this.log = deps.logger;
     this.executor = deps.executor;
+    this.signOutHook = deps.onSignOut;
 
     const senders: AuthSenders | undefined = deps.senders;
     this.adapter = createBetterAuthAdapter({
@@ -130,7 +132,11 @@ export class IdentityModuleImpl implements IdentityModule {
 
   /** The Better Auth host router — mount at `/api/auth`. */
   authRoutes(): Router {
-    return buildAuthRouter({ adapter: this.adapter, verifier: this.principalSvc });
+    return buildAuthRouter({
+      adapter: this.adapter,
+      verifier: this.principalSvc,
+      ...(this.signOutHook ? { onSignOut: this.signOutHook } : {}),
+    });
   }
 
   /**

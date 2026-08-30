@@ -40,6 +40,7 @@ import { tmpdir } from 'node:os';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import type { Workspace } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
+import { extractChangedSymbols } from '../../../shared/changed-symbols.js';
 // Type-only cross-domain seam (erased at build — boundary-legal): the VALUE is
 // injected via `ConvergeOpsDeps.inference`, never imported here.
 import type {
@@ -399,6 +400,13 @@ export async function composeConvergence(
     })),
     ...(assistedRecords.length > 0 ? { assisted: assistedRecords } : {}),
   };
+  // Preserve canonical repository identity and other non-group metadata from the
+  // primary source. Drop only taskGroup: the composed workspace must remain its
+  // own singleton and must never reappear as a source sibling of the old group.
+  const inheritedMetadata: Record<string, unknown> = { ...(primary.metadata ?? {}) };
+  delete inheritedMetadata.taskGroup;
+  delete inheritedMetadata.convergence;
+  delete inheritedMetadata.convergedFromTaskGroup;
   const composed: Workspace = {
     ...primary,
     workspaceId,
@@ -415,6 +423,7 @@ export async function composeConvergence(
     // Own singleton (NO shared `taskGroup`), so compare never re-lists it as a
     // sibling; the source group is recorded under `convergedFromTaskGroup`.
     metadata: {
+      ...inheritedMetadata,
       convergedFromTaskGroup: input.taskGroup,
       convergence: provenance,
     },
@@ -900,12 +909,69 @@ export async function probeSynthesizability(
     for (const c of sorted) {
       const contributors = [...c.workspaceIds].sort();
       const result = await probeOne(deps, { repoPath, base, relPath: c.path, contributors, worktrees, tmpDir });
-      out.push({ path: c.path, workspaceIds: contributors, ...result });
+      const symbols = await probeChangedSymbols(
+        deps,
+        base,
+        c.path,
+        contributors,
+        worktrees,
+      );
+      out.push({ path: c.path, workspaceIds: contributors, ...result, ...symbols });
     }
     return out;
   } finally {
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/**
+ * Read each sibling's zero-context diff for one contested path and retain the
+ * declaration names Recoder's shared code-intelligence extractor recognizes.
+ * Missing/unreadable evidence is omitted; it never changes mergeability itself.
+ */
+async function probeChangedSymbols(
+  deps: ConvergeOpsDeps,
+  base: string,
+  relPath: string,
+  contributors: readonly string[],
+  worktrees: ReadonlyMap<string, string>,
+): Promise<{
+  symbols?: readonly { workspaceId: string; names: readonly string[] }[];
+  sharedSymbols?: readonly string[];
+}> {
+  const exec = deps.exec ?? execFileSafe;
+  const symbols: { workspaceId: string; names: string[] }[] = [];
+  for (const workspaceId of contributors) {
+    const cwd = worktrees.get(workspaceId);
+    if (!cwd) continue;
+    try {
+      const { stdout } = await exec(
+        'git',
+        ['-C', cwd, 'diff', '--unified=0', base, '--', relPath],
+        { maxBuffer: 4 * 1024 * 1024 },
+      );
+      const names = extractChangedSymbols(stdout, 24);
+      if (names.length > 0) symbols.push({ workspaceId, names });
+    } catch {
+      // Structural evidence is optional; the real merge probe remains authoritative.
+    }
+  }
+  if (symbols.length === 0) return {};
+  const counts = new Map<string, number>();
+  for (const entry of symbols) {
+    for (const name of new Set(entry.names)) {
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  const sharedSymbols = [...counts.entries()]
+    .filter(([, count]) => count >= 2)
+    .map(([name]) => name)
+    .sort()
+    .slice(0, 24);
+  return {
+    symbols,
+    ...(sharedSymbols.length > 0 ? { sharedSymbols } : {}),
+  };
 }
 
 /** Probe ONE contested path — the same gather + 3-way fold as compose, but read-only. */

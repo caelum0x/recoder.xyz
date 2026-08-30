@@ -28,7 +28,7 @@ export interface IssueRead {
   readonly description?: string;
 }
 
-/** The issue-graph subset (beads): claim on launch, note + close on completion. */
+/** The issue-graph subset (beads): claim on launch, note runs, close on delivery. */
 export interface IssueGraphPort {
   /**
    * Mark the bd issue `taskId` claimed / in-progress with `workspaceId` as
@@ -37,11 +37,16 @@ export interface IssueGraphPort {
    */
   trackWork(taskId: string, workspaceId: string): Promise<void>;
   /**
-   * Note the terminal `outcome` on the bd issue `taskId`, and close it on
-   * `'completed'`. Best-effort: a failure is logged, never rethrown into the
-   * terminal-event path. No-op + log when `taskId` is absent.
+   * Note a terminal run `outcome` on the bd issue `taskId`. This does not close
+   * the issue: one task can have several sibling runs, and a successful run is
+   * not delivered until review/convergence reaches a governed merge.
    */
   completeWork(taskId: string, outcome: 'completed' | 'failed'): Promise<void>;
+  /**
+   * Mark the task delivered after its workspace has merged successfully. Kept
+   * optional so older adapters remain structurally compatible.
+   */
+  deliverWork?(taskId: string, workspaceId: string): Promise<void>;
   /**
    * READ a bd issue's title/description so a workspace can be STARTED FROM it (the
    * reverse of `trackWork`: Board issue → seeded agent launch). Returns `null` — a
@@ -75,6 +80,11 @@ export interface CodeIntelPort extends IssueGraphPort {
    * empty. Never throws.
    */
   indexRepo(repoPath: string, repoId: string): Promise<void>;
+  /** Same index operation with a truthful outcome for background coverage reads. */
+  indexRepoWithResult?(repoPath: string, repoId: string): Promise<{
+    indexed: boolean;
+    reason?: string;
+  }>;
   /**
    * Incrementally REFRESH the recodergit code-knowledge-graph after the agent has
    * committed new code (fired on run completion, so the graph does not go stale

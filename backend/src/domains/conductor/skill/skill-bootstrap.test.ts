@@ -72,7 +72,7 @@ describe('createGovernedSkillModel', () => {
       getWorkspace, approval, logger: log,
     });
     expect(model).not.toBeNull();
-    expect(model!.loadReport).toEqual([{ id: 'recoder.workspace', ok: false, reason: 'bad_signature' }]);
+    expect(model!.loadReport).toEqual([{ id: 'recoder.workspace', ok: false, reason: 'not_pinned' }]);
     expect(model!.registry.list()).toHaveLength(0);
   });
 });

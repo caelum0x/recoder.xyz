@@ -40,6 +40,7 @@ import { computeWorkspacePort } from '../services/workspace-port.js';
 import { readWorkspacePanes } from '../services/workspace-panes.js';
 import { readRepoConfigFile } from '../services/repo-config-file.js';
 import type { EnvironmentImportView } from '../services/environment-import.js';
+import type { CrystalMigrationView } from '../services/crystal-migration.service.js';
 import type {
   TranscriptSearchView,
   WorkspaceTranscriptView,
@@ -507,6 +508,11 @@ export class ConductorReads {
    */
   async environmentImport(): Promise<EnvironmentImportView> {
     return this.ctx.environmentImportService.probe();
+  }
+
+  /** Discover adoptable Crystal worktrees without starting Crystal itself. */
+  async crystalMigration(): Promise<CrystalMigrationView> {
+    return this.ctx.crystalMigrationService.scan();
   }
 
   /**

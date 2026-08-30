@@ -144,7 +144,8 @@ export function createAuthMiddleware(deps: AuthMiddlewareDeps): AuthMiddleware {
       sendError(res, createError(ErrorCode.AUTH_REQUIRED));
       return;
     }
-    const isAdmin = p.kind === 'internal' || adminIds.has(p.userId) || p.scopes.includes('admin');
+    const isSoloOperator = config.soloMode && !config.isProduction && p.userId === 'solo-owner';
+    const isAdmin = isSoloOperator || p.kind === 'internal' || adminIds.has(p.userId) || p.scopes.includes('admin');
     if (!isAdmin) {
       sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Admin access required.'));
       return;

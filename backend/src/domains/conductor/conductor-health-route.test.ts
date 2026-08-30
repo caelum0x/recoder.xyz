@@ -34,11 +34,20 @@ const middleware = {
   verifyOrgAccess: () => passthrough,
 } as unknown as AuthMiddleware;
 
-/** A stub module that only implements `substrates()` (the only method `/health` hits). */
+/** A stub module that implements the two read models consumed by `/health`. */
 function stubModule(substrates: readonly SubstrateAvailabilityView[]): ConductorModule {
   return {
     async substrates(): Promise<readonly SubstrateAvailabilityView[]> {
       return substrates;
+    },
+    codeNetworkCoverage() {
+      return {
+        status: 'ready' as const,
+        discoveredRepositories: 2,
+        indexedRepositories: 2,
+        unavailableRepositories: 0,
+        repositories: [],
+      };
     },
   } as unknown as ConductorModule;
 }
@@ -89,6 +98,11 @@ function get(base: string, path: string): Promise<{ status: number; body: () => 
 interface HealthBody {
   available: boolean;
   tmux: boolean;
+  codeNetwork: {
+    status: string;
+    discoveredRepositories: number;
+    indexedRepositories: number;
+  };
   substrate: { tmuxBin: string | null; tmuxSocket: string | null };
   reason?: string;
 }
@@ -106,6 +120,11 @@ describe('GET /api/conductor/health', () => {
       const data = (res.body() as { data: HealthBody }).data;
       expect(data.available).toBe(true);
       expect(data.tmux).toBe(true);
+      expect(data.codeNetwork).toMatchObject({
+        status: 'ready',
+        discoveredRepositories: 2,
+        indexedRepositories: 2,
+      });
       // The load-bearing new field: a real binary, not the silent PATH fallback.
       expect(data.substrate.tmuxBin).toBe('/vendored/recoder/tmux');
       // §A1b: the DEFAULT socket is mirrored from the injected resolver so the

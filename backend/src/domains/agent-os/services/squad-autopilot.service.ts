@@ -27,7 +27,12 @@ import type {
   SquadReadyIssue,
   SquadStaleIssue,
 } from '../ports/squad-issue.port.js';
-import type { SquadConductorPort } from '../ports/squad-autopilot.port.js';
+import type {
+  SquadAutopilotLaunchProfile,
+  SquadConductorPort,
+  SquadDispatchResult,
+} from '../ports/squad-autopilot.port.js';
+import type { AgentAutomationStatePort } from '../ports/automation-state.port.js';
 import type { SquadService } from './squad.service.js';
 
 /** A ready issue as the issue-graph port reports it (`bd ready --json`). */
@@ -61,7 +66,7 @@ interface IssueLineage {
 export interface AutopilotBoardEntry {
   readonly issueId: string;
   readonly title: string;
-  readonly status: 'dispatched' | 'failed' | 'skipped';
+  readonly status: 'dispatched' | 'existing' | 'failed' | 'skipped';
   readonly workspaceId?: string;
   readonly runId?: string;
   readonly routedAgentId?: string;
@@ -89,6 +94,14 @@ export interface AutopilotTickResult {
 /** The board read model (`GET /api/agent-os/squads/board`). */
 export interface AutopilotBoardView {
   readonly running: boolean;
+  /** Real scheduler posture surfaced to the desktop — never inferred client-side. */
+  readonly intervalMs: number;
+  readonly maxDispatchesPerTick: number;
+  /** The explicit repository + runtime contract every future tick will use. */
+  readonly launchProfile: SquadAutopilotLaunchProfile | null;
+  /** Background work can prepare changes but never owns delivery. */
+  readonly reviewOwner: 'human';
+  readonly persistence: { readonly wired: boolean; readonly durable: boolean; readonly reason?: string };
   readonly beads: { readonly wired: boolean; readonly status?: string; readonly reason?: string };
   readonly conductor: { readonly wired: boolean };
   readonly lastTick: AutopilotTickResult | null;
@@ -116,6 +129,9 @@ export interface SquadAutopilotDeps {
   readonly logger: Logger;
   readonly intervalMs: number;
   readonly maxDispatchesPerTick: number;
+  /** Optional boot profile; product control normally pins this from Wave. */
+  readonly initialProfile?: SquadAutopilotLaunchProfile | null;
+  readonly state?: Pick<AgentAutomationStatePort, 'loadBackgroundAgents' | 'saveBackgroundAgents' | 'isDurable'> | null;
   readonly now?: () => string;
 }
 
@@ -130,7 +146,10 @@ export class SquadAutopilotService {
   private readonly logger: Logger;
   private readonly intervalMs: number;
   private readonly maxDispatchesPerTick: number;
+  private launchProfile: SquadAutopilotLaunchProfile | null;
   private readonly now: () => string;
+  private readonly stateStore: SquadAutopilotDeps['state'];
+  private persistenceReason: string | null = null;
 
   /** Latest board entry per issue id (insertion-ordered for bounded eviction). */
   private readonly entries = new Map<string, AutopilotBoardEntry>();
@@ -146,7 +165,11 @@ export class SquadAutopilotService {
     this.logger = deps.logger;
     this.intervalMs = deps.intervalMs;
     this.maxDispatchesPerTick = deps.maxDispatchesPerTick;
+    this.launchProfile = deps.initialProfile
+      ? normalizeAutopilotLaunchProfile(deps.initialProfile)
+      : null;
     this.now = deps.now ?? (() => new Date().toISOString());
+    this.stateStore = deps.state ?? null;
   }
 
   /** Late-bind the conductor seam (bootstrap builds the conductor after agent-os). */
@@ -164,6 +187,9 @@ export class SquadAutopilotService {
     const missing: string[] = [];
     if (!this.issueGraph) missing.push('issue-graph seam not attached');
     if (!this.conductor) missing.push('conductor dispatch seam not wired');
+    if (!this.launchProfile) {
+      missing.push('choose a repository and agent before starting background work');
+    }
     if (missing.length > 0) {
       return this.finish({ status: 'degraded', reason: missing.join('; '), ready: 0, dispatched: 0, failed: 0, skipped: 0 });
     }
@@ -180,7 +206,7 @@ export class SquadAutopilotService {
 
     for (const issue of issues) {
       if (dispatched >= this.maxDispatchesPerTick) break; // rest waits for the next tick
-      if (this.entries.get(issue.id)?.status === 'dispatched') {
+      if (this.entries.get(issue.id)?.status === 'dispatched' || this.entries.get(issue.id)?.status === 'existing') {
         skipped += 1; // already launched — never re-dispatch a live workspace
         continue;
       }
@@ -194,6 +220,19 @@ export class SquadAutopilotService {
 
       const outcome = await this.dispatch(issue, routed.agentId);
       if (outcome.ok) {
+        if (outcome.status === 'existing') {
+          skipped += 1;
+          this.record({
+            issueId: issue.id,
+            title: issue.title,
+            status: 'existing',
+            ...(outcome.workspaceId ? { workspaceId: outcome.workspaceId } : {}),
+            ...(routed.agentId ? { routedAgentId: routed.agentId } : {}),
+            reason: 'canonical background workspace already exists',
+            at: this.now(),
+          });
+          continue;
+        }
         dispatched += 1;
         this.record({
           issueId: issue.id,
@@ -219,6 +258,32 @@ export class SquadAutopilotService {
     }
 
     return this.finish({ status: 'ok', ready: issues.length, dispatched, failed, skipped });
+  }
+
+  /**
+   * Serialized public scan used by both the scheduler and desktop control edge.
+   * A manual scan that lands during an active pass never creates a second
+   * dispatcher; it reports the overlap truthfully and lets the first pass finish.
+   */
+  async scanOnce(): Promise<AutopilotTickResult> {
+    if (this.ticking) {
+      return {
+        operation: 'squad-autopilot.tick',
+        status: 'degraded',
+        reason: 'a background-agent scan is already in progress',
+        ready: 0,
+        dispatched: 0,
+        failed: 0,
+        skipped: 0,
+        at: this.now(),
+      };
+    }
+    this.ticking = true;
+    try {
+      return await this.tickOnce();
+    } finally {
+      this.ticking = false;
+    }
   }
 
   /** The truthful board read model. Non-throwing; probes the issue-graph seam's health. */
@@ -250,6 +315,15 @@ export class SquadAutopilotService {
     }
     return {
       running: this.timer !== null,
+      intervalMs: this.intervalMs,
+      maxDispatchesPerTick: this.maxDispatchesPerTick,
+      launchProfile: this.launchProfile,
+      reviewOwner: 'human',
+      persistence: {
+        wired: this.stateStore != null,
+        durable: this.stateStore?.isDurable() === true,
+        ...(this.persistenceReason ? { reason: this.persistenceReason } : {}),
+      },
       beads,
       conductor: { wired: this.conductor !== null },
       lastTick: this.lastTick,
@@ -263,22 +337,57 @@ export class SquadAutopilotService {
     return { beadsWired: this.issueGraph !== null, conductorWired: this.conductor !== null };
   }
 
+  /** Pin the exact repo/runtime future manual and scheduled scans will launch. */
+  async configure(profile: SquadAutopilotLaunchProfile): Promise<SquadAutopilotLaunchProfile> {
+    const normalized = normalizeAutopilotLaunchProfile(profile);
+    this.launchProfile = normalized;
+    await this.persistControlState();
+    return normalized;
+  }
+
+  /** Restore the pinned target and scheduling posture before the installed app starts serving Wave. */
+  async restore(): Promise<boolean> {
+    if (!this.stateStore) return false;
+    try {
+      const saved = await this.stateStore.loadBackgroundAgents();
+      if (!saved) return false;
+      this.launchProfile = saved.launchProfile
+        ? normalizeAutopilotLaunchProfile(saved.launchProfile)
+        : null;
+      if (saved.running && this.launchProfile) this.start();
+      this.persistenceReason = null;
+      return true;
+    } catch (error) {
+      this.persistenceReason = error instanceof Error ? error.message : String(error);
+      this.logger.warn({ err: this.persistenceReason }, 'background-agent control state could not be restored');
+      return false;
+    }
+  }
+
+  /** User-owned run posture. Unlike `stop()`, pause is persisted across backend restarts. */
+  async setRunning(running: boolean): Promise<void> {
+    if (running) this.start();
+    else this.stop();
+    await this.persistControlState();
+  }
+
+  /** One post-boot catch-up pass; paused or unconfigured loops stay inert. */
+  async catchUpIfRunning(): Promise<AutopilotTickResult | null> {
+    if (!this.timer || !this.launchProfile) return null;
+    return this.scanOnce();
+  }
+
   /** Start the interval driver. Idempotent; overlapping passes are skipped. */
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      if (this.ticking) return;
-      this.ticking = true;
-      void this.tickOnce()
+      void this.scanOnce()
         .catch((error) => {
           // Defensive: tickOnce never throws by contract, but the loop must survive.
           this.logger.warn(
             { err: error instanceof Error ? error.message : String(error) },
             'squad-autopilot tick failed',
           );
-        })
-        .finally(() => {
-          this.ticking = false;
         });
     }, this.intervalMs);
     // Do not keep the event loop alive solely for the autopilot.
@@ -290,6 +399,21 @@ export class SquadAutopilotService {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
+    }
+  }
+
+  private async persistControlState(): Promise<void> {
+    if (!this.stateStore) return;
+    try {
+      await this.stateStore.saveBackgroundAgents({
+        version: 1,
+        running: this.timer != null,
+        launchProfile: this.launchProfile,
+      });
+      this.persistenceReason = null;
+    } catch (error) {
+      this.persistenceReason = error instanceof Error ? error.message : String(error);
+      this.logger.warn({ err: this.persistenceReason }, 'background-agent control state could not be saved');
     }
   }
 
@@ -360,7 +484,7 @@ export class SquadAutopilotService {
   private async dispatch(
     issue: ReadyIssue,
     routedAgentId: string | undefined,
-  ): Promise<{ ok: boolean; workspaceId?: string; runId?: string; reason?: string }> {
+  ): Promise<SquadDispatchResult> {
     // FUSION: read the issue's accumulated NOTE evidence + dependency lineage
     // back off the shared issue graph and weave it into the launch prompt so the
     // dispatched agent inherits what prior agents wrote onto this issue — not
@@ -374,6 +498,7 @@ export class SquadAutopilotService {
         title: issue.title,
         prompt,
         ...(routedAgentId ? { routedAgentId } : {}),
+        profile: this.launchProfile!,
       });
     } catch (err) {
       return { ok: false, reason: err instanceof Error ? err.message : 'conductor dispatch threw' };
@@ -398,6 +523,22 @@ export class SquadAutopilotService {
     }
     return result;
   }
+}
+
+/** Validate + normalize the operator-selected unattended launch contract. */
+export function normalizeAutopilotLaunchProfile(
+  profile: SquadAutopilotLaunchProfile
+): SquadAutopilotLaunchProfile {
+  const normalized = {
+    repoPath: profile.repoPath?.trim() ?? '',
+    spaceId: profile.spaceId?.trim() ?? '',
+    projectId: profile.projectId?.trim() ?? '',
+    runtimeId: profile.runtimeId?.trim() ?? '',
+  };
+  for (const [field, value] of Object.entries(normalized)) {
+    if (!value) throw new Error(`${field} is required for background agents`);
+  }
+  return normalized;
 }
 
 /**

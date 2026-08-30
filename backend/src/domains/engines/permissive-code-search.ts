@@ -16,11 +16,18 @@
  */
 import { createHash } from 'node:crypto';
 import {
+  computeFileImpact,
+  createRepoIndexer,
   createSemanticIndex,
+  type FileImpactDirection,
+  type FileImpactResult,
+  type DependencyGraph,
   type EmbeddingPort,
   type VectorStorePort,
   type SemanticHit,
+  repositoryRegistrationFromGraph,
 } from '@recoder/recodergit';
+import type { RecoderGitRepositoryNetwork } from './recodergit-repository-network.store.js';
 
 /** A permissive symbol-search hit — a `path` + line window + score + preview. */
 export interface PermissiveSymbolHit {
@@ -90,6 +97,207 @@ export type PermissiveSymbolSearchFallback = (input: {
   readonly query: string;
   readonly limit: number;
 }) => Promise<readonly PermissiveSymbolHit[] | null>;
+
+/** MIT packaged graph for symbol, file, history, process, and repository impact. */
+export type PermissiveImpactInput = {
+  readonly repoRoot: string;
+  readonly repoId?: string;
+  readonly repoAliases?: readonly string[];
+  /** Exact source revision used to validate a reusable installed-app snapshot. */
+  readonly revision?: string;
+  readonly symbol: string;
+  readonly filePath?: string;
+  readonly direction: FileImpactDirection;
+  readonly maxDepth: number;
+  readonly limit: number;
+  readonly includeTests: boolean;
+};
+
+export type PermissiveImpactFallback = ((input: PermissiveImpactInput) => Promise<FileImpactResult | null>) & {
+  /** Build/register the packaged graph when Conductor indexes a workspace. */
+  indexRepo?(input: {
+    readonly repoRoot: string;
+    readonly repoId: string;
+    readonly repoAliases?: readonly string[];
+    readonly revision: string;
+  }): Promise<DependencyGraph | null>;
+};
+
+export interface PermissiveImpactSnapshotStore {
+  get(input: {
+    readonly repoId: string;
+    readonly repoAliases?: readonly string[];
+    readonly repoRoot: string;
+    readonly revision: string;
+  }): Promise<DependencyGraph | null>;
+  set(input: {
+    readonly repoId: string;
+    readonly repoRoot: string;
+    readonly revision: string;
+    readonly graph: DependencyGraph;
+  }): Promise<void>;
+}
+
+/**
+ * Build a lazily refreshed MIT graph. The process cache keeps one PR review from
+ * rescanning. An exact repo/revision snapshot lets a restarted app reuse the same
+ * graph, while canonical KV connects registered providers to consumer files.
+ */
+export function createPermissiveImpactFallback(deps: {
+  readonly ttlMs?: number;
+  readonly now?: () => number;
+  readonly snapshotStore?: PermissiveImpactSnapshotStore;
+  readonly repositoryNetwork?: RecoderGitRepositoryNetwork;
+  /** Injectable graph builder keeps restart reuse directly provable. */
+  readonly buildGraph?: (repoRoot: string) => Promise<DependencyGraph>;
+} = {}): PermissiveImpactFallback {
+  const ttlMs = deps.ttlMs ?? 30_000;
+  const now = deps.now ?? Date.now;
+  const indexer = createRepoIndexer();
+  const buildGraph = deps.buildGraph ?? ((repoRoot: string) => indexer.indexDependencyGraph(repoRoot));
+  const cache = new Map<string, { expiresAt: number; graph: Promise<DependencyGraph> }>();
+
+  type GraphInput = {
+    readonly repoRoot: string;
+    readonly repoId?: string;
+    readonly repoAliases?: readonly string[];
+    readonly revision?: string;
+  };
+
+  async function registerGraph(input: GraphInput, graph: DependencyGraph): Promise<void> {
+    const repoId = input.repoId?.trim();
+    const revision = input.revision?.trim();
+    if (!repoId || !revision || !deps.repositoryNetwork) return;
+    try {
+      await deps.repositoryNetwork.register(
+        repositoryRegistrationFromGraph(repoId, revision, graph),
+        input.repoAliases,
+      );
+    } catch {
+      // A registry write cannot make single-repository impact unavailable.
+    }
+  }
+
+  async function loadGraph(input: GraphInput): Promise<DependencyGraph> {
+    const repoId = input.repoId?.trim() || null;
+    const revision = input.revision?.trim() || null;
+    const cacheKey = `${repoId ?? input.repoRoot}\0${revision ?? 'working-tree'}\0${input.repoRoot}`;
+    let cached = cache.get(cacheKey);
+    if (!cached || cached.expiresAt <= now()) {
+      cached = {
+        expiresAt: now() + ttlMs,
+        graph: (async () => {
+          if (repoId && revision && deps.snapshotStore) {
+            try {
+              const restored = await deps.snapshotStore.get({
+                repoId,
+                ...(input.repoAliases && input.repoAliases.length > 0
+                  ? { repoAliases: input.repoAliases }
+                  : {}),
+                repoRoot: input.repoRoot,
+                revision,
+              });
+              if (restored) {
+                await registerGraph(input, restored);
+                return restored;
+              }
+            } catch {
+              // Persistence failure must not make on-disk impact unavailable.
+            }
+          }
+          const graph = await buildGraph(input.repoRoot);
+          if (repoId && revision && deps.snapshotStore) {
+            try {
+              await deps.snapshotStore.set({ repoId, repoRoot: input.repoRoot, revision, graph });
+            } catch {
+              // Keep the live graph; the next process can rebuild if KV is down.
+            }
+          }
+          await registerGraph(input, graph);
+          return graph;
+        })(),
+      };
+      cache.set(cacheKey, cached);
+    }
+    return cached.graph;
+  }
+
+  const fallback = async (input: PermissiveImpactInput): Promise<FileImpactResult | null> => {
+    const targetPath = normalizeRepoPath(input.filePath);
+    if (!targetPath) return null;
+    const repoId = input.repoId?.trim() || null;
+    const cacheKey = `${repoId ?? input.repoRoot}\0${input.revision?.trim() || 'working-tree'}\0${input.repoRoot}`;
+    try {
+      const graph = await loadGraph(input);
+      const result = computeFileImpact({
+        graph,
+        targetPath,
+        symbol: input.symbol,
+        direction: input.direction,
+        maxDepth: input.maxDepth,
+        limit: input.limit,
+        includeTests: input.includeTests,
+      });
+      if (!result || !repoId || !deps.repositoryNetwork) return result;
+      const repositoryImpact = await deps.repositoryNetwork.consumerImpact({
+        providerRepoId: repoId,
+        ...(input.repoAliases && input.repoAliases.length > 0
+          ? { providerAliases: input.repoAliases }
+          : {}),
+        targetPath,
+        limit: 100,
+      }).catch(() => []);
+      if (Array.isArray(repositoryImpact)) return result;
+      const crossRepository = repositoryImpact.consumers;
+      if (repositoryImpact.total === 0 && !repositoryImpact.partial) return result;
+      return {
+        ...result,
+        impactedCount: result.impactedCount + repositoryImpact.total,
+        risk: promoteRisk(result.risk, repositoryImpact.total, repositoryImpact.consumerRepositories),
+        partial: result.partial || repositoryImpact.partial,
+        summary: {
+          ...result.summary,
+          cross_repository_files: repositoryImpact.total,
+          consumer_repositories: repositoryImpact.consumerRepositories,
+        },
+        crossRepository,
+      };
+    } catch {
+      cache.delete(cacheKey);
+      return null;
+    }
+  };
+  return Object.assign(fallback, {
+    async indexRepo(input: {
+      readonly repoRoot: string;
+      readonly repoId: string;
+      readonly repoAliases?: readonly string[];
+      readonly revision: string;
+    }): Promise<DependencyGraph | null> {
+      try {
+        return await loadGraph(input);
+      } catch {
+        return null;
+      }
+    },
+  });
+}
+
+function promoteRisk(
+  current: FileImpactResult['risk'],
+  crossRepositoryFiles: number,
+  repositories: number,
+): FileImpactResult['risk'] {
+  const networkRisk = crossRepositoryFiles >= 20 || repositories >= 5
+    ? 'CRITICAL'
+    : crossRepositoryFiles >= 8 || repositories >= 3
+      ? 'HIGH'
+      : crossRepositoryFiles >= 3 || repositories >= 2
+        ? 'MEDIUM'
+        : 'LOW';
+  const order: FileImpactResult['risk'][] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+  return order.indexOf(networkRisk) > order.indexOf(current) ? networkRisk : current;
+}
 
 /**
  * Build the recodergit-service fallback: a per-repo permissive symbol search that
@@ -186,4 +394,11 @@ export function vectorStorePortFrom(store: QdrantLikeStore | null): VectorStoreP
       }
     },
   };
+}
+
+function normalizeRepoPath(value: string | undefined): string | null {
+  const normalized = value?.trim().replaceAll('\\', '/').replace(/^\.\//, '');
+  if (!normalized || normalized.startsWith('/') || /^[a-z]:\//i.test(normalized)) return null;
+  if (normalized.split('/').some((part) => part === '..' || part === '')) return null;
+  return normalized;
 }

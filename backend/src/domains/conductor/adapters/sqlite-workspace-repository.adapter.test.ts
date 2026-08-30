@@ -38,6 +38,19 @@ const workspace: Workspace = {
   sessionName: 'recoder-ws-1',
   state: 'running',
   createdBy: 'user-1',
+  policyProfile: {
+    version: 1,
+    revision: 2,
+    defaultToolEffect: 'allow',
+    toolRules: [{
+      toolName: 'skill.recoder.workspace.git_diff',
+      effect: 'needs_approval',
+      reason: 'review repository-wide diffs',
+    }],
+    swarm: { autoAnswer: true, minConfidence: 0.86 },
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    updatedBy: 'user-1',
+  },
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };

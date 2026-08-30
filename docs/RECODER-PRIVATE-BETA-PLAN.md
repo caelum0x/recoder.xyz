@@ -196,7 +196,7 @@ These lanes begin only when beta evidence shows repeated need.
 | Loom terminal parity | `recoder-wtlm` | Default Loom is used by beta workspaces | Wave renders a bounded bidirectional stream; backend owns Loom socket and governance |
 | Remote/mobile attach | `recoder-n5pc` | Repeated need to monitor away from the Mac | Authenticated transport plus durable shared session store first |
 | Governed skills | `recoder-ne6o`, `recoder-ubyg` | Repeated, reusable task procedures need execution | Pinned registry, publisher keys, workspace containment, concrete executor |
-| Loom swarm policy | `recoder-trk0`, `recoder-vbg2` | Swarm auto-unblock is enabled for users | Real workspace-agent profile, deny-capable gate, target/evidence binding |
+| Loom swarm policy | `recoder-trk0`, `recoder-vbg2` | Swarm auto-unblock is enabled for users | Shipped durable workspace profile and deny-capable gate; require representative target/evidence recovery proof |
 | Agent deliberation | `recoder-jgrx` | Beta data shows consensus improves decisions | Deny-biased, evidence-visible, optional tool |
 | Background/PR agents | `recoder-4keq` | Users request unattended follow-up | Explicit lifecycle, notification, and merge governance |
 | Broader packaging | `recoder-55v9`, `recoder-b8ol` | arm64 demand is validated and reach is the bottleneck | Per-arch native set; avoid multi-GB Python bundle by default |

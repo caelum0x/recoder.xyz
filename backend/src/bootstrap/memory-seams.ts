@@ -55,6 +55,7 @@ export function createSquadIssueAdapter(graph: IssueGraphService): SquadIssuePor
   return {
     health: () => graph.health(),
     ready: () => graph.ready(),
+    create: (input, actor) => graph.create(input, actor),
     show: (id, opts) => graph.show(id, opts),
     stale: () => graph.stale(),
   };

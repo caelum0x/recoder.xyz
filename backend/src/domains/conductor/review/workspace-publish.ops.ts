@@ -57,6 +57,12 @@ export interface CreatePrResultView {
   branch: string;
   base: string;
   url: string;
+  /** Whether this PR was attached to the canonical Agent OS run history. */
+  evidenceAttached?: boolean;
+  /** Truthful degradation reason when the delivery succeeded without evidence. */
+  evidenceReason?: string;
+  artifactId?: string;
+  deliveryLinkId?: string;
 }
 
 export interface MergeInput {
@@ -111,6 +117,8 @@ export interface MergeResultView {
    * merge (nothing to vote on); the compare view renders converged/diverged rows.
    */
   vote?: import('../evidence/finding-vote.js').CandidateVote;
+  /** Repository-scoped delivered-decision history after this merge was recorded. */
+  convergenceFeedback?: import('../ports/convergence-feedback.port.js').ConvergenceFeedbackSummary;
 }
 
 async function requireWorktree(

@@ -116,6 +116,18 @@ describe("fetchFileVersions — request shaping, envelope unwrap + truthful degr
         expect(seen.url).toContain("/api/conductor/workspaces/compare/grp%201/file-versions?path=src%2Fshared.ts");
     });
 
+    it("routes a synthetic ad-hoc group to the explicit-id file-versions edge", async () => {
+        const seen: { url?: string } = {};
+        const result = await fetchFileVersions(
+            "adhoc:ws-a+ws-b",
+            "src/shared.ts",
+            stubFetch({ ok: true, status: 200, json: async () => ({ data: { fileVersions: payload() } }) }, seen)
+        );
+        expect(result.ok).toBe(true);
+        expect(seen.url).toContain("/api/conductor/workspaces/compare/ad-hoc/file-versions?ids=ws-a%2Cws-b");
+        expect(seen.url).toContain("&path=src%2Fshared.ts");
+    });
+
     it("tolerates a bare (un-enveloped) view body", async () => {
         const result = await fetchFileVersions(
             "grp",

@@ -17,20 +17,21 @@
  * subject-selector these tools read is NOT edge-bound, so trusting it would let any
  * authenticated caller list another tenant's agents or read another tenant's A2A
  * task + message log / context bundle (cross-tenant task/inbox disclosure).
- * Therefore, for `interop_list_agents`, `interop_get_task`, and
- * `interop_task_context`:
+ * Therefore, for `interop_list_agents`, `interop_agent_liveness`,
+ * `interop_get_task`, and `interop_task_context`:
  *   - A NON-privileged caller may only resolve its OWN `userId`; a foreign
  *     `args.userId` is rejected (403 `AUTHZ_PROJECT_ACCESS_DENIED`). No args ⇒ the
  *     caller's own id. Only an `admin`/`internal` caller may name an arbitrary id.
  *   - Absent a bound caller ⇒ the TRUSTED in-proc/direct path (the edge always
  *     binds a caller): resolve against the service identity (`deps.ownerId`), or an
  *     explicit `args.userId` when a trusted internal caller supplies one.
- * `interop_agent_liveness` (a derived up/degraded/down verdict keyed by agentId,
- * not a tenant subject) and `interop_methods` (global JSON-RPC advertisement)
- * expose no owner-scoped subject and stay unbound.
+ * `interop_methods` is the only global advertisement and stays unbound.
  */
 import { createError, ErrorCode } from '../../../shared/errors.js';
-import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
+import type {
+  McpToolCaller,
+  McpToolRegistration,
+} from '../../../shared/module-base.js';
 import type { AgentRegistryService } from '../registry/agent-registry.js';
 import type { HeartbeatSloService } from '../registry/heartbeat-slo.js';
 import type { TaskLifecycleService } from '../dispatch/task-lifecycle.js';
@@ -50,7 +51,7 @@ export interface InteropEngineDeps {
 interface OwnedInput {
   readonly userId?: string;
 }
-interface AgentInput {
+interface AgentInput extends OwnedInput {
   readonly agentId?: string;
 }
 interface TaskInput extends OwnedInput {
@@ -68,7 +69,9 @@ function isPrivileged(caller: McpToolCaller): boolean {
   return scopes.includes('admin') || scopes.includes('internal');
 }
 
-export function buildInteropMcpTools(deps: InteropEngineDeps): readonly McpToolRegistration[] {
+export function buildInteropMcpTools(
+  deps: InteropEngineDeps
+): readonly McpToolRegistration[] {
   /**
    * Resolve the OWNER subject these read tools scope against, binding it to the
    * host-authorized caller. A bound, non-privileged caller may only read its OWN
@@ -76,7 +79,11 @@ export function buildInteropMcpTools(deps: InteropEngineDeps): readonly McpToolR
    * absent/empty caller is the trusted in-proc path → the service identity (or an
    * explicit internal-supplied `args.userId`).
    */
-  const resolveSubject = (raw: unknown, caller: McpToolCaller | undefined, tool: string): string => {
+  const resolveSubject = (
+    raw: unknown,
+    caller: McpToolCaller | undefined,
+    tool: string
+  ): string => {
     const requested = str((raw as OwnedInput | undefined)?.userId);
     const callerId = caller ? str(caller.userId) : undefined;
     if (!callerId) {
@@ -86,7 +93,7 @@ export function buildInteropMcpTools(deps: InteropEngineDeps): readonly McpToolR
     if (requested && requested !== callerId && !isPrivileged(caller!)) {
       throw createError(
         ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
-        `${tool}: caller may only read its own tenant subject`,
+        `${tool}: caller may only read its own tenant subject`
       );
     }
     return requested ?? callerId;
@@ -95,27 +102,41 @@ export function buildInteropMcpTools(deps: InteropEngineDeps): readonly McpToolR
   return [
     {
       name: 'interop_list_agents',
-      description: 'List registered A2A agents / runtime endpoints for the calling owner (read-only, owner-scoped).',
+      description:
+        'List registered A2A agents / runtime endpoints for the calling owner (read-only, owner-scoped).',
       handler: async (raw: unknown, caller?: McpToolCaller) => {
-        const agents = await deps.registry.list(resolveSubject(raw, caller, 'interop_list_agents'));
+        const agents = await deps.registry.list(
+          resolveSubject(raw, caller, 'interop_list_agents')
+        );
         return {
           count: agents.length,
-          agents: agents.map((a) => ({ id: a.id, kind: a.kind, runtimeId: a.runtimeId, status: a.status, capabilities: a.card.capabilities })),
+          agents: agents.map(a => ({
+            id: a.id,
+            kind: a.kind,
+            runtimeId: a.runtimeId,
+            status: a.status,
+            capabilities: a.card.capabilities,
+          })),
         };
       },
     },
     {
       name: 'interop_agent_liveness',
-      description: 'The derived heartbeat-SLO liveness verdict for one agent (up/degraded/down/unknown).',
-      handler: async (raw: unknown) => {
+      description:
+        'The derived heartbeat-SLO liveness verdict for one owner-scoped agent.',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as AgentInput;
         if (!input.agentId) return { error: 'agentId is required' };
-        return { verdict: await deps.heartbeat.liveness(input.agentId) };
+        const userId = resolveSubject(raw, caller, 'interop_agent_liveness');
+        return {
+          verdict: await deps.heartbeat.liveness(input.agentId, userId),
+        };
       },
     },
     {
       name: 'interop_get_task',
-      description: 'Fetch one A2A task projection + its message log (owner-scoped; null when absent / not owned).',
+      description:
+        'Fetch one A2A task projection + its message log (owner-scoped; null when absent / not owned).',
       handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as TaskInput;
         if (!input.taskId) return { error: 'taskId is required' };
@@ -127,17 +148,24 @@ export function buildInteropMcpTools(deps: InteropEngineDeps): readonly McpToolR
     },
     {
       name: 'interop_task_context',
-      description: 'The compact context bundle for an owned task (recent messages + live scratchpad notes).',
+      description:
+        'The compact context bundle for an owned task (recent messages + live scratchpad notes).',
       handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as TaskInput;
         if (!input.taskId) return { error: 'taskId is required' };
         const userId = resolveSubject(raw, caller, 'interop_task_context');
-        return { bundle: await deps.contextBridge.build({ taskId: input.taskId, userId }) };
+        return {
+          bundle: await deps.contextBridge.build({
+            taskId: input.taskId,
+            userId,
+          }),
+        };
       },
     },
     {
       name: 'interop_methods',
-      description: 'The A2A JSON-RPC methods this instance currently advertises.',
+      description:
+        'The A2A JSON-RPC methods this instance currently advertises.',
       handler: () => ({ methods: deps.jsonRpc.methods() }),
     },
   ];

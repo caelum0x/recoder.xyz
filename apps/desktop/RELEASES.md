@@ -1,9 +1,11 @@
 # Building for release
 
-> **Note:** This document describes the release pipeline inherited from the upstream
-> [Wave Terminal](https://github.com/wavetermdev/waveterm) project. The workflow, S3, and
-> package-manager references below point at upstream infrastructure and do not apply to
-> Recoder Terminal releases; a Recoder release pipeline has not been set up yet.
+> **Historical upstream reference — do not use this to release Recoder.** This
+> document describes the pipeline inherited from
+> [Wave Terminal](https://github.com/wavetermdev/waveterm); its workflow, S3, and
+> package-manager references do not apply. Recoder's active signed/notarized arm64
+> pipeline is documented in [`../../RELEASE.md`](../../RELEASE.md) and implemented
+> by [`.github/workflows/desktop-release.yml`](../../.github/workflows/desktop-release.yml).
 
 ## Step-by-step guide
 

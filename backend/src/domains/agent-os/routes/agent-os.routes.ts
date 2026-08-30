@@ -10,15 +10,16 @@
  * artifacts/memory/instructions/policies/events) lives in
  * `agent-os-crud.routes.ts` and is mounted here after the summary surfaces.
  */
+import { RunHistoryService, type RunHistory, type TaskRun } from '@recoder/agent-os';
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import type { z } from 'zod';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { AgentOsRepositoryPort, PageQuery } from '../ports/agent-os-repository.port.js';
 import { sendSuccess, sendError, createError, ErrorCode } from '../../../shared/errors.js';
-import { validateQuery } from '../../../http/middleware/validate.js';
+import { validateParams, validateQuery } from '../../../http/middleware/validate.js';
 import { buildAgentOsCrudRouter } from './agent-os-crud.routes.js';
-import { paginationQuerySchema } from './agent-os-crud.schemas.js';
-import { seesAllSpaces, visibleSpaces } from '../services/space-authz.js';
+import { idParamSchema, paginationQuerySchema } from './agent-os-crud.schemas.js';
+import { canAccessSpace, seesAllSpaces, visibleSpaces } from '../services/space-authz.js';
 import { scopeAndPage } from '../services/list-scope.js';
 import type { PolicyUpdatedEvent } from '../services/policy-update.emitter.js';
 
@@ -102,6 +103,40 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
     },
   );
 
+  // One canonical, repository-backed history for the selected run. This is the
+  // bridge from durable Agent OS records into Review/Runs: events, artifacts,
+  // runtime evidence, approvals, policy decisions, memory, instructions, and
+  // GitHub PR/preview delivery links appear in one ordered chain instead of the
+  // desktop rebuilding a second, workspace-only history.
+  router.get(
+    '/runs/:runId/history',
+    middleware.authenticate,
+    validateParams(idParamSchema('runId')),
+    async (req: Request, res: Response) => {
+      try {
+        const [runs, spaces] = await Promise.all([repository.listRuns(), repository.listSpaces()]);
+        const run = runs.find((candidate) => candidate.runId === req.params.runId);
+        const runSpace = run == null ? null : spaces.find((space) => space.spaceId === run.spaceId);
+        // Missing and foreign runs are deliberately indistinguishable (404,
+        // no existence oracle), matching GET /runs/:runId.
+        if (!run || !runSpace || !canAccessSpace(runSpace, req.principal, soloMode)) {
+          sendError(res, createError(ErrorCode.NOT_FOUND, `run not found: ${req.params.runId}`));
+          return;
+        }
+        // Assemble the potentially broad evidence join only AFTER authorization;
+        // a foreign caller never causes another tenant's history to be read.
+        const history = await loadRunHistory(repository, run.runId, run);
+        if (!history) {
+          sendError(res, createError(ErrorCode.NOT_FOUND, `run not found: ${req.params.runId}`));
+          return;
+        }
+        sendSuccess(res, history);
+      } catch (error) {
+        sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, message(error)));
+      }
+    },
+  );
+
   router.get(
     '/runs',
     middleware.authenticate,
@@ -133,6 +168,53 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
   return router;
 }
 
+async function loadRunHistory(
+  repository: AgentOsRepositoryPort,
+  runId: string,
+  resolvedRun?: TaskRun,
+): Promise<RunHistory | null> {
+  const run = resolvedRun ?? (await repository.listRuns()).find((candidate) => candidate.runId === runId);
+  if (!run) return null;
+
+  const [
+    tasks,
+    events,
+    artifacts,
+    runtimeEvidence,
+    approvals,
+    policyDecisions,
+    memoryCandidates,
+    memoryItems,
+    instructionBundles,
+    githubDeliveryLinks,
+  ] = await Promise.all([
+    repository.listTasks(),
+    repository.listEvents(),
+    repository.listArtifacts(),
+    repository.listRuntimeEvidence(),
+    repository.listApprovals(),
+    repository.listPolicyDecisions(),
+    repository.listMemoryCandidates(),
+    repository.listMemoryItems(),
+    repository.listInstructionBundles(),
+    repository.listGitHubDeliveryLinks(),
+  ]);
+  const task = tasks.find((candidate) => candidate.taskId === run.taskId);
+  return new RunHistoryService().build({
+    run,
+    ...(task ? { task } : {}),
+    events,
+    artifacts,
+    runtimeEvidence,
+    approvals,
+    policyDecisions,
+    memoryCandidates,
+    memoryItems,
+    instructionBundles,
+    githubDeliveryLinks,
+  });
+}
+
 function message(error: unknown): string {
   return error instanceof Error ? error.message : 'agent-os request failed';
 }
@@ -151,3 +233,5 @@ function metaOf(page: { total: number; limit: number; offset: number }): {
 } {
   return { total: page.total, limit: page.limit, offset: page.offset };
 }
+
+export { loadRunHistory };

@@ -180,6 +180,25 @@ describe("openWorkspaceTerminal", () => {
         });
     });
 
+    it("opens the bounded Loom terminal for a Loom workspace instead of attaching tmux", async () => {
+        await openWorkspaceTerminal({
+            sessionName: "pane-1",
+            cwd: "/wt/s1",
+            workspaceId: "ws-1",
+            substrate: "loom",
+        });
+        expect(createBlockMock).toHaveBeenCalledWith({
+            meta: { view: "recoder-loom-terminal", "recoder:workspaceid": "ws-1" },
+        });
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("refuses a Loom terminal open without a durable workspace id", async () => {
+        await openWorkspaceTerminal({ sessionName: "pane-1", substrate: "loom" });
+        expect(createBlockMock).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
     it("attaches on the conductor's socket when health reports one (no caller bin)", async () => {
         vi.stubGlobal("fetch", mockHealthFetch("/pin/tmux", "/tmp/tmux-501/default"));
         await openWorkspaceTerminal({ sessionName: "conductor-s1" });

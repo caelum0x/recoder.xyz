@@ -124,6 +124,8 @@ export interface UpsertAgentInput {
 /** A single heartbeat sample for a registered agent. */
 export interface HeartbeatSample {
   readonly agentId: string;
+  /** Tenant owner of this agent id; the same public/card id may exist per owner. */
+  readonly userId: string;
   readonly seenAt: string;
   readonly latencyMs?: number;
   readonly ok: boolean;
@@ -141,7 +143,11 @@ export type A2ATaskState =
   | 'canceled';
 
 /** Terminal states no further transition may leave. */
-export const TERMINAL_TASK_STATES: readonly A2ATaskState[] = ['completed', 'failed', 'canceled'];
+export const TERMINAL_TASK_STATES: readonly A2ATaskState[] = [
+  'completed',
+  'failed',
+  'canceled',
+];
 
 /** A projected A2A task row (mirror of `interop_tasks`). */
 export interface TaskRow {

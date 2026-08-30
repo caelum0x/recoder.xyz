@@ -151,6 +151,13 @@ export interface ContestedProbe {
    * omits it, and unprobed plans are unaffected (see {@link ConvergencePlan.contested}).
    */
   readonly regions?: readonly ConflictRegion[];
+  /** Declaration names each sibling changed in this file (diff/RecoderGit signal). */
+  readonly symbols?: readonly {
+    readonly workspaceId: string;
+    readonly names: readonly string[];
+  }[];
+  /** Symbols touched by 2+ siblings — a stronger collision than file overlap. */
+  readonly sharedSymbols?: readonly string[];
 }
 
 /**

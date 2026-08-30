@@ -3,7 +3,6 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-RECODER_WEB_URL="${RECODER_WEB_URL:-https://web.recoder.xyz}"
 BACKEND_URL="${BACKEND_URL:-https://docker.recoder.xyz}"
 EXPECTED_QUEUE_BACKEND="${EXPECTED_QUEUE_BACKEND:-redis}"
 BILLING_ACTIONS_ENABLED_RAW="${BILLING_ACTIONS_ENABLED:-}"
@@ -14,14 +13,11 @@ usage() {
 Phase 1 main-branch smoke wrapper.
 
 Runs:
-1) recoder-web BYOK readiness
-2) recoder-web public API readiness
-3) backend queue readiness (redis expected by default)
-4) billing-mode decision validation
-5) optional full BYOK smoke (if BYOK secret env vars are present)
+1) local environment consistency
+2) backend queue readiness (redis expected by default)
+3) billing-mode decision validation
 
 Environment:
-  RECODER_WEB_URL             default: https://web.recoder.xyz
   BACKEND_URL                 default: https://docker.recoder.xyz
   EXPECTED_QUEUE_BACKEND      default: redis
   BILLING_ACTIONS_ENABLED     required: true|false
@@ -49,7 +45,6 @@ if [[ "$BILLING_ACTIONS_ENABLED" != "true" && "$BILLING_ACTIONS_ENABLED" != "fal
 fi
 
 echo "== Phase 1 Main-Branch Smoke =="
-echo "recoder-web: $RECODER_WEB_URL"
 echo "backend: $BACKEND_URL"
 echo "expectedQueueBackend: $EXPECTED_QUEUE_BACKEND"
 echo "billingActionsEnabled: $BILLING_ACTIONS_ENABLED"
@@ -64,14 +59,8 @@ if [[ "$DRY_RUN" == "true" ]]; then
   exit 0
 fi
 
-if [[ -d "$REPO_ROOT/recoder-web" && -f "$REPO_ROOT/recoder-web/package.json" ]]; then
-  RECODER_WEB_URL="$RECODER_WEB_URL" \
-  BACKEND_URL="$BACKEND_URL" \
-  EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" \
-  BILLING_ACTIONS_ENABLED="$BILLING_ACTIONS_ENABLED" \
-  pnpm -C "$REPO_ROOT/recoder-web" smoke:prod-blockers
-else
-  echo "recoder-web surface absent; skipping retired browser-surface smoke."
-fi
+BACKEND_URL="$BACKEND_URL" \
+EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" \
+pnpm -C "$REPO_ROOT/backend" run smoke:queue
 
 echo "Phase 1 smoke passed."

@@ -82,6 +82,13 @@ export class TerminalStreamService implements TerminalStreamPort {
     this.hub.publish(event);
   }
 
+  subscribeSync(
+    workspaceId: string,
+    listener: (event: WorkspaceSyncEvent) => void,
+  ): () => void {
+    return this.hub.subscribeListener(workspaceId, listener);
+  }
+
   /** Publish a FULL RunEvent to the workspace's `/stream` subscribers. */
   publishRunEvent(workspaceId: string, event: unknown): void {
     this.streamHub.publishRaw(workspaceId, event);

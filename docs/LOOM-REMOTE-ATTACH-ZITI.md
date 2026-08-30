@@ -1,6 +1,6 @@
 # Loom Remote Attach over Ziti — Design (herdr pillar #5)
 
-> Status: 2026-08-13. Owner-approved transport: **on-box OpenZiti** (zero-trust
+> Status: updated 2026-08-30. Owner-approved host-to-host transport: **on-box OpenZiti** (zero-trust
 > overlay, no public port). This is the design + wiring plan for "run agents on a
 > rented box, reattach from anything with a keyboard." It is a DESIGN, not shipped
 > code: the real dialer needs a provisioned ziti identity to build AND verify, and
@@ -16,10 +16,19 @@ herdr pillar #5 is "where do agents run while you sleep" — a remote box. In Re
 - `createRemoteAttachDeps` (`adapters/remote-attach-wiring.ts`) already binds
   `deliver` → the **loom control API** (`agent.prompt`) over a `LoomClientPort`,
   plus real policy/approval/audit. It is composed at bootstrap.
-- **Gap:** the `LoomClientPort` it drives is the **local Unix-domain socket**
+- Authenticated HTTP mint/describe/snapshot/stream/steer/revoke routes now expose the service to a second
+  signed-in client. Sessions use the canonical TTL-backed KvStore and report
+  whether they are restart-survivable; Session copies a receiver deep link and
+  the mobile-first web receiver shows real panes, governed steer, and revocation.
+  Its authenticated SSE route projects native Loom status and Recoder lifecycle
+  edges through the session's still-owned scope rather than polling the UI.
+  Canonical Better Auth sign-out revokes every remote session for the owner before
+  invalidating the credential, so a second client cannot outlive global sign-out.
+- **Remaining host-to-host gap:** the `LoomClientPort` it drives is the **local Unix-domain socket**
   (`loomDaemon.socketPath`). "Remote" today means a different *client on the same
-  host*, not a remote box. The transport is the only missing piece — the governance,
-  ownership, policy, approval, and audit are all already enforced.
+  host*, not a remote box. Ziti is still required when the agents themselves run
+  on another host; the client-facing transport, governance, ownership, policy,
+  approval, audit, and durable session state are already enforced.
 
 Because `createRemoteAttachDeps` takes `loom: LoomClientPort` as an injected seam,
 **no refactor is required**: remote reach is a matter of supplying a ziti-backed

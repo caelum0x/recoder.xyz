@@ -183,6 +183,12 @@ export interface NeedsYouQueueDeps {
   readonly source: NeedsYouStreamSource;
   readonly scheduler?: NeedsYouScheduler;
   readonly logger?: LoggerPort;
+  /** Publish a native pane-status edge into Recoder's canonical live plane. */
+  readonly onChange?: (change: {
+    readonly workspaceId: string;
+    readonly attention: AttentionState;
+    readonly at: string;
+  }) => void;
 }
 
 /**
@@ -193,6 +199,7 @@ export class NeedsYouQueueService {
   private readonly source: NeedsYouStreamSource;
   private readonly scheduler: NeedsYouScheduler;
   private readonly logger: LoggerPort;
+  private readonly onChange?: NeedsYouQueueDeps['onChange'];
 
   /** workspaceId → last derived pane entry (a second event REPLACES, never duplicates). */
   private readonly panes = new Map<string, TrackedPane>();
@@ -208,6 +215,7 @@ export class NeedsYouQueueService {
     this.source = deps.source;
     this.scheduler = deps.scheduler ?? realNeedsYouScheduler;
     this.logger = deps.logger ?? NOOP_LOGGER;
+    this.onChange = deps.onChange;
   }
 
   /** Open the ONE long-lived subscription. Idempotent — a second call is a no-op. */
@@ -301,6 +309,11 @@ export class NeedsYouQueueService {
       nativeStatus: event.nativeStatus,
       state: attention,
       seen: event.seen ?? false,
+    });
+    this.onChange?.({
+      workspaceId: event.workspaceId,
+      attention,
+      at: new Date().toISOString(),
     });
   }
 

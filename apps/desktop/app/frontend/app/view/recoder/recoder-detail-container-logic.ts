@@ -4,11 +4,11 @@
 import { detailSegments, segmentTitle, type RecoderDetailFace, type RecoderDetailViewId } from "./recoder-detail-header";
 
 // Pure state for the workspace-detail container (PRODUCT-GAPS PW3-9, paradigm =
-// POP-OUT TABS: Session/Review swap in-place under one surface, but the raw tmux
-// Terminal stays a pop-out escape hatch — it is never an in-container active
-// face). The live pane swap + the pop-out wiring are a gui-verify Electron
-// concern; THIS module owns only the truthful navigation decision so every branch
-// is headless-testable, exactly like the sibling detail-header reducer.
+// POP-OUT TABS: Session/Review swap in-place under one surface, but the live
+// Terminal stays a Wave pop-out — it is never an in-container active
+// face). The live pane swap is owned by `recoder-detail.tsx`; the pop-out wiring
+// is owned by each face's shared header. THIS module owns the truthful navigation
+// decision so every branch remains headless-testable like the sibling header.
 
 interface DetailContainerState {
     readonly activeFace: RecoderDetailFace;
@@ -16,10 +16,10 @@ interface DetailContainerState {
 
 // The outcome of a tab click, resolved WITHOUT mutating state:
 // - switch:          change the in-container active face (Session ⇄ Review).
-// - popout-terminal: the caller should open the raw tmux terminal as a separate
+// - popout-terminal: the caller should open the substrate-routed terminal as a separate
 //                    (tiling) block — never folded into the container surface.
 // - noop:            nothing to do, with a truthful reason (already current, no
-//                    workspace bound, or no attached tmux session) — never a
+//                    workspace bound, or no attached substrate session) — never a
 //                    silent dead click.
 type DetailNavOutcome =
     | { readonly kind: "switch"; readonly face: RecoderDetailFace }

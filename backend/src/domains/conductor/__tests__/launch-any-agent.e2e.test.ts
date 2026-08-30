@@ -58,9 +58,9 @@ const PROMPT = 'do the thing';
 
 /** The four supported CLI runtimes, with their real bin + the argv the fake records. */
 const RUNTIMES = [
-  { runtimeId: 'claude_code', bin: 'claude', argv: ['-p', PROMPT, '--permission-mode', 'acceptEdits'] },
-  { runtimeId: 'codex', bin: 'codex', argv: ['exec', PROMPT, '--sandbox', 'workspace-write'] },
-  { runtimeId: 'opencode', bin: 'opencode', argv: ['run', PROMPT] },
+  { runtimeId: 'claude_code', bin: 'claude', argv: ['-p', PROMPT, '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits'] },
+  { runtimeId: 'codex', bin: 'codex', argv: ['exec', '--json', PROMPT, '--sandbox', 'workspace-write'] },
+  { runtimeId: 'opencode', bin: 'opencode', argv: ['run', '--format', 'json', PROMPT] },
   { runtimeId: 'cursor', bin: 'cursor-agent', argv: ['-p', PROMPT, '--force'] },
 ] as const;
 
@@ -129,16 +129,16 @@ describe('run-any-agent LAUNCH E2E (command composition + real spawn + truthful 
 
     it('claude/codex use their own CLI (-p / exec), each headless-and-exits', () => {
       expect(resolveRuntimeCommand('claude_code', { prompt: PROMPT }).commandLine).toBe(
-        `claude -p '${PROMPT}' --permission-mode acceptEdits`,
+        `claude -p '${PROMPT}' --output-format stream-json --verbose --permission-mode acceptEdits`,
       );
       expect(resolveRuntimeCommand('codex', { prompt: PROMPT }).commandLine).toBe(
-        `codex exec '${PROMPT}' --sandbox workspace-write`,
+        `codex exec --json '${PROMPT}' --sandbox workspace-write`,
       );
     });
 
     it('opencode headless uses the `run <prompt>` positional', () => {
       expect(resolveRuntimeCommand('opencode', { prompt: PROMPT }).commandLine).toBe(
-        `opencode run '${PROMPT}'`,
+        `opencode run --format json '${PROMPT}'`,
       );
     });
 
@@ -185,15 +185,19 @@ describe('run-any-agent LAUNCH E2E (command composition + real spawn + truthful 
               PRINCIPAL,
             );
             expect(result.ok).toBe(true);
+            // The write returns only after the real child is launched; at that
+            // instant the canonical workspace is running. A very fast CLI may
+            // settle it to Review before the outer loop reads it again.
+            expect(result.value!.state).toBe('running');
             return { rt, workspaceId: result.value!.workspaceId };
           }),
         );
 
         for (const { rt, workspaceId } of launched) {
-          // created → running: the state of record advanced synchronously on launch.
+          // The worktree/runtime identity remains available whether this fast
+          // fake child is still running or already settled by the terminal hook.
           const ws = await module.getWorkspace(workspaceId);
           expect(ws).not.toBeNull();
-          expect(ws!.state).toBe('running');
           expect(ws!.runtimeId).toBe(rt.runtimeId);
           const worktree = ws!.worktreePath!;
           expect(existsSync(worktree)).toBe(true);
@@ -205,6 +209,10 @@ describe('run-any-agent LAUNCH E2E (command composition + real spawn + truthful 
           const terminal = await waitForTerminalEvent(module, workspaceId);
           expect(terminal.type).toBe('completed');
           expect(terminal.data?.exitCode).toBe(0);
+          expect(terminal.data?.workspaceId).toBe(workspaceId);
+          expect((await module.getWorkspace(workspaceId))?.state).toBe(
+            'awaiting_review'
+          );
 
           // The RunEvent stream is real: started → log(s) → completed.
           const events = await module.listWorkspaceEvents(workspaceId);
@@ -257,6 +265,8 @@ describe('run-any-agent LAUNCH E2E (command composition + real spawn + truthful 
         // Truthful failure — NEVER a faked `completed`.
         expect(terminal.type).toBe('failed');
         expect(terminal.data?.exitCode).toBe(127);
+        expect(terminal.data?.workspaceId).toBe(workspaceId);
+        expect((await module.getWorkspace(workspaceId))?.state).toBe('failed');
         expect(substrate.hasExited(workspaceId)).toBe(true);
 
         // A real reason is surfaced in the captured output (shell reports the miss).

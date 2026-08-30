@@ -3,12 +3,13 @@
 
 import { createBlock, globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
-import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
-import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
-import { workspaceDetailMeta } from "../recoder/recoder-detail-open";
-import type { RecoderDetailFace } from "../recoder/recoder-detail-header";
 import { fetchPreviewVerification } from "../recoder-diff/recoder-evidence-logic";
+import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
+import type { RecoderDetailFace } from "../recoder/recoder-detail-header";
+import { workspaceDetailMeta } from "../recoder/recoder-detail-open";
+import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason } from "../recoder/recoder-errors";
+import { RecoderRunsView } from "./recoder-runs";
 import {
     correlateRunToWorkspace,
     correlateRuns,
@@ -17,7 +18,6 @@ import {
     type WorkspaceCorrelation,
 } from "./recoder-runs-correlation";
 import { parseReconcileFindings, type RunsDriftFinding } from "./recoder-runs-findings";
-import { RecoderRunsView } from "./recoder-runs";
 
 // Mirrors the Agent OS TaskRun domain type (packages/agent-os/src/domain/task-spec.ts).
 // GET /api/agent-os/runs → { success, data: TaskRun[] }. Only the fields the
@@ -46,6 +46,21 @@ type RecoderRunEvent = {
     createdAt: string;
 };
 
+// Canonical RunHistoryItem projection from @recoder/agent-os. The backend joins
+// events, artifacts, approvals, policy, runtime evidence, and GitHub delivery
+// links into this one chain; the desktop never invents a parallel history.
+type RecoderRunHistoryItem = {
+    itemId: string;
+    kind: string;
+    taskId: string;
+    runId?: string;
+    createdAt: string;
+    title: string;
+    summary?: string;
+    severity: "info" | "success" | "warning" | "block";
+    refs?: Record<string, string>;
+};
+
 // The state of the selected-run drilldown events panel. Distinguishes the honest
 // reasons the panel may be empty so the view never fakes a transcript:
 //   idle           — no run selected
@@ -67,6 +82,51 @@ const MaxEvents = 40;
 // The selected-run transcript reads oldest→newest; cap the tail so a long run
 // stays readable without dropping the latest activity.
 const MaxSelectedEvents = 100;
+
+function parseRunHistory(body: unknown): RecoderRunHistoryItem[] | null {
+    const data = (body as { data?: unknown } | null)?.data;
+    if (data == null || typeof data != "object" || !Array.isArray((data as { items?: unknown }).items)) {
+        return null;
+    }
+    const items: RecoderRunHistoryItem[] = [];
+    for (const raw of (data as { items: unknown[] }).items) {
+        if (raw == null || typeof raw != "object") continue;
+        const item = raw as Record<string, unknown>;
+        if (
+            typeof item.itemId != "string" ||
+            typeof item.kind != "string" ||
+            typeof item.taskId != "string" ||
+            typeof item.createdAt != "string" ||
+            typeof item.title != "string"
+        ) {
+            continue;
+        }
+        const severity = item.severity;
+        const refs = item.refs;
+        let normalizedSeverity: RecoderRunHistoryItem["severity"] = "info";
+        if (severity == "success") normalizedSeverity = "success";
+        if (severity == "warning") normalizedSeverity = "warning";
+        if (severity == "block") normalizedSeverity = "block";
+        items.push({
+            itemId: item.itemId,
+            kind: item.kind,
+            taskId: item.taskId,
+            createdAt: item.createdAt,
+            title: item.title,
+            severity: normalizedSeverity,
+            ...(typeof item.runId == "string" ? { runId: item.runId } : {}),
+            ...(typeof item.summary == "string" ? { summary: item.summary } : {}),
+            ...(refs != null && typeof refs == "object"
+                ? {
+                      refs: Object.fromEntries(
+                          Object.entries(refs).filter((entry): entry is [string, string] => typeof entry[1] == "string")
+                      ),
+                  }
+                : {}),
+        });
+    }
+    return items.slice(-MaxSelectedEvents);
+}
 
 class RecoderRunsViewModel implements ViewModel {
     viewType: string;
@@ -90,6 +150,7 @@ class RecoderRunsViewModel implements ViewModel {
     // The run the user drilled into ("" = none) and its per-run events panel.
     selectedRunIdAtom: PrimitiveAtom<string>;
     selectedEventsAtom: PrimitiveAtom<RecoderRunEvent[]>;
+    selectedHistoryAtom: PrimitiveAtom<RecoderRunHistoryItem[]>;
     selectedStatusAtom: PrimitiveAtom<SelectedRunStatus>;
 
     constructor(initOpts: ViewModelInitType) {
@@ -109,6 +170,7 @@ class RecoderRunsViewModel implements ViewModel {
         this.findingsStatusAtom = atom("ok") as PrimitiveAtom<"ok" | "unavailable">;
         this.selectedRunIdAtom = atom("") as PrimitiveAtom<string>;
         this.selectedEventsAtom = atom([]) as PrimitiveAtom<RecoderRunEvent[]>;
+        this.selectedHistoryAtom = atom([]) as PrimitiveAtom<RecoderRunHistoryItem[]>;
         this.selectedStatusAtom = atom("idle") as PrimitiveAtom<SelectedRunStatus>;
     }
 
@@ -196,7 +258,7 @@ class RecoderRunsViewModel implements ViewModel {
     // several runs point at it. The endpoint helper never throws, so an unavailable
     // preview cannot take down the run list or masquerade as a failed verification.
     async fetchPreviewStatuses(
-        correlation: ReadonlyMap<string, string>,
+        correlation: ReadonlyMap<string, string>
     ): Promise<Map<string, PreviewVerificationRunStatus>> {
         const byWorkspace = new Map<string, Promise<PreviewVerificationRunStatus>>();
         for (const workspaceId of correlation.values()) {
@@ -255,11 +317,13 @@ class RecoderRunsViewModel implements ViewModel {
         if (current == runId) {
             globalStore.set(this.selectedRunIdAtom, "");
             globalStore.set(this.selectedEventsAtom, []);
+            globalStore.set(this.selectedHistoryAtom, []);
             globalStore.set(this.selectedStatusAtom, "idle");
             return;
         }
         globalStore.set(this.selectedRunIdAtom, runId);
         globalStore.set(this.selectedEventsAtom, []);
+        globalStore.set(this.selectedHistoryAtom, []);
         await this.refreshSelectedEvents();
     }
 
@@ -271,12 +335,27 @@ class RecoderRunsViewModel implements ViewModel {
         if (runId == "") {
             globalStore.set(this.selectedStatusAtom, "idle");
             globalStore.set(this.selectedEventsAtom, []);
+            globalStore.set(this.selectedHistoryAtom, []);
+            return;
+        }
+        if (globalStore.get(this.selectedHistoryAtom).length == 0) {
+            globalStore.set(this.selectedStatusAtom, "loading");
+        }
+        const history = await this.fetchRunHistory(runId);
+        if (globalStore.get(this.selectedRunIdAtom) != runId) {
+            return;
+        }
+        if (history != null) {
+            globalStore.set(this.selectedHistoryAtom, history);
+            globalStore.set(this.selectedEventsAtom, []);
+            globalStore.set(this.selectedStatusAtom, history.length == 0 ? "empty" : "ready");
             return;
         }
         const workspaceId = this.workspaceIdForRun(runId);
         if (workspaceId == "") {
             globalStore.set(this.selectedStatusAtom, "not-correlated");
             globalStore.set(this.selectedEventsAtom, []);
+            globalStore.set(this.selectedHistoryAtom, []);
             return;
         }
         if (globalStore.get(this.selectedEventsAtom).length == 0) {
@@ -289,10 +368,26 @@ class RecoderRunsViewModel implements ViewModel {
         if (events == null) {
             globalStore.set(this.selectedStatusAtom, "not-connected");
             globalStore.set(this.selectedEventsAtom, []);
+            globalStore.set(this.selectedHistoryAtom, []);
             return;
         }
         globalStore.set(this.selectedEventsAtom, events.slice(-MaxSelectedEvents));
+        globalStore.set(this.selectedHistoryAtom, []);
         globalStore.set(this.selectedStatusAtom, events.length == 0 ? "empty" : "ready");
+    }
+
+    // Canonical Agent OS history is primary. `null` means this embedded backend
+    // does not expose it (or was unreachable), so older builds degrade to the
+    // conductor workspace-event fallback instead of losing the drilldown.
+    async fetchRunHistory(runId: string): Promise<RecoderRunHistoryItem[] | null> {
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/runs/${encodeURIComponent(runId)}/history`);
+            const body = await res.json().catch(() => null);
+            if (!res.ok) return null;
+            return parseRunHistory(body);
+        } catch {
+            return null;
+        }
     }
 
     // GET /api/conductor/workspaces/:id/events (oldest→newest). null signals a
@@ -300,7 +395,7 @@ class RecoderRunsViewModel implements ViewModel {
     async fetchWorkspaceEvents(workspaceId: string): Promise<RecoderRunEvent[] | null> {
         try {
             const res = await fetch(
-                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/events`,
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/events`
             );
             const body = await res.json().catch(() => null);
             if (!res.ok) {
@@ -359,8 +454,10 @@ class RecoderRunsViewModel implements ViewModel {
 
 export {
     RecoderRunsViewModel,
+    parseRunHistory,
     type PreviewVerificationRunStatus,
     type RecoderRun,
     type RecoderRunEvent,
+    type RecoderRunHistoryItem,
     type SelectedRunStatus,
 };

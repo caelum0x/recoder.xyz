@@ -2,14 +2,22 @@
 
 **Domain owner.** Uses the OSS engine(s) **in place** (never copied): apps/desktop/server/engines/multica (leader-routing + autopilot logic ported into the **agent-os** domain — `backend/src/domains/agent-os/services/squad.service.ts` + `squad-autopilot.service.ts`; the autopilot dispatches to the conductor)
 
-> **SHIPPED POSTURE: read-only introspection** (owner decision). The squads surface
-> exposes only READ edges — `GET /api/agent-os/squads/*` (`squad-read.routes.ts`) and
-> the board (`squad-board.routes.ts`); there are **no mutating squad MCP tools**. The
+> **SHIPPED POSTURE: read-only squad graph + local scheduler control.** The squad
+> membership/routing surface exposes only READ edges — `GET /api/agent-os/squads/*`
+> (`squad-read.routes.ts`) and the board (`squad-board.routes.ts`); there are **no
+> mutating squad MCP tools**. The desktop may start, pause, or manually scan the
+> already-bounded local autopilot through `POST /squads/board/control`; this does not
+> mutate squads, routing, budgets, or existing workspaces. The
+> desktop pins an explicit Git repository, project, space, and installed runtime
+> before the first pass; later scans reuse that visible contract. Every dispatched
+> workspace is durable, marked for human review, and carries `autoMerge:false`.
+> Completion/approval notifications and Session/Review opening reuse the canonical
+> Recoder workspace loop rather than a separate background-agent authority. The
 > `createSquad`/`assign`/`autopilot` verbs exist as internal service methods
 > (`squad.service.ts` / `squad-autopilot.service.ts`) but are not surfaced as agent-callable
 > mutations. Adding mutating tools would be NEW work.
 
-**Interface (read-only surface):** `listSquads · squadDetail · board · health`
+**Interface:** `listSquads · squadDetail · board · health · autopilotControl`
 
 ## Multica coordination MCP tools (SHIPPED)
 

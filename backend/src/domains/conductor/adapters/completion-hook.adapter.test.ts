@@ -139,6 +139,29 @@ describe('conductor completion hook', () => {
     expect(reindexRepo).toHaveBeenCalledWith('project_1');
   });
 
+  it('reindexes with the canonical repo id persisted at launch', async () => {
+    const reindexRepo = vi.fn(async () => {});
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      codeIntel: {
+        indexRepo: vi.fn(async () => {}),
+        reindexRepo,
+        trackWork: vi.fn(async () => {}),
+        completeWork: vi.fn(async () => {}),
+      },
+      getWorkspace: async () => ws({
+        projectId: 'widget',
+        metadata: { repoId: 'acme__widget', repoAliases: ['widget'] },
+      }),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed'));
+    await flush();
+
+    expect(reindexRepo).toHaveBeenCalledWith('acme__widget');
+  });
+
   it('reindex derives the repoId from worktreePath when projectId is empty', async () => {
     const reindexRepo = vi.fn(async () => {});
     const sink = createCompletionHookSink({

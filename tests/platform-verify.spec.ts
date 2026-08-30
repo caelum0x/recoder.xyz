@@ -149,16 +149,13 @@ test.describe('Agents Frontend', () => {
 });
 
 // =============================================================================
-// 3. WEB IDE (web.recoder.xyz)
+// 3. RETIRED WEB HOST (redirect-only compatibility)
 // =============================================================================
-test.describe('Web IDE', () => {
-  test('homepage responds (may redirect to login)', async ({ page }) => {
-    const response = await page.goto(WEB_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    // May redirect to login page — that's OK, just shouldn't be 500/502
-    const finalUrl = page.url();
-    const status = response?.status() ?? 200;
-    expect(status).toBeLessThan(500);
-    console.log(`Web IDE: status=${status}, redirected to ${finalUrl}`);
+test.describe('Retired Web host', () => {
+  test('redirects into the canonical recoder.xyz site', async ({ request }) => {
+    const response = await request.get(WEB_URL, { maxRedirects: 0 });
+    expect([301, 302, 307, 308]).toContain(response.status());
+    expect(response.headers().location).toMatch(/^https:\/\/recoder\.xyz(?:\/|$)/);
   });
 
   test('backend health check', async ({ request }) => {
@@ -239,7 +236,6 @@ test.describe('Auth (recoder.xyz)', () => {
 test.describe('Console Error Audit', () => {
   const sites = [
     { name: 'Agents', url: AGENTS_URL },
-    { name: 'Web IDE', url: WEB_URL },
     { name: 'Agency', url: AGENCY_URL },
     { name: 'PM', url: PM_URL },
   ];

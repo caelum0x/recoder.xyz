@@ -10,7 +10,10 @@ const assetPrefix = process.env.SITE_ASSET_PREFIX || undefined;
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  outputFileTracingRoot: path.join(__dirname),
+  // Pin output file tracing to site/ so traced paths stay within this package,
+  // not the parent monorepo root. Consistent with site/ having its own node_modules.
+  outputFileTracingRoot: path.resolve(__dirname),
+  // ESLint config in site/ is not set up for next-lint; skip during build.
   eslint: { ignoreDuringBuilds: true },
   assetPrefix,
   async headers() {

@@ -46,6 +46,7 @@ import { OutboxDrainService } from './services/outbox-drain.service.js';
 import { PolicyUpdateEmitter, type PolicyUpdatedListener } from './services/policy-update.emitter.js';
 import { SquadService, InMemorySquadStore } from './services/squad.service.js';
 import { SquadAutopilotService } from './services/squad-autopilot.service.js';
+import { PullRequestReviewAgentService } from './services/pr-review-agent.service.js';
 import {
   WorkflowService,
   InMemoryWorkflowDefinitionStore,
@@ -60,8 +61,14 @@ import { AgentOsWorkflowRunnerDriver } from './adapters/agent-os-workflow-runner
 import { createBrowserCheckWorkflowHandler } from './adapters/browser-check-workflow.handler.js';
 import { createNativeWorkflowHandler } from '@recoder/agent-workflows';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
-import type { SquadIssuePort, SquadReadyIssue } from './ports/squad-issue.port.js';
+import type { PullRequestReviewConductorPort } from './ports/pr-review-agent.port.js';
+import type {
+  SquadIssueCreateInput,
+  SquadIssuePort,
+  SquadReadyIssue,
+} from './ports/squad-issue.port.js';
 import { buildSquadBoardRouter } from './routes/squad-board.routes.js';
+import { buildPullRequestReviewAgentsRouter } from './routes/pr-review-agents.routes.js';
 import { buildSquadReadRouter } from './routes/squad-read.routes.js';
 import { buildIssuesReadRouter } from './routes/issues-read.routes.js';
 import { buildWorkflowRouter } from './routes/workflow.routes.js';
@@ -94,6 +101,7 @@ export class AgentOsComposer implements AgentOsModule {
   private readonly drain: OutboxDrainService;
   private readonly squads: SquadService | null;
   private readonly autopilot: SquadAutopilotService | null;
+  private readonly prReviewAgents: PullRequestReviewAgentService;
   /**
    * The late-bound issue-graph read seam (`attachIssueGraph`). Stored on the
    * module itself — INDEPENDENT of the autopilot — so the `/issues/ready` edge
@@ -207,8 +215,11 @@ export class AgentOsComposer implements AgentOsModule {
         'agent-os: RECODER_SQUAD_ID set without a squadSeed — autopilot routes flat (pass-through), not skip-all',
       );
     }
+    // Compose the bounded loop whenever squads are available so the desktop can
+    // explicitly start it without a process restart. The feature flag controls
+    // initial scheduling, not whether the product control surface exists.
     this.autopilot =
-      cfg.squadsEnabled && cfg.squadAutopilotEnabled
+      cfg.squadsEnabled
         ? new SquadAutopilotService({
             conductor: deps.conductorDispatch ?? null,
             squads: this.squads,
@@ -219,8 +230,27 @@ export class AgentOsComposer implements AgentOsModule {
             logger: this.log,
             intervalMs: cfg.squadAutopilotIntervalMs,
             maxDispatchesPerTick: cfg.squadAutopilotMaxPerTick,
+            state: deps.automationState ?? null,
           })
         : null;
+
+    // Pull-request review agents are an installed-app product loop, independent
+    // of squad routing. They stay paused until Wave pins a repo/runtime and
+    // starts the watcher; no boot env or GitHub webhook is required.
+    this.prReviewAgents = new PullRequestReviewAgentService({
+      source: deps.pullRequestSource ?? null,
+      conductor: deps.pullRequestReviewConductor ?? null,
+      publisher: deps.pullRequestReviewPublisher ?? null,
+      approvals: deps.pullRequestReviewApprovals ?? null,
+      feedback: deps.pullRequestReviewFeedback ?? null,
+      jira: deps.jiraRequirements ?? null,
+      gate: this.governanceGate,
+      logger: this.log,
+      intervalMs: cfg.squadAutopilotIntervalMs,
+      maxDispatchesPerScan: cfg.squadAutopilotMaxPerTick,
+      soloMode: cfg.soloMode,
+      state: deps.automationState ?? null,
+    });
 
     // Workflow-definition CRUD + dispatch. Definitions persist through the
     // DURABLE pg store when the effective repository driver is postgres, else the
@@ -313,6 +343,12 @@ export class AgentOsComposer implements AgentOsModule {
       middleware: deps.middleware,
     });
     this.router = Router();
+    this.router.use(
+      buildPullRequestReviewAgentsRouter({
+        service: this.prReviewAgents,
+        middleware: deps.middleware,
+      }),
+    );
     // Board first: its literal `/squads/board` path must win over the `/squads/
     // :squadId` param route in the read router mounted next.
     this.router.use(
@@ -325,7 +361,11 @@ export class AgentOsComposer implements AgentOsModule {
     // Independent of the squads flag; serves `{ ready: [] }` (200) until the
     // issue-graph seam is attached, never a squads-off tombstone.
     this.router.use(
-      buildIssuesReadRouter({ readyIssues: () => this.readyIssues(), middleware: deps.middleware }),
+      buildIssuesReadRouter({
+        readyIssues: () => this.readyIssues(),
+        createIssue: (input, actor) => this.createIssue(input, actor),
+        middleware: deps.middleware,
+      }),
     );
     // Workflow-definition CRUD + dispatch edge.
     this.router.use(buildWorkflowRouter({ workflows: this.workflows, middleware: deps.middleware }));
@@ -365,7 +405,7 @@ export class AgentOsComposer implements AgentOsModule {
     return this.squads;
   }
 
-  /** The squad autopilot loop (null when squads/autopilot are disabled). */
+  /** The squad autopilot loop (null only when squads are disabled). */
   squadAutopilot(): SquadAutopilotService | null {
     return this.autopilot;
   }
@@ -378,10 +418,19 @@ export class AgentOsComposer implements AgentOsModule {
   /** Late-bind the conductor dispatch seam (bootstrap builds it after agent-os). */
   attachSquadAutopilotConductor(port: SquadConductorPort): void {
     if (!this.autopilot) {
-      this.log.debug('agent-os: squad autopilot disabled — conductor seam not attached');
+      this.log.debug('agent-os: squads disabled — autopilot conductor seam not attached');
       return;
     }
     this.autopilot.attachConductor(port);
+  }
+
+  /** Late-bind canonical workspace lookup/dispatch for PR review agents. */
+  attachPullRequestReviewConductor(port: PullRequestReviewConductorPort): void {
+    this.prReviewAgents.attachConductor(port);
+  }
+
+  pullRequestReviewAgents(): PullRequestReviewAgentService {
+    return this.prReviewAgents;
   }
 
   /**
@@ -394,8 +443,9 @@ export class AgentOsComposer implements AgentOsModule {
     // (the Board's pickup queue) reads the issue graph directly, independent of
     // whether the squads autopilot is enabled.
     this.issueGraph = port;
+    this.prReviewAgents.attachIssueGraph(port);
     if (!this.autopilot) {
-      this.log.debug('agent-os: squad autopilot disabled — issue-graph seam serves reads only');
+      this.log.debug('agent-os: squads disabled — issue-graph seam serves reads and PR requirements');
       return;
     }
     this.autopilot.attachIssueGraph(port);
@@ -408,6 +458,14 @@ export class AgentOsComposer implements AgentOsModule {
    */
   async readyIssues(): Promise<readonly SquadReadyIssue[]> {
     return this.issueGraph?.ready() ?? [];
+  }
+
+  /** File real work into the late-bound memory-owned Beads graph. */
+  async createIssue(
+    input: SquadIssueCreateInput,
+    actor: string,
+  ): Promise<{ id: string } | null> {
+    return this.issueGraph?.create?.(input, actor) ?? null;
   }
 
   /**
@@ -486,8 +544,14 @@ export class AgentOsComposer implements AgentOsModule {
     // Seed the squad store BEFORE the autopilot loop starts, so its first tick's
     // `route()` finds the configured squad (opt-in; no seed ⇒ no-op).
     await this.seedSquad();
+    const [autopilotRestored] = await Promise.all([
+      this.autopilot?.restore(),
+      this.prReviewAgents.restore(),
+    ]);
     this.drain.start();
-    this.autopilot?.start();
+    // A persisted operator pause outranks the boot default. The env flag is an
+    // initial posture only when no durable control state exists yet.
+    if (this.cfg.squadAutopilotEnabled && !autopilotRestored) this.autopilot?.start();
     this.log.info(
       {
         repositoryDriver: this.effectiveDriver,
@@ -501,6 +565,7 @@ export class AgentOsComposer implements AgentOsModule {
 
   async stop(): Promise<void> {
     this.autopilot?.stop();
+    this.prReviewAgents.stop();
     this.drain.stop();
     if (this.outboxPublisher.close) {
       await this.outboxPublisher.close().catch(() => undefined);

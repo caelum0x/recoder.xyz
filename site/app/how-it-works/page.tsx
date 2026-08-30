@@ -94,10 +94,7 @@ export default function HowItWorks() {
               merge.
             </p>
             <div className="mt-8 flex items-center justify-center gap-4">
-              <DownloadButton
-                label="Download"
-                className="px-6 py-3 text-[15px]"
-              />
+              <DownloadButton className="px-6 py-3 text-[15px]" />
               <SecondaryButton href="/enterprise" label="For teams →" />
             </div>
           </div>
@@ -174,10 +171,7 @@ export default function HowItWorks() {
               merge it with a trail you can trust.
             </p>
             <div className="mt-8 flex items-center justify-center gap-4">
-              <DownloadButton
-                label="Download"
-                className="px-6 py-3 text-[15px]"
-              />
+              <DownloadButton className="px-6 py-3 text-[15px]" />
               <SecondaryButton href="/enterprise" label="For teams →" />
             </div>
           </div>

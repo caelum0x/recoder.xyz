@@ -103,6 +103,7 @@ references):
 | Doc | What it is |
 |---|---|
 | [OWNER-RUNBOOK.md](OWNER-RUNBOOK.md) | Credential/release-gated owner actions: sign/notarize/publish the dmg, sidecars, x64. |
+| [DESKTOP-LICENSE-BOUNDARY.md](DESKTOP-LICENSE-BOUNDARY.md) | Fail-closed RecoderGit/Multica distribution boundary and per-artifact evidence. |
 | [growth/SEARCH-SUBMISSION-RUNBOOK.md](growth/SEARCH-SUBMISSION-RUNBOOK.md) | GSC/Bing/IndexNow search submission. |
 
 ## Research & reference

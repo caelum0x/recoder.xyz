@@ -16,10 +16,16 @@ vi.mock("./recoder-fanout", () => ({
 
 import { atom as jotaiAtom } from "jotai";
 import { globalStore } from "@/app/store/global";
-import { RecoderFanoutViewModel, cockpitPollDelayMs, resolveConvergeSelection } from "./recoder-fanout-model";
+import {
+    RecoderFanoutViewModel,
+    cockpitPollDelayMs,
+    fanoutRecoveryKinds,
+    resolveConvergeSelection,
+} from "./recoder-fanout-model";
 
 const CockpitUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_cockpit/call";
 const FanoutUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_fanout/call";
+const RetryUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_fanout_retry/call";
 const FromIssueUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_fanout_from_issue/call";
 const ReFanUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_refan/call";
 const ComposeUrl = "http://127.0.0.1:3100/api/conductor/workspaces/compare/grp-ready/converge";
@@ -353,6 +359,102 @@ describe("RecoderFanoutViewModel.launch", () => {
         expect(globalStore.get(model.launchNoticeAtom)).toBe("Not connected.");
         expect(globalStore.get(model.launchResultAtom)).toBeNull();
         expect(globalStore.get(model.launchingAtom)).toBe(false);
+    });
+});
+
+describe("RecoderFanoutViewModel.retryIncomplete", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("replaces only incomplete agents in the same group and refreshes the cockpit", async () => {
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+            if (String(url) == RetryUrl) {
+                return Promise.resolve(
+                    ok({
+                        status: "completed",
+                        result: {
+                            taskGroup: "grp-partial",
+                            workspaceIds: ["ws-codex-retry"],
+                            reviewableWorkspaceIds: ["ws-codex-retry"],
+                            perAgent: [
+                                {
+                                    kind: "codex",
+                                    nativeStatus: true,
+                                    workspaceId: "ws-codex-retry",
+                                    settled: true,
+                                    state: "review_ready",
+                                    reason: "review_ready",
+                                },
+                            ],
+                        },
+                    })
+                );
+            }
+            return Promise.resolve(completedSnapshot(null));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        const model = makeModel();
+        model.setRepoPath("/repo");
+        model.setSpaceId("space1");
+        model.setProjectId("proj1");
+        const result = {
+            taskGroup: "grp-partial",
+            workspaceIds: ["ws-claude"],
+            converged: null,
+            convergeReason: "nothing to converge",
+            perAgent: [
+                {
+                    kind: "claude",
+                    nativeStatus: true,
+                    workspaceId: "ws-claude",
+                    settled: true,
+                    state: "review_ready",
+                    reason: "review_ready",
+                },
+                {
+                    kind: "codex",
+                    nativeStatus: true,
+                    workspaceId: null,
+                    settled: false,
+                    reason: "launch failed",
+                },
+            ],
+        };
+
+        await model.retryIncomplete(result);
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            RetryUrl,
+            expect.objectContaining({
+                body: JSON.stringify({
+                    args: {
+                        taskGroup: "grp-partial",
+                        agentKinds: ["codex"],
+                        repoPath: "/repo",
+                        spaceId: "space1",
+                        projectId: "proj1",
+                    },
+                }),
+            })
+        );
+        expect(globalStore.get(model.retryResultAtom)?.workspaceIds).toEqual(["ws-codex-retry"]);
+        expect(fetchMock).toHaveBeenCalledWith(CockpitUrl, expect.objectContaining({ method: "POST" }));
+    });
+
+    it("reruns all kinds when every pane settled but no branch composed", () => {
+        expect(
+            fanoutRecoveryKinds({
+                taskGroup: "grp",
+                workspaceIds: ["ws1", "ws2"],
+                converged: null,
+                convergeReason: "unresolved contested file",
+                perAgent: [
+                    { kind: "claude", nativeStatus: true, workspaceId: "ws1", settled: true, reason: "done" },
+                    { kind: "codex", nativeStatus: true, workspaceId: "ws2", settled: true, reason: "done" },
+                ],
+            })
+        ).toEqual(["claude", "codex"]);
     });
 });
 

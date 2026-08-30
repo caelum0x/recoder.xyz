@@ -1,0 +1,18 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Recoder">
+  <defs>
+    <linearGradient id="rc" x1="256" y1="128" x2="256" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0B1220"/>
+  <!-- code brackets: recoder rewrites code -->
+  <path d="M168 176 L120 176 L120 336 L168 336" stroke="#24406b" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M344 176 L392 176 L392 336 L344 336" stroke="#24406b" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- text cursor / I-beam caret (the mark) -->
+  <g fill="url(#rc)">
+    <rect x="176" y="120" width="160" height="34" rx="17"/>
+    <rect x="176" y="358" width="160" height="34" rx="17"/>
+    <rect x="238" y="120" width="36" height="272" rx="18"/>
+  </g>
+</svg>

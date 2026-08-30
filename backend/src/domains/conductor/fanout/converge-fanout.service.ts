@@ -237,6 +237,17 @@ export interface FanoutInput {
   readonly settleTimeoutMs?: number;
 }
 
+/**
+ * Recover an incomplete fan-out inside its ORIGINAL task group. Unlike the first
+ * launch this intentionally accepts a single agent: one failed pane should not
+ * force the operator to discard a healthy sibling or fabricate a second round.
+ */
+export interface FanoutRetryInput extends Omit<FanoutInput, 'task'> {
+  readonly taskGroup: string;
+  /** Optional at the module edge, which can recover the original task from SoR. */
+  readonly task?: string;
+}
+
 /** One agent's truthful fan-out outcome (never fabricated). */
 export interface FanoutAgentResult {
   readonly kind: string;
@@ -269,6 +280,14 @@ export interface FanoutResult {
   /** Why `converged` is `null` (nothing to converge / compose failed). */
   readonly convergeReason?: string;
   /** Per-agent truthful outcome, in the caller's `agentKinds` order. */
+  readonly perAgent: readonly FanoutAgentResult[];
+}
+
+/** A recovery launch. The cockpit recomputes the whole group and owns composition. */
+export interface FanoutRetryResult {
+  readonly taskGroup: string;
+  readonly workspaceIds: readonly string[];
+  readonly reviewableWorkspaceIds: readonly string[];
   readonly perAgent: readonly FanoutAgentResult[];
 }
 
@@ -314,6 +333,12 @@ function isWaitable(
   return 'workspaceId' in stub;
 }
 
+interface LaunchAndWaitResult {
+  readonly workspaceIds: readonly string[];
+  readonly reviewableWorkspaceIds: readonly string[];
+  readonly perAgent: readonly FanoutAgentResult[];
+}
+
 export class ConvergeFanoutService {
   private readonly deps: ConvergeFanoutDeps;
   private readonly logger: LoggerPort;
@@ -333,6 +358,54 @@ export class ConvergeFanoutService {
    */
   async fanout(input: FanoutInput): Promise<FanoutResult> {
     const taskGroup = `fan-${this.newId().slice(0, 8)}`;
+    const launched = await this.launchAndWait(input, taskGroup);
+
+    // Converge the settled siblings — but only when there is honestly something
+    // to converge (≥2 done-ish panes).
+    const { converged, convergeReason } = await this.convergeSettled(
+      taskGroup,
+      launched.reviewableWorkspaceIds,
+      input
+    );
+
+    this.logger.info('converge fanout complete', {
+      taskGroup,
+      created: launched.workspaceIds.length,
+      settledDone: launched.reviewableWorkspaceIds.length,
+      converged: converged != null,
+    });
+
+    return {
+      taskGroup,
+      workspaceIds: launched.workspaceIds,
+      converged,
+      ...(convergeReason ? { convergeReason } : {}),
+      perAgent: launched.perAgent,
+    };
+  }
+
+  /**
+   * Launch replacement panes into an existing group without auto-composing only
+   * the replacement set. The live cockpit sees old + new siblings together and
+   * the operator uses its existing Converge action once the group is ready.
+   */
+  async retry(input: FanoutRetryInput): Promise<FanoutRetryResult> {
+    const task = input.task?.trim();
+    if (!task) throw new Error('fan-out recovery task is unavailable');
+    const launched = await this.launchAndWait({ ...input, task }, input.taskGroup);
+    this.logger.info('fanout recovery complete', {
+      taskGroup: input.taskGroup,
+      created: launched.workspaceIds.length,
+      settledDone: launched.reviewableWorkspaceIds.length,
+    });
+    return { taskGroup: input.taskGroup, ...launched };
+  }
+
+  /** Create, deliver and wait for one launch batch inside the supplied group. */
+  private async launchAndWait(
+    input: FanoutInput,
+    taskGroup: string
+  ): Promise<LaunchAndWaitResult> {
     const short = this.newId().slice(0, 8);
     const timeoutMs = input.settleTimeoutMs ?? DEFAULT_FANOUT_SETTLE_TIMEOUT_MS;
 
@@ -409,7 +482,7 @@ export class ConvergeFanoutService {
     // Step 4: wait for EACH delivered pane to settle (concurrently — N live panes).
     const waitables = stubs.filter(isWaitable);
     const waitByWorkspace = new Map<string, FanoutAgentResult>();
-    const convergeSet: string[] = [];
+    const reviewableWorkspaceIds: string[] = [];
     await Promise.all(
       waitables.map(async stub => {
         let outcome: WaitOutcome | null = null;
@@ -431,7 +504,7 @@ export class ConvergeFanoutService {
           result.state != null &&
           DONE_ISH_STATES.includes(result.state)
         ) {
-          convergeSet.push(stub.workspaceId);
+          reviewableWorkspaceIds.push(stub.workspaceId);
         }
       })
     );
@@ -440,26 +513,9 @@ export class ConvergeFanoutService {
       'result' in stub ? stub.result : waitByWorkspace.get(stub.workspaceId)!
     );
 
-    // Step 5: converge the settled siblings — but only when there is honestly
-    // something to converge (≥2 done-ish panes).
-    const { converged, convergeReason } = await this.convergeSettled(
-      taskGroup,
-      convergeSet,
-      input
-    );
-
-    this.logger.info('converge fanout complete', {
-      taskGroup,
-      created: workspaceIds.length,
-      settledDone: convergeSet.length,
-      converged: converged != null,
-    });
-
     return {
-      taskGroup,
       workspaceIds,
-      converged,
-      ...(convergeReason ? { convergeReason } : {}),
+      reviewableWorkspaceIds,
       perAgent,
     };
   }

@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { openLink } from "@/app/store/global";
 import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { FIELD_LABEL, PAGE_TITLE } from "@/app/view/recoder/recoder-styles";
 import { cn } from "@/util/util";
@@ -17,6 +18,7 @@ import {
     PreviewVerificationRunStatus,
     RecoderRun,
     RecoderRunEvent,
+    RecoderRunHistoryItem,
     RecoderRunsViewModel,
     SelectedRunStatus,
 } from "./recoder-runs-model";
@@ -94,9 +96,7 @@ function RunRow({ run, correlated, selected, drift, previewStatus, onSelect, onS
     // Row actions (and the "no workspace" note) stay out of the default scan and
     // reveal on hover or when the row is selected — keeps the list glanceable
     // without dropping the affordance for mouse or keyboard.
-    const revealClass = selected
-        ? "opacity-100"
-        : "opacity-0 group-hover:opacity-100 focus-within:opacity-100";
+    const revealClass = selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100";
     return (
         <div
             role="button"
@@ -181,6 +181,41 @@ function EventLine({ event }: { event: RecoderRunEvent }) {
     );
 }
 
+function historyUrl(item: RecoderRunHistoryItem): string {
+    const candidate = item.refs?.pullRequestUrl ?? item.refs?.url ?? item.refs?.issueUrl ?? "";
+    return candidate.startsWith("https://") ? candidate : "";
+}
+
+function HistoryLine({ item }: { item: RecoderRunHistoryItem }) {
+    const url = historyUrl(item);
+    const tone =
+        item.severity == "block"
+            ? "text-error border-error/40"
+            : item.severity == "warning"
+              ? "text-warning border-warning/40"
+              : item.severity == "success"
+                ? "text-success border-success/40"
+                : "text-secondary border-border";
+    return (
+        <div className="flex items-baseline gap-2 text-xs" title={item.itemId}>
+            <span className="text-secondary font-mono whitespace-nowrap">{shortTime(item.createdAt)}</span>
+            <span className={cn("rounded border px-1.5 py-0.5 font-mono whitespace-nowrap", tone)}>
+                {item.kind.replace(/_/g, " ")}
+            </span>
+            <span className="text-primary truncate">{item.summary || item.title}</span>
+            {url != "" && (
+                <button
+                    type="button"
+                    className="ml-auto text-accent hover:underline whitespace-nowrap"
+                    onClick={() => openLink(url)}
+                >
+                    Open
+                </button>
+            )}
+        </div>
+    );
+}
+
 // Honest empty-reason copy for the drilldown panel. Each state names WHY there's
 // no transcript so the view never implies a run has events it can't show.
 const SELECTED_EMPTY: Partial<Record<SelectedRunStatus, { title: string; hint: string }>> = {
@@ -200,10 +235,12 @@ const SELECTED_EMPTY: Partial<Record<SelectedRunStatus, { title: string; hint: s
 
 function SelectedRunPanel({
     status,
+    history,
     events,
     label,
 }: {
     status: SelectedRunStatus;
+    history: RecoderRunHistoryItem[];
     events: RecoderRunEvent[];
     label: string;
 }) {
@@ -213,14 +250,14 @@ function SelectedRunPanel({
     const empty = SELECTED_EMPTY[status];
     return (
         <div className="flex flex-col gap-1">
-            <div className={FIELD_LABEL}>Run events · {label}</div>
+            <div className={FIELD_LABEL}>Run history · {label}</div>
             {status == "loading" && <RecoderSkeleton rows={3} />}
             {empty != null && <RecoderEmpty title={empty.title} hint={empty.hint} />}
             {status == "ready" && (
                 <div className="flex flex-col gap-0.5">
-                    {events.map((event) => (
-                        <EventLine key={event.eventId} event={event} />
-                    ))}
+                    {history.length > 0
+                        ? history.map((item) => <HistoryLine key={item.itemId} item={item} />)
+                        : events.map((event) => <EventLine key={event.eventId} event={event} />)}
                 </div>
             )}
         </div>
@@ -238,6 +275,7 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
     const correlation = useAtomValue(model.correlationAtom);
     const selectedRunId = useAtomValue(model.selectedRunIdAtom);
     const selectedEvents = useAtomValue(model.selectedEventsAtom);
+    const selectedHistory = useAtomValue(model.selectedHistoryAtom);
     const selectedStatus = useAtomValue(model.selectedStatusAtom);
     const findings = useAtomValue(model.findingsAtom);
     const findingsStatus = useAtomValue(model.findingsStatusAtom);
@@ -305,7 +343,12 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
                 </div>
             )}
             {connected && selectedRun != null && (
-                <SelectedRunPanel status={selectedStatus} events={selectedEvents} label={runLabel(selectedRun)} />
+                <SelectedRunPanel
+                    status={selectedStatus}
+                    history={selectedHistory}
+                    events={selectedEvents}
+                    label={runLabel(selectedRun)}
+                />
             )}
             {connected && events.length > 0 && (
                 <div className="flex flex-col gap-1">

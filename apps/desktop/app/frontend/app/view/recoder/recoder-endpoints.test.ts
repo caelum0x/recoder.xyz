@@ -6,10 +6,13 @@ import {
     applyInjectedBackendUrl,
     DefaultRecoderBackend,
     getRecoderBackendUrl,
+    initializeRecoderBackendEndpoint,
     setRecoderBackendUrl,
+    subscribeRecoderBackendUrl,
 } from "./recoder-endpoints";
 
 function clearBackendState(): void {
+    setRecoderBackendUrl("");
     (globalThis as { __RECODER_BACKEND_URL__?: unknown }).__RECODER_BACKEND_URL__ = undefined;
     try {
         globalThis.localStorage?.removeItem("recoder:backendurl");
@@ -81,5 +84,48 @@ describe("applyInjectedBackendUrl (DT-7.1 main-process port injection)", () => {
             stored = null;
         }
         expect(stored == null || stored == "").toBe(true);
+    });
+
+    it("reveals the injected session port after a user override is cleared", () => {
+        clearBackendState();
+        applyInjectedBackendUrl("http://127.0.0.1:3271");
+        setRecoderBackendUrl("http://127.0.0.1:9999");
+        expect(getRecoderBackendUrl()).toBe("http://127.0.0.1:9999");
+
+        setRecoderBackendUrl("");
+        expect(getRecoderBackendUrl()).toBe("http://127.0.0.1:3271");
+    });
+});
+
+describe("renderer-wide backend endpoint lifecycle", () => {
+    afterEach(clearBackendState);
+
+    it("adopts the synchronous port and later supervisor updates without a view model", () => {
+        clearBackendState();
+        let pushed: ((url: string) => void) | undefined;
+        initializeRecoderBackendEndpoint({
+            getRecoderBackendUrl: () => "http://127.0.0.1:3271",
+            onRecoderBackendUrl: (callback) => {
+                pushed = callback;
+            },
+        });
+        expect(getRecoderBackendUrl()).toBe("http://127.0.0.1:3271");
+
+        pushed?.("http://127.0.0.1:3272");
+        expect(getRecoderBackendUrl()).toBe("http://127.0.0.1:3272");
+    });
+
+    it("notifies live transports only when the effective endpoint changes", () => {
+        clearBackendState();
+        const seen: string[] = [];
+        const unsubscribe = subscribeRecoderBackendUrl((url) => seen.push(url));
+        try {
+            applyInjectedBackendUrl("http://127.0.0.1:4100");
+            applyInjectedBackendUrl("http://127.0.0.1:4100/");
+            setRecoderBackendUrl("http://127.0.0.1:4200");
+            expect(seen).toEqual(["http://127.0.0.1:4100", "http://127.0.0.1:4200"]);
+        } finally {
+            unsubscribe();
+        }
     });
 });

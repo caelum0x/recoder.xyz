@@ -48,6 +48,8 @@ export interface OwnedWorkspaceLookup {
     readonly createdBy: string;
     /** The REAL server-side checkout path (absent for non-local substrates). */
     readonly worktreePath?: string;
+    /** Durable governed-action policy profile (shape validated by the policy layer). */
+    readonly policyProfile?: unknown;
   } | null>;
 }
 

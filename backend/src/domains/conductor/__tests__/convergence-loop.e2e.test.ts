@@ -36,6 +36,12 @@ import type {
   RunHarvestInput,
 } from '../adapters/brain-memory.adapter.js';
 import type { ConvergeInferenceFn } from '../converge/converge.ops.js';
+import type {
+  ConvergenceDecisionRecord,
+  ConvergenceFeedbackPort,
+  ConvergenceFlagDisposition,
+  ConvergenceFlagFeedbackEvent,
+} from '../ports/convergence-feedback.port.js';
 import {
   SYNTHESIZE_SELECTION,
   ASSISTED_SELECTION,
@@ -117,6 +123,10 @@ describe('convergence loop E2E (real git + deterministic substrate)', () => {
   let worktreesDir: string;
   let substrate: RealGitSubstrate;
   let brain: RecordingBrain;
+  let feedbackRecords: ConvergenceDecisionRecord[];
+  let feedbackRules: ConvergenceFlagDisposition[];
+  let feedbackHistory: ConvergenceFlagFeedbackEvent[];
+  let convergenceFeedback: ConvergenceFeedbackPort;
   let module: ReturnType<typeof composeConductor>['module'];
   let gate: ReturnType<typeof composeConductor>['gate'];
 
@@ -139,7 +149,56 @@ describe('convergence loop E2E (real git + deterministic substrate)', () => {
 
     substrate = new RealGitSubstrate({ id: 'tmux_worktree', worktreesDir });
     brain = makeBrain();
-    ({ module, gate } = composeConductor({ substrates: [substrate], brain }));
+    feedbackRecords = [];
+    feedbackRules = [];
+    feedbackHistory = [];
+    convergenceFeedback = {
+      durable: true,
+      async read(repoId) {
+        return {
+          repoId,
+          durable: true,
+          totalDeliveries: feedbackRecords.length,
+          contestedPickDecisions: feedbackRecords.reduce((sum, row) => sum + row.picks.length, 0),
+          proceededWithFlagDecisions: feedbackRecords.reduce((sum, row) => sum + row.proceededWithFlags.length, 0),
+          totalFlagFeedbackDecisions: feedbackHistory.length,
+          acceptedFlagRules: feedbackRules.filter(row => row.disposition === 'accepted').length,
+          dismissedFlagRules: feedbackRules.filter(row => row.disposition === 'dismissed').length,
+          decisions: feedbackRecords,
+          flagDispositions: feedbackRules,
+          flagFeedbackHistory: feedbackHistory,
+        };
+      },
+      async record(repoId, decision) {
+        feedbackRecords = [decision, ...feedbackRecords.filter(row => row.workspaceId !== decision.workspaceId)];
+        return this.read(repoId);
+      },
+      async setFlagDisposition(repoId, input) {
+        const decision = feedbackRecords.find(row => row.workspaceId === input.workspaceId);
+        if (!decision?.proceededWithFlags.includes(input.flag)) throw new Error('flag was not recorded');
+        const key = input.flag.toLowerCase();
+        feedbackRules = input.disposition === 'clear'
+          ? feedbackRules.filter(row => row.key !== key)
+          : [{
+              key,
+              flag: input.flag,
+              disposition: input.disposition,
+              actorId: input.actorId,
+              workspaceId: input.workspaceId,
+              updatedAt: input.decidedAt,
+            }, ...feedbackRules.filter(row => row.key !== key)];
+        feedbackHistory = [{
+          key,
+          flag: input.flag,
+          disposition: input.disposition,
+          actorId: input.actorId,
+          workspaceId: input.workspaceId,
+          decidedAt: input.decidedAt,
+        }, ...feedbackHistory];
+        return this.read(repoId);
+      },
+    };
+    ({ module, gate } = composeConductor({ substrates: [substrate], brain, convergenceFeedback }));
   });
 
   afterEach(async () => {
@@ -245,6 +304,8 @@ describe('convergence loop E2E (real git + deterministic substrate)', () => {
     // A NEW reviewable workspace with the MERGED files (real git worktree).
     const convWs = (await module.getWorkspace(conv.workspaceId))!;
     expect(convWs.state).toBe('awaiting_review');
+    expect(typeof convWs.metadata?.repoId).toBe('string');
+    expect(convWs.metadata?.taskGroup).toBeUndefined();
     const convWt = convWs.worktreePath!;
     expect(git(convWt, ['show', 'HEAD:a.ts'])).toBe('from-a\n');
     expect(git(convWt, ['show', 'HEAD:b.ts'])).toBe('from-b\n');
@@ -266,6 +327,60 @@ describe('convergence loop E2E (real git + deterministic substrate)', () => {
     expect(gate.decisions).toContain('workspace.merge');
     expect(merge.value!.auditEntryHash).toBeTruthy();
     expect(merge.value!.evidenceHash).toBeTruthy();
+    // The pre-merge trust gate reads the composed workspace's immutable N-source
+    // provenance. It must not collapse this real two-agent convergence to `solo`,
+    // and the contested whole-file pick must be visible before/at delivery.
+    expect(merge.value!.vote).toMatchObject({
+      verdict: 'mixed',
+      contestedCount: 2,
+      converged: ['synth.ts'],
+      picked: ['pick.ts'],
+    });
+    expect(merge.value!.trustFlags?.join(' ')).toMatch(/pick\.ts/i);
+    expect(merge.value!.convergenceFeedback).toMatchObject({
+      durable: true,
+      totalDeliveries: 1,
+      contestedPickDecisions: 1,
+    });
+    expect(feedbackRecords[0]).toMatchObject({
+      workspaceId: conv.workspaceId,
+      picks: [{ path: 'pick.ts', sourceWorkspaceId: wsB, sourceRuntime: 'codex' }],
+      trustTier: 'high',
+    });
+    expect(feedbackRecords[0]?.proceededWithFlags.join(' ')).toMatch(/pick\.ts/i);
+    expect(await module.getConvergenceDecisionProfile(conv.workspaceId)).toMatchObject({
+      repoId: convWs.metadata?.repoId,
+      totalDeliveries: 1,
+      contestedPickDecisions: 1,
+    });
+
+    // An explicit disposition — never the merge itself — calibrates the same
+    // repository's future trust. Dismiss hides the exact repeat without restoring
+    // evidence points; Accept retains it and adds a small confirmed-risk deduction.
+    const flag = merge.value!.trustFlags!.find(value => /pick\.ts/i.test(value))!;
+    const rawTrust = await module.getConvergenceTrust(conv.workspaceId);
+    const dismissed = await module.setConvergenceFlagFeedback(
+      conv.workspaceId,
+      { flag, disposition: 'dismissed' },
+      PRINCIPAL,
+    );
+    expect(dismissed.ok).toBe(true);
+    expect(gate.decisions).toContain('workspace.convergence-feedback');
+    expect(dismissed.value).toMatchObject({ dismissedFlagRules: 1, acceptedFlagRules: 0 });
+    const dismissedTrust = await module.getConvergenceTrust(conv.workspaceId);
+    expect(dismissedTrust!.reviewFlags).not.toContain(flag);
+    expect(dismissedTrust!.score).toBe(rawTrust!.score);
+
+    const accepted = await module.setConvergenceFlagFeedback(
+      conv.workspaceId,
+      { flag, disposition: 'accepted' },
+      PRINCIPAL,
+    );
+    expect(accepted.value).toMatchObject({ dismissedFlagRules: 0, acceptedFlagRules: 1 });
+    const acceptedTrust = await module.getConvergenceTrust(conv.workspaceId);
+    expect(acceptedTrust!.reviewFlags).toContain(flag);
+    expect(acceptedTrust!.score).toBe(rawTrust!.score - 3);
+    expect(acceptedTrust!.calibration?.accepted).toEqual([flag]);
 
     const evidence = await module.getConvergenceEvidence(conv.workspaceId);
     expect(evidence).not.toBeNull();

@@ -24,12 +24,22 @@ export interface SquadReadyIssue {
   readonly description?: string;
 }
 
+/** User-authored work filed from the desktop Board into the Beads graph. */
+export interface SquadIssueCreateInput {
+  readonly title: string;
+  readonly description?: string;
+  readonly labels?: string;
+  readonly discoveredFrom?: string;
+}
+
 /**
  * One issue in full (`bd show --long --json`): the accumulated NOTE evidence
  * (`comments`) + the `dependencies` lineage prior agents wrote onto the issue,
  * passed through raw (shapes bd owns) for the launch-prompt weave.
  */
 export interface SquadIssueDetail extends SquadReadyIssue {
+  readonly status?: string;
+  readonly labels?: readonly string[];
   readonly comments?: readonly unknown[];
   readonly dependencies?: readonly unknown[];
 }
@@ -48,6 +58,11 @@ export interface SquadIssuePort {
   health(): Promise<{ available: boolean; reason?: string }>;
   /** `bd ready --json` — unblocked open work. `[]` when the graph is down. */
   ready(): Promise<readonly SquadReadyIssue[]>;
+  /** `bd create --json` — returns the real issue id, or null when unavailable. */
+  create?(
+    input: SquadIssueCreateInput,
+    actor: string,
+  ): Promise<{ id: string } | null>;
   /** `bd show <id> --long --json` — the lineage read. `null` when down/absent. */
   show(id: string, opts: { long: true }): Promise<SquadIssueDetail | null>;
   /** `bd stale --json` — stalled in-flight work for the board. `[]` when down. */

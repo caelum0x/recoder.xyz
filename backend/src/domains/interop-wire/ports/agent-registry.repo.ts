@@ -7,7 +7,12 @@
  * `WHERE user_id = :user_id` tenancy. Callers depend on THIS interface, never on
  * the executor directly. Interface only.
  */
-import type { AgentRow, AgentStatus, HeartbeatSample, UpsertAgentInput } from '../types.js';
+import type {
+  AgentRow,
+  AgentStatus,
+  HeartbeatSample,
+  UpsertAgentInput,
+} from '../types.js';
 
 export interface AgentRegistryRepo {
   /** Register/upsert an agent endpoint; returns the persisted row. */
@@ -20,8 +25,11 @@ export interface AgentRegistryRepo {
   setStatus(id: string, userId: string, status: AgentStatus): Promise<boolean>;
   /** Deregister an agent (cascades its heartbeats). */
   remove(id: string, userId: string): Promise<boolean>;
-  /** Record a heartbeat sample for an agent. */
+  /** Record an owner-scoped heartbeat sample for an agent. */
   recordHeartbeat(sample: HeartbeatSample): Promise<void>;
-  /** The most recent heartbeat for an agent, or `null` when never seen. */
-  lastHeartbeat(agentId: string): Promise<HeartbeatSample | null>;
+  /** The most recent heartbeat for an owned agent, or `null` when never seen. */
+  lastHeartbeat(
+    agentId: string,
+    userId: string
+  ): Promise<HeartbeatSample | null>;
 }

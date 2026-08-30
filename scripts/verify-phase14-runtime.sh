@@ -13,7 +13,6 @@ RECODER_BASE_URL="${RECODER_BASE_URL:-https://recoder.xyz}"
 AGENTS_URL="${AGENTS_URL:-https://agents.recoder.xyz}"
 DOCKER_URL="${DOCKER_URL:-https://docker.recoder.xyz}"
 BACKEND_URL="${BACKEND_URL:-https://api.recoder.xyz}"
-WEB_URL="${WEB_URL:-https://web.recoder.xyz}"
 
 PASS=0
 FAIL=0
@@ -157,30 +156,6 @@ check_docker_health() {
   fi
 }
 
-check_web_runtime() {
-  local root_headers root_status location health_status
-
-  root_headers="$(curl -sSI "${WEB_URL}" || true)"
-  root_status="$(printf "%s\n" "$root_headers" | grep -im1 '^HTTP/' | tr -d '\r' | cut -d' ' -f2)"
-  location="$(printf "%s\n" "$root_headers" | awk 'tolower($1)=="location:" {print $2}' | tr -d '\r')"
-
-  if [[ "$root_status" == "302" && "$location" == https://recoder.xyz/auth/signin* ]]; then
-    pass "web root is intentionally auth-gated (302 to recoder.xyz signin)"
-  elif [[ "$root_status" == "200" ]]; then
-    pass "web root returned 200"
-  else
-    fail "web root unexpected status/location (${root_status:-missing}, ${location:-none})"
-  fi
-
-  health_status="$(curl -sS -o /tmp/phase14_web_health.json -w "%{http_code}" "${WEB_URL}/api/health" || true)"
-  [[ -n "$health_status" ]] || health_status="000"
-  if [[ "$health_status" == "200" ]]; then
-    pass "web /api/health returned 200"
-  else
-    fail "web /api/health returned ${health_status}"
-  fi
-}
-
 check_queue_status_optional() {
   local url code
   url="${BACKEND_URL}/v1/admin/analytics/conversations/queue-status"
@@ -214,7 +189,6 @@ check_agents_csp
 check_main_health
 check_forgot_password_contract
 check_docker_health
-check_web_runtime
 check_queue_status_optional
 
 echo "Summary: PASS=${PASS} FAIL=${FAIL}"

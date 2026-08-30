@@ -35,6 +35,7 @@ import type { MigrationRunner } from './ports/migration-runner.port.js';
 import type { StateOfRecordRepository } from './repositories/state-of-record.repository.js';
 import type { MigrationReport } from './types.js';
 import type { PersistenceModule } from './index.js';
+import { resolveStateOfRecordSqlitePath } from '../../shared/state-of-record.js';
 
 export class PersistenceComposer implements PersistenceModule {
   readonly name = 'persistence' as const;
@@ -64,7 +65,12 @@ export class PersistenceComposer implements PersistenceModule {
     this.pool = createPgPool({ ...this.cfg, databaseUrl: safeUrl }, this.log);
     this.queryExecutor = createQueryExecutor(this.pool, this.log);
     this.runner = createMigrationRunner(this.pool, this.cfg, this.log);
-    this.factory = createRepositoryFactory(this.queryExecutor, this.log);
+    const sqlitePath = resolveStateOfRecordSqlitePath(config);
+    this.factory = createRepositoryFactory(
+      this.queryExecutor,
+      this.log,
+      sqlitePath ? { sqlitePath } : undefined,
+    );
     this.inspector = createSchemaInspector(this.queryExecutor);
 
     // Bind the legacy sync-KV facade to the DB-backed store so the recreated
@@ -117,7 +123,11 @@ export class PersistenceComposer implements PersistenceModule {
     if (this.started) return;
     this.started = true;
     if (!this.pool) {
-      this.log.warn('persistence started in degraded mode (no pool) — KV falls back to in-memory');
+      if (this.kvStore().isDurable()) {
+        this.log.info('persistence started with the embedded SQLite KV store');
+      } else {
+        this.log.warn('persistence started in degraded mode (no pool) — KV falls back to in-memory');
+      }
       return;
     }
     const report = await this.migrate();
@@ -137,6 +147,7 @@ export class PersistenceComposer implements PersistenceModule {
     } catch (err) {
       this.log.warn({ err: err instanceof Error ? err.message : String(err) }, 'KV flush on shutdown failed');
     }
+    this.factory.close();
     await drainPool(this.pool, this.log);
   }
 }

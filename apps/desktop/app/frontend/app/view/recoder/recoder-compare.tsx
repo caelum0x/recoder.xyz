@@ -41,6 +41,15 @@ import {
 import { RecoderEmpty } from "./recoder-states";
 import { summarizeChecks, buildChecksTable } from "./recoder-checks-summary";
 import { projectVote } from "./recoder-trust";
+import { getRecoderBackendUrl } from "./recoder-endpoints";
+import { readErrorReason } from "./recoder-errors";
+import {
+    dispositionForConvergenceFlag,
+    parseConvergenceFeedbackProfile,
+    type ConvergenceFeedbackProfile,
+    type ConvergenceFlagDispositionValue,
+    type RequiredRuleTrustMode,
+} from "./recoder-convergence-feedback";
 import { FIELD_LABEL, META, QUIET_BTN_XS, SAVE_BTN } from "./recoder-styles";
 
 // Explicit sign so a pairwise delta can never be mistaken for an absolute count;
@@ -255,7 +264,7 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
         return null;
     }
     const merged = record.status == "merged";
-    const tone = merged ? "text-accent" : record.status == "no_change" ? "text-secondary" : "text-error";
+    const tone = merged ? "text-accent" : record.status == "no_change" || record.status == "escalated" ? "text-secondary" : "text-error";
     const verdict = record.verdict;
     const parts: string[] = [];
     if (verdict?.effect) parts.push(`gate ${verdict.effect}`);
@@ -268,9 +277,11 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
             ? "merged"
             : record.status == "no_change"
               ? "nothing to merge"
-              : record.status == "blocked"
-                ? "blocked"
-                : "could not complete";
+              : record.status == "escalated"
+                ? "human review required"
+                : record.status == "blocked"
+                  ? "blocked"
+                  : "could not complete";
     // Convergence TRUST the merge was gated on (present only when the gate is not
     // `off`). Colour-free per the design constraints: only a LOW-trust merge is toned
     // crimson (text-error); high/medium read quiet.
@@ -289,6 +300,7 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
     // per the design: only a `weak` verdict uses the crimson marker; strong/mixed stay quiet.
     const vote = projectVote((record.merge as { vote?: unknown } | undefined)?.vote);
     const voteWeak = vote.verdict == "weak";
+    const history = record.merge?.convergenceFeedback;
     return (
         <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -305,15 +317,13 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
                     </span>
                 )}
             </div>
-            {trustFlags.length > 0 && (
-                <ul className="ml-1 flex flex-col gap-0.5 text-[11px] text-secondary">
-                    {trustFlags.map((flag, i) => (
-                        <li key={i} className="flex gap-1">
-                            <span className={trustTier == "low" ? "text-error" : "text-secondary"}>›</span>
-                            <span>{flag}</span>
-                        </li>
-                    ))}
-                </ul>
+            {record.merge?.workspaceId && (
+                <ConvergenceFlagControls
+                    workspaceId={record.merge.workspaceId}
+                    flags={trustFlags}
+                    trustTier={trustTier}
+                    showPolicy={false}
+                />
             )}
             {vote.verdict != "solo" && (
                 <div className="flex flex-col gap-0.5">
@@ -340,11 +350,219 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
                     )}
                 </div>
             )}
+            {history != null && (
+                <span
+                    className="text-[11px] text-secondary"
+                    title={`${history.totalDeliveries} delivered convergence decision${history.totalDeliveries == 1 ? "" : "s"} recorded${history.durable ? " durably" : " for this run"}`}
+                >
+                    decision history: {history.totalDeliveries} delivered · {history.contestedPickDecisions} contested pick
+                    {history.contestedPickDecisions == 1 ? "" : "s"} · {history.proceededWithFlagDecisions} flag
+                    {history.proceededWithFlagDecisions == 1 ? "" : "s"} carried through
+                    {` · ${history.totalFlagFeedbackDecisions ?? 0} explicit decision${history.totalFlagFeedbackDecisions == 1 ? "" : "s"}`}
+                </span>
+            )}
         </div>
     );
 }
 
 MergeVerdictLine.displayName = "MergeVerdictLine";
+
+function ConvergenceFlagControls({
+    workspaceId,
+    flags,
+    trustTier,
+    showPolicy = true,
+}: {
+    workspaceId: string;
+    flags: string[];
+    trustTier?: "high" | "medium" | "low";
+    showPolicy?: boolean;
+}) {
+    const [profile, setProfile] = useState<ConvergenceFeedbackProfile | null>(null);
+    const [loaded, setLoaded] = useState(false);
+    const [busyFlag, setBusyFlag] = useState("");
+    const [busyPolicy, setBusyPolicy] = useState(false);
+    const [error, setError] = useState("");
+
+    const readProfile = async (): Promise<ConvergenceFeedbackProfile> => {
+        const response = await fetch(
+            `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/convergence-feedback`
+        );
+        const body = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(readErrorReason(body) || "Decision history unavailable.");
+        const parsed = parseConvergenceFeedbackProfile(
+            (body as { data?: { profile?: unknown } } | null)?.data?.profile
+        );
+        if (!parsed) throw new Error("Decision history returned an unreadable profile.");
+        return parsed;
+    };
+
+    useEffect(() => {
+        let cancelled = false;
+        void readProfile()
+            .then((parsed) => {
+                if (!cancelled) setProfile(parsed);
+            })
+            .catch((cause) => {
+                if (!cancelled) setError(cause instanceof Error ? cause.message : "Decision history unavailable.");
+            })
+            .finally(() => {
+                if (!cancelled) setLoaded(true);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [workspaceId]);
+
+    const decide = async (flag: string, disposition: ConvergenceFlagDispositionValue | "clear") => {
+        setBusyFlag(flag);
+        setError("");
+        try {
+            const response = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/convergence-feedback`,
+                {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ flag, disposition }),
+                }
+            );
+            const body = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(readErrorReason(body) || "Could not save this trust decision.");
+            const parsed = parseConvergenceFeedbackProfile(
+                (body as { data?: { profile?: unknown } } | null)?.data?.profile
+            );
+            if (!parsed) throw new Error("Saved decision returned an unreadable profile.");
+            setProfile(parsed);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Could not save this trust decision.");
+        } finally {
+            setBusyFlag("");
+        }
+    };
+
+    const setRequiredRulePolicy = async (mode: RequiredRuleTrustMode) => {
+        setBusyPolicy(true);
+        setError("");
+        try {
+            const response = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/convergence-policy`,
+                {
+                    method: "PUT",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ mode }),
+                }
+            );
+            const body = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(readErrorReason(body) || "Could not save required-rule policy.");
+            const parsed = parseConvergenceFeedbackProfile(
+                (body as { data?: { profile?: unknown } } | null)?.data?.profile
+            );
+            if (!parsed) throw new Error("Saved policy returned an unreadable profile.");
+            setProfile(parsed);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Could not save required-rule policy.");
+        } finally {
+            setBusyPolicy(false);
+        }
+    };
+
+    return (
+        <div className="ml-1 flex flex-col gap-1" aria-label="Convergence trust decisions">
+            {showPolicy && <div className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-white/10 py-1 pl-2">
+                <div className="min-w-0">
+                    <div className="text-[11px] text-secondary">Required repository rules</div>
+                    <div className="text-[9px] text-meta">
+                        Operator-owned · runs exact linked checks at merge · block lowers trust; delivery still follows the deployment trust gate.
+                    </div>
+                </div>
+                <select
+                    className="rounded border border-border bg-transparent px-1.5 py-1 text-[11px] text-secondary"
+                    aria-label="Required repository rule trust policy"
+                    value={profile?.requiredRulePolicy.mode ?? "off"}
+                    disabled={!loaded || busyPolicy}
+                    onChange={(event) => void setRequiredRulePolicy(event.target.value as RequiredRuleTrustMode)}
+                >
+                    <option value="off">Off</option>
+                    <option value="warn">Warn in trust</option>
+                    <option value="block">Cap trust low</option>
+                </select>
+            </div>}
+            {flags.map((flag) => {
+                const disposition = dispositionForConvergenceFlag(profile, flag);
+                const dismissed = disposition == "dismissed";
+                const accepted = disposition == "accepted";
+                return (
+                    <div
+                        key={flag}
+                        className={`grid grid-cols-1 items-start gap-1 border-l-2 py-1 pl-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-2 ${
+                            dismissed
+                                ? "border-white/10 opacity-65"
+                                : accepted
+                                  ? "border-accent/55 bg-accent/[0.04]"
+                                  : trustTier == "low"
+                                    ? "border-error/55 bg-error/[0.035]"
+                                    : "border-amber-400/45 bg-amber-400/[0.025]"
+                        }`}
+                    >
+                        <div className="min-w-0">
+                            <div className={`text-[11px] ${dismissed ? "text-meta line-through" : "text-secondary"}`}>
+                                {flag}
+                            </div>
+                            <div className="mt-0.5 text-[9px] uppercase tracking-[0.11em] text-meta">
+                                {accepted ? "accepted signal · future repeats stay weighted" : dismissed ? "dismissed noise · exact repeats suppressed" : "decision pending"}
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                            {dismissed ? (
+                                <button
+                                    type="button"
+                                    className={QUIET_BTN_XS}
+                                    disabled={busyFlag == flag}
+                                    onClick={() => void decide(flag, "clear")}
+                                    title="Restore this exact flag to the pending state. The decision remains in history."
+                                >
+                                    Restore
+                                </button>
+                            ) : (
+                                <>
+                                    <button
+                                        type="button"
+                                        className={accepted ? SAVE_BTN : QUIET_BTN_XS}
+                                        aria-pressed={accepted}
+                                        disabled={!loaded || busyFlag == flag}
+                                        onClick={() => void decide(flag, accepted ? "clear" : "accepted")}
+                                        title="Confirm this flag is useful. Exact future repeats remain visible and receive a bounded trust deduction."
+                                    >
+                                        {accepted ? "Accepted" : "Accept risk"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={QUIET_BTN_XS}
+                                        disabled={!loaded || busyFlag == flag}
+                                        onClick={() => void decide(flag, "dismissed")}
+                                        title="Mark this exact flag as noise. Future repeats are suppressed, but the underlying evidence score is never restored."
+                                    >
+                                        Dismiss noise
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+            {!loaded && <span className={META}>Loading repository decisions…</span>}
+            {error && <span className="text-[11px] text-error" role="status">{error}</span>}
+            {profile && profile.totalFlagFeedbackDecisions > 0 && (
+                <span className={META}>
+                    {profile.acceptedFlagRules} accepted · {profile.dismissedFlagRules} dismissed · {profile.totalFlagFeedbackDecisions} recorded
+                    {profile.durable ? " durably" : " for this run"}
+                </span>
+            )}
+        </div>
+    );
+}
+
+ConvergenceFlagControls.displayName = "ConvergenceFlagControls";
 
 type SiblingCompareColumnProps = {
     model: RecoderViewModel;
@@ -995,6 +1213,10 @@ function RecoderComparePanel({
                     </button>
                 </div>
             </div>
+            <ConvergenceFlagControls
+                workspaceId={compareView.siblings[0]!.workspaceId}
+                flags={[]}
+            />
             {checksTab ? (
                 <ChecksPanel siblings={compareView.siblings} readinessMap={readinessMap} />
             ) : (

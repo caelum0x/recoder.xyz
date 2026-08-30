@@ -12,6 +12,7 @@ import {
     atoms,
     createBlock,
     getAllBlockComponentModels,
+    getFocusedBlockId,
     getOrefMetaKeyAtom,
     getSettingsKeyAtom,
 } from "@/app/store/global";
@@ -44,7 +45,7 @@ import {
     validateFileSizeFromInfo,
 } from "./ai-utils";
 import type { AIPanelInputRef } from "./aipanelinput";
-import { fetchWorkspaceDiffFiles, gatherWorkspaceContext } from "./waveai-workspace-context";
+import { fetchWorkspaceDiffFiles, fetchWorkspaceRecord, gatherWorkspaceContext } from "./waveai-workspace-context";
 
 export interface DroppedFile {
     id: string;
@@ -388,8 +389,13 @@ export class WaveAIModel {
         }
         this.workspaceContextRefreshing = true;
         try {
-            const context = await gatherWorkspaceContext(getAllBlockComponentModels(), globalStore.get, (wsId) =>
-                fetchWorkspaceDiffFiles(getRecoderBackendUrl(), wsId, (input) => fetch(input))
+            const baseUrl = getRecoderBackendUrl();
+            const context = await gatherWorkspaceContext(
+                getAllBlockComponentModels(),
+                globalStore.get,
+                (wsId) => fetchWorkspaceDiffFiles(baseUrl, wsId, (input) => fetch(input)),
+                (wsId) => fetchWorkspaceRecord(baseUrl, wsId, (input) => fetch(input)),
+                getFocusedBlockId()
             );
             globalStore.set(this.workspaceContextAtom, context);
         } catch {

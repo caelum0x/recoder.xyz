@@ -103,7 +103,7 @@ describe('assembleConvergenceEvidence', () => {
   it('omits the step-2 convergence block for a plain single-agent merge', () => {
     const ev = assembleConvergenceEvidence(baseInput());
     expect(ev.convergence).toBeUndefined();
-    expect(ev.schema).toBe('recoder.convergence-evidence/v3');
+    expect(ev.schema).toBe('recoder.convergence-evidence/v4');
   });
 
   it('includes + hashes the step-2 convergence block with pick + synthesize modes', () => {

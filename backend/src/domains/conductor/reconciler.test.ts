@@ -114,6 +114,35 @@ describe('conductor reconciler (restart-survivable)', () => {
     expect((terminal[0]!.data as { exitCode?: unknown }).exitCode).not.toBe(0);
   });
 
+  it('finalizes a GONE orphan (null exit) as failed — never treats a missing handle as clean', async () => {
+    const repository = createWorkspaceRepository({ executor: makeExecutor(false) });
+    await repository.upsertWorkspace(
+      runningWorkspace({ workspaceId: 'ws_gone', runId: 'run_ws_gone', runtimeId: 'cursor' })
+    );
+    await repository.upsertRun({
+      runId: 'run_ws_gone',
+      taskId: 'task_1',
+      spaceId: 'space_1',
+      state: 'running',
+      updatedAt: new Date().toISOString(),
+    });
+
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree', missingExitCode: null })],
+      repository,
+    });
+
+    const result = await module.reconcile(makePrincipal());
+    expect(result.ok).toBe(true);
+    expect(result.value!.finalized).toContain('ws_gone');
+    expect((await repository.listRuns()).find(run => run.runId === 'run_ws_gone')?.state).toBe('failed');
+    const terminal = (await repository.listEvents()).find(
+      event => event.runId === 'run_ws_gone' && (event.type === 'completed' || event.type === 'failed')
+    );
+    expect(terminal?.type).toBe('failed');
+    expect(terminal?.data?.exitCode).toBeNull();
+  });
+
   it('reports an empty, well-formed pass when there are no persisted workspaces', async () => {
     const repository = createWorkspaceRepository({
       executor: makeExecutor(false),

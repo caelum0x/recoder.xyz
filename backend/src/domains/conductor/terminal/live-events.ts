@@ -61,6 +61,9 @@ export interface SyncHubOptions {
   readonly historyLimit?: number;
 }
 
+/** In-process subscriber used by authenticated HTTP projections such as SSE. */
+export type SyncHubListener = (event: WorkspaceSyncEvent) => void;
+
 /**
  * `SyncHub` — the workspace→sockets subscription registry both `/sync` and
  * `/terminal` publish through. Instance-scoped (never a process global) so the
@@ -77,6 +80,7 @@ export interface SyncHubOptions {
  */
 export class SyncHub {
   private readonly subscribers = new Map<string, Set<WebSocket>>();
+  private readonly listeners = new Map<string, Set<SyncHubListener>>();
   /** Bounded replay buffer, present only when a `historyLimit` was configured. */
   private readonly ring?: RunEventRing;
 
@@ -101,6 +105,22 @@ export class SyncHub {
     };
   }
 
+  /** Subscribe an in-process listener without pretending it is a WebSocket. */
+  subscribeListener(workspaceId: string, listener: SyncHubListener): () => void {
+    let set = this.listeners.get(workspaceId);
+    if (!set) {
+      set = new Set<SyncHubListener>();
+      this.listeners.set(workspaceId, set);
+    }
+    set.add(listener);
+    return () => {
+      const current = this.listeners.get(workspaceId);
+      if (!current) return;
+      current.delete(listener);
+      if (current.size === 0) this.listeners.delete(workspaceId);
+    };
+  }
+
   /** Fan an event out to every OPEN socket subscribed to its workspace. */
   publish(event: WorkspaceSyncEvent): void {
     this.publishRaw(event.workspaceId, event);
@@ -112,10 +132,21 @@ export class SyncHub {
     // Retaining even with zero live subscribers lets a client that reconnects
     // during a quiet window still replay what it missed.
     const seq = this.ring?.append(workspaceId, payload);
+    const outgoing = seq === undefined ? payload : stampSeq(payload, seq);
+    const listenerSet = this.listeners.get(workspaceId);
+    if (listenerSet && outgoing !== null && typeof outgoing === 'object') {
+      for (const listener of listenerSet) {
+        try {
+          listener(outgoing as WorkspaceSyncEvent);
+        } catch {
+          // One HTTP projection must never break the canonical live fan-out.
+        }
+      }
+    }
     const set = this.subscribers.get(workspaceId);
     if (!set || set.size === 0) return;
     // History-less hubs assign no id, so the live wire stays byte-for-byte bare.
-    const frame = JSON.stringify(seq === undefined ? payload : stampSeq(payload, seq));
+    const frame = JSON.stringify(outgoing);
     for (const socket of set) {
       if (socket.readyState !== socket.OPEN) continue;
       // Backpressure bound: a consumer that stopped draining its socket makes
@@ -171,6 +202,7 @@ export class SyncHub {
   subscriberCount(): number {
     let total = 0;
     for (const set of this.subscribers.values()) total += set.size;
+    for (const set of this.listeners.values()) total += set.size;
     return total;
   }
 }

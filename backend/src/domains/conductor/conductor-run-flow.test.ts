@@ -101,6 +101,10 @@ describe('conductor run flow uses engines', () => {
     expect(codeIntel.index).toHaveLength(1);
     expect(codeIntel.index[0]!.repoPath).toBe('/tmp/fake-repo');
     expect(codeIntel.index[0]!.repoId).toBe('project_1');
+    expect(result.value!.metadata).toMatchObject({
+      repoId: 'project_1',
+      repoAliases: ['__tmp__fake-repo', 'fake-repo'],
+    });
     // (b) beads track on create, anchored to the workspace.
     expect(codeIntel.track).toHaveLength(1);
     expect(codeIntel.track[0]!.taskId).toBe('task_1');
@@ -225,7 +229,7 @@ describe('conductor consumes the issue-graph module facet (IssueGraphWriter seam
     });
   });
 
-  it('completion: notes the terminal outcome then closes the issue through the module slice', async () => {
+  it('completion notes the terminal outcome but leaves delivery closure to governed merge', async () => {
     const { writer, calls } = makeIssueGraphWriter();
     const codeIntel = createConductorCodeIntel({ recodergit: null, beads: writer, logger: makeLogger() });
     // The SAME decorator conductor-module composes around its RunEvent sink.
@@ -252,14 +256,13 @@ describe('conductor consumes the issue-graph module facet (IssueGraphWriter seam
     } as RunEvent);
     await flush();
 
-    // note (run outcome) → close (success), attributed to the conductor subsystem.
-    expect(calls.map((c) => c.verb)).toEqual(['note', 'close']);
+    // A completed sibling run is evidence, not delivery. Governed merge owns close.
+    expect(calls.map((c) => c.verb)).toEqual(['note']);
     expect(calls[0]).toMatchObject({
       id: 'task_1',
       text: 'Recoder workspace run completed',
       actor: 'conductor',
     });
-    expect(calls[1]).toMatchObject({ id: 'task_1', actor: 'conductor' });
   });
 
   it('degrade-safe: a throwing issue-graph slice never blocks the launch', async () => {

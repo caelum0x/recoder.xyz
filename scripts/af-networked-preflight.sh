@@ -71,11 +71,9 @@ check_neon_tcp() {
 echo "== AF Networked Preflight =="
 echo "repo: $REPO_ROOT"
 
-check_dns "web.recoder.xyz" || ((FAILURES+=1))
 check_dns "docker.recoder.xyz" || ((FAILURES+=1))
 check_dns "api.github.com" || ((FAILURES+=1))
 
-check_https "https://web.recoder.xyz/api/health/byok-readiness" || ((FAILURES+=1))
 check_https "https://docker.recoder.xyz/health" || ((FAILURES+=1))
 
 if gh auth status >/dev/null 2>&1; then

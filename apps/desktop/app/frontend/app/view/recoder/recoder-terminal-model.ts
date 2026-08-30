@@ -187,7 +187,7 @@ class RecoderTerminalViewModel implements ViewModel {
         this.blockId = initOpts.blockId;
         this.viewType = "recoder-terminal";
         this.viewIcon = atom("terminal");
-        this.viewName = atom("Recoder Session");
+        this.viewName = atom("Session");
         this.blockAtom = initOpts.waveEnv.wos.getWaveObjectAtom<Block>(`block:${initOpts.blockId}`);
         this.linesAtom = atom([]) as PrimitiveAtom<string[]>;
         this.entriesAtom = atom([]) as PrimitiveAtom<RunStreamEntry[]>;

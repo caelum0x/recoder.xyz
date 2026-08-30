@@ -203,8 +203,6 @@ else
   check_required_var "$AGENCY_ENV" "POLAR_PRO_PRODUCT_ID" "Agency billing"
   check_required_var "$AGENCY_ENV" "POLAR_WEBHOOK_SECRET" "Agency billing"
   check_required_var "$AGENCY_ENV" "POLAR_ORGANIZATION_ID" "Agency billing"
-  check_required_var "$AGENCY_ENV" "RECODER_WEB_URL" "Agency integration"
-  check_required_var "$AGENCY_ENV" "RECODER_WEB_API_KEY" "Agency integration"
 fi
 
 echo ""

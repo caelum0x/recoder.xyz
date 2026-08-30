@@ -141,6 +141,12 @@ export function taskGroupOf(workspace: Workspace): string | undefined {
   return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : undefined;
 }
 
+/** Recovery keeps history but removes a replaced pane from the active converge set. */
+export function isSupersededFanoutWorkspace(workspace: Workspace): boolean {
+  const replacement = workspace.metadata?.fanoutSupersededBy;
+  return typeof replacement === 'string' && replacement.trim().length > 0;
+}
+
 /**
  * Parse a `git diff --stat` summary into a {@link DiffStat}. `changedFiles` is the
  * authoritative file count (the substrate already computed it); insertions and
@@ -247,7 +253,10 @@ export async function compareTaskGroup(
   // recoder-kybr: fold ONLY the group siblings the caller may access. `canAccess`
   // absent (an internal, principal-less read) ⇒ the full group, unchanged.
   const members = all.filter(
-    (ws) => taskGroupOf(ws) === group && (deps.canAccess ? deps.canAccess(ws) : true),
+    (ws) =>
+      taskGroupOf(ws) === group &&
+      !isSupersededFanoutWorkspace(ws) &&
+      (deps.canAccess ? deps.canAccess(ws) : true),
   );
   const siblings = await Promise.all(members.map((ws) => buildEntry(deps, ws)));
   siblings.sort(bySiblingOrder);

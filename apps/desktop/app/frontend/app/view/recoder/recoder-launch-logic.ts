@@ -93,6 +93,8 @@ type LaunchRequestContext = {
     prompt: string;
     branch: string;
     interactive: boolean;
+    /** Parallel siblings share bounded progress context unless explicitly disabled. */
+    siblingAwareness?: boolean;
     taskGroup: string;
     // Total agents in this launch — a user branch is honored only for a solo
     // launch, since a shared branch would collide across sibling worktrees.
@@ -120,6 +122,7 @@ function shapeLaunchRequestBody(
         ...(branch != "" && ctx.agentCount == 1 ? { branch } : {}),
         ...(ctx.interactive ? { interactive: true } : {}),
         ...(ctx.taskGroup != "" ? { taskGroup: ctx.taskGroup } : {}),
+        ...(ctx.taskGroup != "" && ctx.siblingAwareness === false ? { sibling_awareness: false } : {}),
     };
 }
 

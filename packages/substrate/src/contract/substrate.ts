@@ -37,9 +37,11 @@ export interface ConductorSubstrate {
    * Exit code of the finished agent, when the substrate can observe it.
    *   - a number → the process exit code (0 = success, >0 = failure).
    *   - `undefined` → still running, or unknown on a transient/unreachable probe
-   *     (NEVER a fabricated 0). `null` mirrors a signal-terminated process.
+   *     (NEVER a fabricated 0). `null` means the handle is gone or was terminated
+   *     without a recoverable numeric status.
    * Optional: substrates that cannot surface an exit code (e.g. a tmux pane with
-   * no sentinel) simply omit it; callers must treat absence as "unknown".
+   * no sentinel) simply omit it; callers must treat absence as an unverified
+   * outcome, never as a clean completion.
    */
   exitCode?(handle: SubstrateHandle): Promise<number | null | undefined>;
   /** Reviewable diff of the work against `baseRef`. */

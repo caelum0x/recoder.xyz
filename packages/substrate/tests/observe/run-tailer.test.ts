@@ -126,6 +126,7 @@ test('emits started → log(delta) → completed for a successful run', async ()
 
   assert.equal(sink.events.at(-1)?.type, 'completed');
   assert.equal((sink.events.at(-1)?.data as { exitCode?: number })?.exitCode, 0);
+  assert.equal((sink.events.at(-1)?.data as { workspaceId?: string })?.workspaceId, 'ws_1');
   assert.equal(registry.count(), 0, 'tail removed itself on completion');
 });
 
@@ -172,7 +173,7 @@ test('non-zero exit code → failed (not completed)', async () => {
   assert.equal((terminal?.data as { exitCode?: number })?.exitCode, 137);
 });
 
-test('session gone with no exit code → completed(0) (proven default)', async () => {
+test('session gone with undefined exit code → failed unknown (never fabricated completed(0))', async () => {
   const sub = new FakeTailSubstrate();
   const clock = new FakeClock();
   const { deps, sink } = makeDeps(sub, clock);
@@ -186,8 +187,29 @@ test('session gone with no exit code → completed(0) (proven default)', async (
   await settle();
 
   const terminal = sink.events.at(-1);
-  assert.equal(terminal?.type, 'completed');
-  assert.equal((terminal?.data as { exitCode?: number })?.exitCode, 0);
+  assert.equal(terminal?.type, 'failed');
+  assert.equal((terminal?.data as { exitCode?: unknown })?.exitCode, null);
+  assert.equal((terminal?.data as { reason?: string })?.reason, 'exit_code_unavailable');
+  assert.equal((terminal?.data as { workspaceId?: string })?.workspaceId, 'ws_1');
+});
+
+test('session gone with null exit code → failed unknown (signal/gone is not success)', async () => {
+  const sub = new FakeTailSubstrate();
+  const clock = new FakeClock();
+  const { deps, sink } = makeDeps(sub, clock);
+
+  startRunTail({ ...baseInput, intervalMs: 5 }, deps);
+  await settle();
+
+  sub.isAlive = false;
+  sub.exit = null;
+  await new Promise((r) => setTimeout(r, 12));
+  await settle();
+
+  const terminal = sink.events.at(-1);
+  assert.equal(terminal?.type, 'failed');
+  assert.equal((terminal?.data as { exitCode?: unknown })?.exitCode, null);
+  assert.equal((terminal?.data as { reason?: string })?.reason, 'exit_code_unavailable');
 });
 
 test('max-duration safety stop → failed(max_duration)', async () => {

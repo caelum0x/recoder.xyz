@@ -111,18 +111,6 @@ recoder mcp detect                   # Auto-detect from other tools
 recoder mcp detect --add             # Detect and add servers
 ```
 
-### Web IDE Integration
-
-```bash
-recoder web launch                   # Open recoder.xyz
-recoder web launch -n                # Create new project
-recoder web list                     # List your projects
-recoder web open <id>                # Open project in browser
-recoder web sync <id>                # Sync local ↔ web
-recoder web push <id>                # Push local to web
-recoder web download <id>            # Download from web
-```
-
 ### Authentication
 
 ```bash

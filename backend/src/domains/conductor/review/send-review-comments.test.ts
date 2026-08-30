@@ -174,3 +174,57 @@ describe('conductor sendReviewComments — review-state continue path', () => {
     expect((await module.getWorkspace(created.value!.workspaceId))?.state).toBe('awaiting_review');
   });
 });
+
+describe('conductor sendBlockerFeedback', () => {
+  it('re-probes canonical blockers, steers one server-authored packet, and seals the inherited audit', async () => {
+    const gate = makeGate('allow');
+    const transport = new FakeSteerTransport();
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate()],
+      gate,
+      steerTransport: transport,
+    });
+    const created = await module.createWorkspace(makeCreateInput(), makePrincipal());
+    (module as unknown as { workspaceReadiness: () => Promise<unknown> }).workspaceReadiness = async () => ({
+      verdict: 'blocked',
+      signals: [],
+      blockers: ['src/conflicted.ts', 'local checks failing: tests'],
+      advisories: [],
+      pr: null,
+      review: null,
+    });
+
+    const result = await module.sendBlockerFeedback(created.value!.workspaceId, makePrincipal('user_bob'));
+
+    expect(result.ok).toBe(true);
+    expect(result.value?.blockers).toEqual(['src/conflicted.ts', 'local checks failing: tests']);
+    expect(transport.sent).toHaveLength(1);
+    expect(transport.sent[0]?.keys).toContain('Recoder re-ran the convergence gates');
+    expect(transport.sent[0]?.keys).toContain('1. "src/conflicted.ts"');
+    expect(transport.sent[0]?.keys).toContain('2. "local checks failing: tests"');
+    expect(gate.audits.find((entry) => entry.action === 'workspace.steer')?.actorId).toBe('user_bob');
+  });
+
+  it('refuses a stale request when the fresh readiness probe has no hard blockers', async () => {
+    const transport = new FakeSteerTransport();
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate()],
+      steerTransport: transport,
+    });
+    const created = await module.createWorkspace(makeCreateInput(), makePrincipal());
+    (module as unknown as { workspaceReadiness: () => Promise<unknown> }).workspaceReadiness = async () => ({
+      verdict: 'ready',
+      signals: [],
+      blockers: [],
+      advisories: [],
+      pr: null,
+      review: null,
+    });
+
+    const result = await module.sendBlockerFeedback(created.value!.workspaceId, makePrincipal());
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/non-empty/);
+    expect(transport.sent).toHaveLength(0);
+  });
+});

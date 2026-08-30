@@ -1,5 +1,5 @@
 /**
- * Editor Settings API (for recoder-web)
+ * Editor Settings API for Recoder clients.
  * GET - Fetch editor settings
  * PUT - Update editor settings
  */

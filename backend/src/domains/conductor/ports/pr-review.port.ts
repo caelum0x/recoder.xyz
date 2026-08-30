@@ -16,30 +16,14 @@
  *    change, and the readiness read never 500s on this seam.
  *  - gh missing / unauthenticated / a failed review ⇒ `available:false` with a
  *    truthful reason — never a fabricated review.
- *  - The RAW DIFF never rides the readiness payload — only a bounded projection
- *    (truncation flag + a capped top-symbols blast radius).
+ *  - The RAW DIFF never rides the readiness payload. The shared bounded impact
+ *    ledger does, unchanged, so readiness and installed PR review expose the
+ *    same files, tests, directions, depth, risk, and evidence scope.
  */
+import type { CodeImpactLedger } from '../../../shared/code-impact-ledger.js';
 
-/** One changed symbol's bounded blast-radius reading (reference count only). */
-export interface PrReviewImpactSymbol {
-  readonly symbol: string;
-  /** Upstream reference count read from the code-graph (0 when unreadable). */
-  readonly references: number;
-}
-
-/**
- * The bounded recodergit blast-radius projection. `available` is true only when
- * the code-graph produced at least one real reading; otherwise `reason` states
- * the truthful cause (code-graph disabled / repo not indexed / no symbols).
- */
-export interface PrReviewImpactView {
-  readonly available: boolean;
-  readonly reason?: string;
-  /** How many changed symbols the engine scored (pre-truncation). */
-  readonly symbolCount: number;
-  /** The highest-reference changed symbols, capped — never the full graph. */
-  readonly topSymbols: readonly PrReviewImpactSymbol[];
-}
+/** The same bounded ledger carried by PR agents and Wave. */
+export type PrReviewImpactView = CodeImpactLedger;
 
 /** The bounded, advisory review evidence the readiness read model carries. */
 export interface PrReviewEvidenceView {
@@ -51,7 +35,7 @@ export interface PrReviewEvidenceView {
   readonly pr: number;
   /** True when the bounded diff was cut at the engine's cap. */
   readonly diffTruncated?: boolean;
-  /** The bounded blast-radius projection; absent when the review failed. */
+  /** The shared bounded impact ledger; absent when the review failed. */
   readonly impact?: PrReviewImpactView;
 }
 

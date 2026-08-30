@@ -18,6 +18,12 @@ import {
 // terminal, not a stoplight. Both surfaces share the SAME accent (never a second color).
 const CRIMSON_BTN =
     "rounded border border-red-500/40 bg-red-500/10 text-red-300 px-2 py-0.5 text-xs whitespace-nowrap hover:bg-red-500/20 transition-colors cursor-pointer disabled:opacity-60";
+const RECOVERY_BTN =
+    "border border-border bg-black px-2 py-0.5 font-mono text-xs whitespace-nowrap hover:border-amber-400/60 hover:text-amber-300 cursor-pointer disabled:opacity-60";
+
+function canReviewAgent(state: string | undefined, settled: boolean): boolean {
+    return settled && ["agent_idle_prompt", "review_ready", "awaiting_approval", "awaiting_review"].includes(state || "");
+}
 
 function SettleStrip({ model }: { model: RecoderFanoutViewModel }) {
     const snapshot = useAtomValue(model.snapshotAtom);
@@ -58,13 +64,23 @@ function SettleStrip({ model }: { model: RecoderFanoutViewModel }) {
 
 SettleStrip.displayName = "SettleStrip";
 
-function AgentRow({ agent }: { agent: CockpitAgent }) {
+function AgentRow({ model, agent }: { model: RecoderFanoutViewModel; agent: CockpitAgent }) {
     return (
         <div className="flex items-center gap-2 rounded border border-border p-2" title={agent.workspaceId}>
             <span className="text-sm font-medium truncate">{agent.kind || agent.workspaceId}</span>
             <span className={`${STATE_CHIP} ml-auto`}>{agent.state}</span>
             <span className={STATE_CHIP}>{agent.settled ? "settled" : "working"}</span>
             {!agent.nativeStatus && <span className={STATE_CHIP}>raw pane</span>}
+            {agent.workspaceId != "" && (
+                <button className={RECOVERY_BTN} onClick={() => model.openWorkspace(agent.workspaceId, "session")}>
+                    Open session
+                </button>
+            )}
+            {agent.workspaceId != "" && canReviewAgent(agent.state, agent.settled) && (
+                <button className={RECOVERY_BTN} onClick={() => model.openWorkspace(agent.workspaceId, "review")}>
+                    Open review
+                </button>
+            )}
         </div>
     );
 }
@@ -166,6 +182,9 @@ function LaunchForm({ model }: { model: RecoderFanoutViewModel }) {
     const launching = useAtomValue(model.launchingAtom);
     const launchNotice = useAtomValue(model.launchNoticeAtom);
     const result = useAtomValue(model.launchResultAtom);
+    const retrying = useAtomValue(model.retryingAtom);
+    const retryNotice = useAtomValue(model.retryNoticeAtom);
+    const retryResult = useAtomValue(model.retryResultAtom);
 
     return (
         <div className="flex flex-col gap-2 rounded border border-border p-2">
@@ -266,8 +285,52 @@ function LaunchForm({ model }: { model: RecoderFanoutViewModel }) {
                             <span className={`${STATE_CHIP} ml-auto`}>{a.settled ? "settled" : "unsettled"}</span>
                             {!a.nativeStatus && <span className={STATE_CHIP}>raw pane</span>}
                             {a.workspaceId == null && <span className={STATE_CHIP}>not created</span>}
+                            {a.workspaceId != null && (
+                                <button className={RECOVERY_BTN} onClick={() => model.openWorkspace(a.workspaceId!, "session")}>
+                                    Open session
+                                </button>
+                            )}
+                            {a.workspaceId != null && canReviewAgent(a.state, a.settled) && (
+                                <button className={RECOVERY_BTN} onClick={() => model.openWorkspace(a.workspaceId!, "review")}>
+                                    Open review
+                                </button>
+                            )}
                         </div>
                     ))}
+                    {result.converged == null && (
+                        <div className="mt-1 flex flex-col gap-1 border-l border-amber-400/60 bg-black pl-2 py-1 font-mono">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-secondary">
+                                    Keep completed siblings and replace only incomplete agents in {result.taskGroup}.
+                                </span>
+                                <button
+                                    disabled={retrying}
+                                    className={RECOVERY_BTN}
+                                    onClick={() => model.retryIncomplete(result)}
+                                >
+                                    {retrying ? "Retrying…" : "Retry incomplete"}
+                                </button>
+                            </div>
+                            {retryNotice != "" && <span className="text-xs text-secondary">{retryNotice}</span>}
+                            {retryResult != null &&
+                                retryResult.perAgent.map((agent) => (
+                                    <div key={`${retryResult.taskGroup}:${agent.kind}`} className="flex items-center gap-2 border-t border-border py-1">
+                                        <span className="text-xs">{agent.kind}</span>
+                                        <span className={`${STATE_CHIP} ml-auto`}>
+                                            {agent.settled ? "replacement settled" : "replacement incomplete"}
+                                        </span>
+                                        {agent.workspaceId != null && (
+                                            <button
+                                                className={RECOVERY_BTN}
+                                                onClick={() => model.openWorkspace(agent.workspaceId!, "session")}
+                                            >
+                                                Open session
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -463,7 +526,7 @@ function RecoderFanoutView({ model }: ViewComponentProps<RecoderFanoutViewModel>
                     <div className="flex flex-col gap-1">
                         <div className={FIELD_LABEL}>Agents</div>
                         {snapshot.agents.map((a) => (
-                            <AgentRow key={a.workspaceId || a.kind} agent={a} />
+                            <AgentRow key={a.workspaceId || a.kind} model={model} agent={a} />
                         ))}
                     </div>
 

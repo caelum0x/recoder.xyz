@@ -107,6 +107,11 @@ export class SkillRegistry {
     return [...this.verified.values()];
   }
 
+  /** Remove one admitted skill when its operator publisher trust is revoked. */
+  remove(skillId: string): boolean {
+    return this.verified.delete(skillId);
+  }
+
   /**
    * Resolve a (skill, action) from the VERIFIED set only. An unknown/unverified
    * skill or an unknown action id ⇒ `null` — the invoke path treats that as a

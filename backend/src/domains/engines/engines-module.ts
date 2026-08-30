@@ -297,10 +297,16 @@ export class EnginesComposer implements EnginesModule {
 
     // ONE shared recodergit service backs both the CLI adapter and the unified
     // GitHub module, so freshness/health state is a single source of truth. The
-    // permissive (MIT) symbol-search fallback (Path B) is threaded when bootstrap
-    // wires it, so symbol_search works even without the vendored PolyForm engine.
+    // permissive (MIT) search + file-import impact fallbacks are threaded when
+    // bootstrap wires them, so packaged reviews keep structural code evidence.
     this.recodergitService = createRecoderGitService(
-      deps.codeSearchFallback ? { fallbackSymbolSearch: deps.codeSearchFallback } : undefined
+      deps.codeSearchFallback || deps.codeImpactFallback || deps.codeIndexStateStore
+        ? {
+            ...(deps.codeSearchFallback ? { fallbackSymbolSearch: deps.codeSearchFallback } : {}),
+            ...(deps.codeImpactFallback ? { fallbackImpact: deps.codeImpactFallback } : {}),
+            ...(deps.codeIndexStateStore ? { store: deps.codeIndexStateStore } : {}),
+          }
+        : undefined
     );
     this.adapters = this.buildAdapters();
 

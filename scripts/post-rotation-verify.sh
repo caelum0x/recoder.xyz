@@ -96,26 +96,14 @@ run_step "2/5 Core HTTP health checks" \
     set -euo pipefail
     app=$(curl -sS -o /dev/null -w "%{http_code}" http://localhost:3000/ || true)
     frontend=$(curl -sS -o /dev/null -w "%{http_code}" http://localhost:3001/ || true)
-    web=$(curl -sS -o /dev/null -w "%{http_code}" http://localhost:5173/ || true)
     backend=$(curl -sS -o /dev/null -w "%{http_code}" http://localhost:3100/health || true)
-    web_present=$(docker inspect recoder-web >/dev/null 2>&1 && echo yes || echo no)
 
     echo "app=${app}"
     echo "frontend=${frontend}"
-    echo "web=${web}"
-    echo "web_present=${web_present}"
     echo "backend=${backend}"
 
     test "${app}" = "200"
     test "${frontend}" = "200"
-    if [[ "${web_present}" == "yes" ]]; then
-      case "${web}" in
-        200|301|302|307|308) ;;
-        *) echo "FAIL: recoder-web expected 2xx/3xx, got ${web}"; exit 1 ;;
-      esac
-    else
-      echo "INFO: recoder-web container absent; skipping retired surface HTTP check"
-    fi
     test "${backend}" = "200"
   '
 

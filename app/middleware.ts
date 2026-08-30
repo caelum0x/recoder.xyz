@@ -9,7 +9,7 @@ const intlMiddleware = createMiddleware({
   localePrefix: 'as-needed'
 });
 
-const PROTECTED_PREFIXES = ['/dashboard', '/settings', '/billing', '/projects'];
+const PROTECTED_PREFIXES = ['/dashboard', '/settings', '/billing', '/projects', '/remote'];
 const ADMIN_PREFIX = '/admin';
 const PAYLOAD_CMS_PREFIX = '/cms';
 

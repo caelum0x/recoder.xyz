@@ -105,7 +105,7 @@ export default function SelfHost() {
               ) : (
                 <SecondaryButton href={ACCESS_HREF} label="Request deploy access →" />
               )}
-              <DownloadButton label="Download the cockpit" className="px-6 py-3 text-[15px]" />
+              <DownloadButton href="/download" label="Download the cockpit" className="px-6 py-3 text-[15px]" />
             </div>
             {!REPO && (
               <p className="mx-auto mt-4 max-w-md text-xs text-faint">

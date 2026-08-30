@@ -10,6 +10,7 @@ import {
   LoomSocketClient,
   defaultLoomSocketPath,
   type LoomEventStream,
+  type LoomTerminalStream,
 } from './socket-client';
 
 let socketCounter = 0;
@@ -34,17 +35,19 @@ function startFakeServer(
     let buffer = '';
     socket.on('data', chunk => {
       buffer += chunk.toString('utf8');
-      const newline = buffer.indexOf('\n');
-      if (newline === -1) return;
-      const line = buffer.slice(0, newline);
-      buffer = buffer.slice(newline + 1);
-      let request: unknown = null;
-      try {
-        request = JSON.parse(line);
-      } catch {
-        request = null;
+      let newline = buffer.indexOf('\n');
+      while (newline !== -1) {
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        let request: unknown = null;
+        try {
+          request = JSON.parse(line);
+        } catch {
+          request = null;
+        }
+        respond(request, socket);
+        newline = buffer.indexOf('\n');
       }
-      respond(request, socket);
     });
   });
 
@@ -261,7 +264,9 @@ describe('LoomSocketClient', () => {
   test('subscribe parses seq off ring events and tracks a monotonic resume cursor', async () => {
     const client = await withServer((request, socket) => {
       const id = requestId(request);
-      socket.write(successLine(id, { type: 'subscription_started', cursor: 40 }));
+      socket.write(
+        successLine(id, { type: 'subscription_started', cursor: 40 })
+      );
       socket.write(
         `${JSON.stringify({ seq: 41, event: 'pane_updated', data: { pane_id: 'p1' } })}\n`
       );
@@ -295,7 +300,12 @@ describe('LoomSocketClient', () => {
     let seenRequest: unknown = null;
     const client = await withServer((request, socket) => {
       seenRequest = request;
-      socket.write(successLine(requestId(request), { type: 'subscription_started', cursor: 7 }));
+      socket.write(
+        successLine(requestId(request), {
+          type: 'subscription_started',
+          cursor: 7,
+        })
+      );
     });
 
     const stream = client.subscribe({
@@ -347,7 +357,9 @@ describe('LoomSocketClient', () => {
   test('subscribe drops a malformed seq and floors the cursor at the ack baseline', async () => {
     const client = await withServer((request, socket) => {
       const id = requestId(request);
-      socket.write(successLine(id, { type: 'subscription_started', cursor: 12 }));
+      socket.write(
+        successLine(id, { type: 'subscription_started', cursor: 12 })
+      );
       socket.write(
         `${JSON.stringify({ seq: 'not-a-number', event: 'pane_updated', data: { pane_id: 'p1' } })}\n`
       );
@@ -368,6 +380,95 @@ describe('LoomSocketClient', () => {
     });
     // Cursor stays at the ack baseline since no valid event seq advanced it.
     assert.equal(stream.cursor(), 12);
+  });
+
+  test('terminalStream yields Loom-rendered ANSI frames after its acknowledgement', async () => {
+    const client = await withServer((request, socket) => {
+      if (!('method' in (request as Record<string, unknown>))) return;
+      const id = requestId(request);
+      socket.write(successLine(id, { type: 'terminal_stream_started' }));
+      socket.write(
+        `${JSON.stringify({
+          type: 'terminal.frame',
+          seq: 9,
+          encoding: 'ansi',
+          width: 120,
+          height: 36,
+          full: true,
+          bytes: 'G1sySg==',
+        })}\n`
+      );
+    });
+
+    const stream: LoomTerminalStream = client.terminalStream({
+      pane_id: 'pane_1',
+      mode: 'observe',
+      cols: 120,
+      rows: 36,
+      takeover: false,
+    });
+    const first = await stream[Symbol.asyncIterator]().next();
+    stream.close();
+
+    assert.equal(first.done, false);
+    assert.deepEqual(first.value, {
+      type: 'terminal.frame',
+      seq: 9,
+      encoding: 'ansi',
+      width: 120,
+      height: 36,
+      full: true,
+      bytes: 'G1sySg==',
+    });
+  });
+
+  test('terminalStream serializes input, resize, and wheel controls on the public socket', async () => {
+    const controls: unknown[] = [];
+    let resolveControls: (() => void) | undefined;
+    const allControls = new Promise<void>(resolve => {
+      resolveControls = resolve;
+    });
+    const client = await withServer((message, socket) => {
+      const record = message as Record<string, unknown>;
+      if ('method' in record) {
+        socket.write(
+          successLine(requestId(message), { type: 'terminal_stream_started' })
+        );
+        socket.write(
+          `${JSON.stringify({
+            type: 'terminal.frame',
+            seq: 1,
+            encoding: 'ansi',
+            width: 80,
+            height: 24,
+            full: true,
+            bytes: '',
+          })}\n`
+        );
+        return;
+      }
+      controls.push(message);
+      if (controls.length === 3) resolveControls?.();
+    });
+
+    const stream = client.terminalStream({
+      pane_id: 'pane_2',
+      mode: 'observe',
+      cols: 80,
+      rows: 24,
+    });
+    await stream[Symbol.asyncIterator]().next();
+    stream.sendInput('ls\n');
+    stream.resize(144, 42);
+    stream.scroll('up', 3);
+    await allControls;
+    stream.close();
+
+    assert.deepEqual(controls, [
+      { type: 'terminal.input', bytes: 'bHMK' },
+      { type: 'terminal.resize', cols: 144, rows: 42 },
+      { type: 'terminal.scroll', direction: 'up', lines: 3, source: 'wheel' },
+    ]);
   });
 
   test('agentQuery serializes the filter/sort/limit request and parses the agent list', async () => {
@@ -465,7 +566,10 @@ describe('LoomSocketClient', () => {
     });
 
     await assert.rejects(
-      () => client.agentQuery({ filter: { op: 'exists', field: { token: 'bad token' } } }),
+      () =>
+        client.agentQuery({
+          filter: { op: 'exists', field: { token: 'bad token' } },
+        }),
       (err: unknown) => {
         assert.ok(err instanceof LoomError);
         assert.equal(err.code, 'invalid_agent_view');

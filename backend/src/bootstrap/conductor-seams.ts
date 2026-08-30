@@ -104,6 +104,13 @@ export function createCloudSandboxGateway(
         .provisioner()
         .provision({ tenant, userId: tenantOwner, runId: options?.runId ?? null });
       if (!provisioned.ok) throw new Error(provisioned.error.message);
+      // This gateway promises an OFF-BOX substrate. Cloud's self-host tier may
+      // legitimately select its local provider, but accepting that here would
+      // mislabel host execution as Daytona. Tear it down and refuse truthfully.
+      if (provisioned.value.provider === 'local') {
+        await cloud.provisioner().destroy(provisioned.value.id, tenant.id).catch(() => undefined);
+        throw new Error('off-box provider unavailable (cloud placement selected local)');
+      }
       return { id: provisioned.value.id };
     },
     getWorkDir: async (sandboxId) => {

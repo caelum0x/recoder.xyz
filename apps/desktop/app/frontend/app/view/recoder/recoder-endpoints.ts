@@ -3,6 +3,14 @@
 
 const DefaultRecoderBackend = "http://127.0.0.1:3100";
 const BackendUrlStorageKey = "recoder:backendurl";
+const backendUrlListeners = new Set<(url: string) => void>();
+let backendBridgeInitialized = false;
+let volatileUserOverride: string | null = null;
+
+type RecoderBackendBridge = {
+    getRecoderBackendUrl?: () => unknown;
+    onRecoderBackendUrl?: (callback: (url: string) => void) => void;
+};
 
 function trimTrailingSlash(url: string): string {
     return url.replace(/\/+$/, "");
@@ -20,11 +28,28 @@ function getRecoderBackendUrl(): string {
     } catch {
         // no localStorage (e.g. preview harness) — fall through
     }
+    if (volatileUserOverride != null) {
+        return volatileUserOverride;
+    }
     const fromWindow = (globalThis as { __RECODER_BACKEND_URL__?: unknown }).__RECODER_BACKEND_URL__;
     if (fromWindow) {
         return trimTrailingSlash(String(fromWindow));
     }
     return DefaultRecoderBackend;
+}
+
+function notifyBackendUrlChanged(previous: string): void {
+    const current = getRecoderBackendUrl();
+    if (current == previous) {
+        return;
+    }
+    for (const listener of backendUrlListeners) {
+        try {
+            listener(current);
+        } catch {
+            // One view transport must not prevent remaining clients from moving.
+        }
+    }
 }
 
 // Apply a backend URL the MAIN PROCESS injected for THIS session (DT-7.1): the
@@ -43,15 +68,19 @@ function applyInjectedBackendUrl(injected: unknown): boolean {
     if (clean == "") {
         return false;
     }
+    const previous = getRecoderBackendUrl();
     (globalThis as { __RECODER_BACKEND_URL__?: unknown }).__RECODER_BACKEND_URL__ = clean;
+    notifyBackendUrlChanged(previous);
     return true;
 }
 
-// Persist a user backend-URL override (settings block). Empty clears the override
-// (reverts to window/default). Also mirrors to the window global for this session.
-// Degrade-safe: a localStorage failure is swallowed.
+// Persist a user backend-URL override (settings block). Empty clears ONLY that
+// override and reveals the supervisor-injected session URL again. The volatile
+// mirror keeps settings functional when localStorage is unavailable without
+// conflating user authority with the injected port.
 function setRecoderBackendUrl(url: string): void {
     const clean = trimTrailingSlash((url ?? "").trim());
+    const previous = getRecoderBackendUrl();
     try {
         if (clean == "") {
             globalThis.localStorage?.removeItem(BackendUrlStorageKey);
@@ -59,9 +88,45 @@ function setRecoderBackendUrl(url: string): void {
             globalThis.localStorage?.setItem(BackendUrlStorageKey, clean);
         }
     } catch {
-        // ignore — the window mirror below still applies for this session
+        // ignore — the volatile mirror below still applies for this session
     }
-    (globalThis as { __RECODER_BACKEND_URL__?: unknown }).__RECODER_BACKEND_URL__ = clean == "" ? undefined : clean;
+    volatileUserOverride = clean == "" ? null : clean;
+    notifyBackendUrlChanged(previous);
 }
 
-export { getRecoderBackendUrl, setRecoderBackendUrl, applyInjectedBackendUrl, DefaultRecoderBackend };
+// Initialize endpoint discovery once for every renderer, independently of which
+// Recoder view happens to mount first. This closes a startup race where a Session,
+// Review, or Loom block could miss the main-process READY broadcast because the
+// identity model (the old subscriber) had never been constructed.
+function initializeRecoderBackendEndpoint(bridge: RecoderBackendBridge | null | undefined): void {
+    if (backendBridgeInitialized || bridge == null) {
+        return;
+    }
+    backendBridgeInitialized = true;
+    try {
+        applyInjectedBackendUrl(bridge.getRecoderBackendUrl?.());
+    } catch {
+        // A failed synchronous read must not prevent the READY push subscription.
+    }
+    try {
+        bridge.onRecoderBackendUrl?.((url) => {
+            applyInjectedBackendUrl(url);
+        });
+    } catch {
+        // No preload bridge (preview/test) — keep override/window/default resolution.
+    }
+}
+
+function subscribeRecoderBackendUrl(listener: (url: string) => void): () => void {
+    backendUrlListeners.add(listener);
+    return () => backendUrlListeners.delete(listener);
+}
+
+export {
+    DefaultRecoderBackend,
+    applyInjectedBackendUrl,
+    getRecoderBackendUrl,
+    initializeRecoderBackendEndpoint,
+    setRecoderBackendUrl,
+    subscribeRecoderBackendUrl,
+};

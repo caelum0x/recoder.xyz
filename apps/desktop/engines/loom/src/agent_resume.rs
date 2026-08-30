@@ -87,6 +87,7 @@ pub fn is_reserved_native_state_source(source: &str, agent: &str) -> bool {
             | ("loom:devin", "devin")
             | ("loom:droid", "droid")
             | ("loom:qodercli", "qodercli")
+            | ("loom:qwen", "qwen_code")
             | ("loom:cursor", "cursor")
             | ("loom:grok", "grok")
     )
@@ -177,6 +178,9 @@ pub fn plan(source: &str, agent: &str, session_ref: &AgentSessionRef) -> Option<
                 session_ref.value.clone(),
             ]
         }
+        ("loom:qwen", "qwen_code", AgentSessionRefKind::Id) => {
+            vec!["qwen".into(), "--resume".into(), session_ref.value.clone()]
+        }
         ("loom:kilo", "kilo", AgentSessionRefKind::Id) => {
             vec!["kilo".into(), "--session".into(), session_ref.value.clone()]
         }
@@ -234,6 +238,7 @@ pub(crate) fn is_official_agent_source(source: &str, agent: &str) -> bool {
             | ("loom:hermes", "hermes")
             | ("loom:opencode", "opencode")
             | ("loom:qodercli", "qodercli")
+            | ("loom:qwen", "qwen_code")
             | ("loom:kilo", "kilo")
             | ("loom:cursor", "cursor")
             | ("loom:antigravity_cli", "agy")
@@ -402,6 +407,16 @@ mod tests {
         );
         assert_eq!(
             plan(
+                "loom:qwen",
+                "qwen_code",
+                &AgentSessionRef::id("qwen-session").unwrap()
+            )
+            .unwrap()
+            .argv,
+            vec!["qwen", "--resume", "qwen-session"]
+        );
+        assert_eq!(
+            plan(
                 "loom:kilo",
                 "kilo",
                 &AgentSessionRef::id("kilo-session").unwrap()
@@ -485,8 +500,7 @@ mod tests {
 
         assert!(session_ref_from_report("loom:pi", "pi", Some("bad\nid".into()), None).is_none());
         assert!(
-            session_ref_from_report("loom:pi", "pi", None, Some("relative.jsonl".into()))
-                .is_none()
+            session_ref_from_report("loom:pi", "pi", None, Some("relative.jsonl".into())).is_none()
         );
         assert!(session_ref_from_report("custom:pi", "pi", Some("pi-id".into()), None).is_none());
 
@@ -626,12 +640,8 @@ mod tests {
         let codex_plan = plan("loom:codex", "codex", &AgentSessionRef::id(id).unwrap()).unwrap();
         assert_eq!(codex_plan.argv, vec!["codex", "resume", id]);
 
-        let copilot_plan = plan(
-            "loom:copilot",
-            "copilot",
-            &AgentSessionRef::id(id).unwrap(),
-        )
-        .unwrap();
+        let copilot_plan =
+            plan("loom:copilot", "copilot", &AgentSessionRef::id(id).unwrap()).unwrap();
         assert_eq!(copilot_plan.argv, vec!["copilot", "--resume=abc; rm -rf /"]);
 
         let devin_plan = plan("loom:devin", "devin", &AgentSessionRef::id(id).unwrap()).unwrap();

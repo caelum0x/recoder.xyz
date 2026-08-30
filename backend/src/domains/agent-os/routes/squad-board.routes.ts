@@ -2,22 +2,24 @@
  * `GET /api/agent-os/squads/board` — the squads board read model (docs/modules/
  * squads.md `board`; the cockpit board feed). Truthful throughout:
  *  - squads feature off      ⇒ `enabled:false` with the reason (no faked board);
- *  - autopilot not composed  ⇒ `autopilot:null` with the reason, squads still listed;
+ *  - squads not composed     ⇒ `autopilot:null` with the reason;
  *  - autopilot composed      ⇒ the live board (seam health, last tick, entries,
  *    and the `bd stale` stalled-work read — explicit control-plane state).
- * Read-only; the owner decision keeps squad mutations OFF the MCP surface and
- * this board is likewise a pure read model.
+ * Squad membership/routing remains read-only. The narrow control edge below
+ * only starts, pauses, or manually ticks this process's bounded dispatch loop;
+ * it cannot mutate a squad, route, budget, or existing workspace.
  */
 import { Router, type Request, type Response } from 'express';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import { sendSuccess, sendError, createError, ErrorCode } from '../../../shared/errors.js';
 import type { SquadAutopilotService } from '../services/squad-autopilot.service.js';
 import type { SquadService } from '../services/squad.service.js';
+import type { SquadAutopilotLaunchProfile } from '../ports/squad-autopilot.port.js';
 
 export interface SquadBoardRoutesDeps {
   /** Null when the squads feature flag is off. */
   readonly squads: SquadService | null;
-  /** Null when the autopilot is not composed (feature off / not enabled). */
+  /** Null only when squads are not composed. A paused loop remains inspectable. */
   readonly autopilot: SquadAutopilotService | null;
   readonly middleware: AuthMiddleware;
 }
@@ -59,5 +61,82 @@ export function buildSquadBoardRouter(deps: SquadBoardRoutesDeps): Router {
     }
   });
 
+  router.post('/squads/board/control', middleware.authenticateMutating, async (req: Request, res: Response) => {
+    const action = typeof req.body?.action === 'string' ? req.body.action : '';
+    if (action !== 'start' && action !== 'pause' && action !== 'scan') {
+      sendError(
+        res,
+        createError(ErrorCode.VALIDATION_ERROR, 'action must be start, pause, or scan'),
+      );
+      return;
+    }
+    if (!autopilot) {
+      sendError(
+        res,
+        createError(ErrorCode.SERVICE_UNAVAILABLE, 'background agents are unavailable'),
+      );
+      return;
+    }
+    if (action !== 'pause' && req.body?.profile != null) {
+      try {
+        await autopilot.configure(readLaunchProfile(req.body.profile));
+      } catch (error) {
+        sendError(
+          res,
+          createError(
+            ErrorCode.VALIDATION_ERROR,
+            error instanceof Error ? error.message : 'invalid background-agent launch profile',
+          ),
+        );
+        return;
+      }
+    }
+    try {
+      if (action !== 'pause' && (await autopilot.board()).launchProfile == null) {
+        sendError(
+          res,
+          createError(
+            ErrorCode.VALIDATION_ERROR,
+            'choose a repository and agent before starting background work',
+          ),
+        );
+        return;
+      }
+      if (action === 'start') await autopilot.setRunning(true);
+      if (action === 'pause') await autopilot.setRunning(false);
+      // Start means start working now, not one interval from now.
+      const tick = action === 'scan' || action === 'start'
+        ? await autopilot.scanOnce()
+        : null;
+      sendSuccess(res, {
+        action,
+        ...(tick ? { tick } : {}),
+        autopilot: await autopilot.board(),
+      });
+    } catch (error) {
+      sendError(
+        res,
+        createError(
+          ErrorCode.SERVICE_UNAVAILABLE,
+          error instanceof Error ? error.message : 'background-agent control failed',
+        ),
+      );
+    }
+  });
+
   return router;
+}
+
+function readLaunchProfile(value: unknown): SquadAutopilotLaunchProfile {
+  const profile = value && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : {};
+  const text = (field: string): string =>
+    typeof profile[field] === 'string' ? profile[field].trim() : '';
+  return {
+    repoPath: text('repoPath'),
+    spaceId: text('spaceId'),
+    projectId: text('projectId'),
+    runtimeId: text('runtimeId'),
+  };
 }

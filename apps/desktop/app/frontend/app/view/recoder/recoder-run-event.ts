@@ -1,6 +1,8 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { agentLabel } from "./recoder-agent-labels";
+
 // Pure classification of a backend RunEvent into a structured display descriptor.
 // The legacy run view flattens every event to one text line; a rich run view
 // renders the descriptor as a block (icon + severity + label + detail). Keeping
@@ -10,6 +12,7 @@
 // Structural mirror — the socket payload is untrusted external data, so every
 // field is optional and this never couples to a backend package.
 type RunEventLike = {
+    eventId?: string;
     type?: string;
     message?: string;
     state?: string;
@@ -26,7 +29,13 @@ type RunEventSeverity = "info" | "active" | "success" | "warn" | "danger";
 // RunEvent board as a type:"log" frame stamped data.source:"cloud". Surfacing
 // the origin keeps the label truthful instead of mixing sandbox frames into the
 // run stream as generic logs.
-type RunEventOrigin = "run" | "sandbox";
+type RunEventOrigin = "run" | "sandbox" | "coordination";
+
+interface CoordinationDescriptor {
+    agent: string;
+    fromWorkspaceId: string;
+    milestone?: string;
+}
 
 interface RunEventDescriptor {
     time: string;
@@ -36,6 +45,8 @@ interface RunEventDescriptor {
     severity: RunEventSeverity;
     detail: string;
     origin: RunEventOrigin;
+    eventId?: string;
+    coordination?: CoordinationDescriptor;
     // Present on an approval_requested event that carries a decidable approval —
     // lets the rich run view render inline approve/deny in place of the side-list.
     approvalId?: string;
@@ -74,6 +85,25 @@ const SandboxEventStyles: Record<string, RunEventStyle> = {
 };
 
 const SandboxUnknownStyle: RunEventStyle = { label: "Sandbox", icon: "cloud", severity: "info" };
+const CoordinationStyle: RunEventStyle = { label: "Shared context", icon: "share-nodes", severity: "active" };
+
+function coordinationOf(event: RunEventLike): CoordinationDescriptor | null {
+    const data = event?.data;
+    if (data?.kind != "sibling_context_delivered") return null;
+    return {
+        agent: typeof data.agent == "string" ? data.agent : "Agent",
+        fromWorkspaceId: typeof data.fromWorkspaceId == "string" ? data.fromWorkspaceId : "",
+        ...(typeof data.milestone == "string" ? { milestone: data.milestone } : {}),
+    };
+}
+
+function coordinationDetail(coordination: CoordinationDescriptor): string {
+    const agent = agentLabel(coordination.agent);
+    if (coordination.milestone == "first_diff") return `${agent} shared its first changed files.`;
+    if (coordination.milestone == "files_step") return `${agent} shared an updated file map.`;
+    if (coordination.milestone == "lines_step") return `${agent} shared a larger diff milestone.`;
+    return `${agent} shared its completed result.`;
+}
 
 // The bridge's sandbox lifecycle type (data.cloudEventType) when the event is a
 // cloud-sandbox frame (data.source == "cloud"), else null. A cloud frame with a
@@ -119,17 +149,24 @@ function extractApprovalId(event: RunEventLike): string | null {
 
 function describeRunEvent(event: RunEventLike): RunEventDescriptor {
     const kind = typeof event.type == "string" && event.type != "" ? event.type : "event";
+    const coordination = coordinationOf(event);
     const sandboxType = sandboxEventType(event);
     const style =
-        sandboxType != null ? (SandboxEventStyles[sandboxType] ?? SandboxUnknownStyle) : (RunEventStyles[kind] ?? UnknownStyle);
+        coordination != null
+            ? CoordinationStyle
+            : sandboxType != null
+              ? (SandboxEventStyles[sandboxType] ?? SandboxUnknownStyle)
+              : (RunEventStyles[kind] ?? UnknownStyle);
     const descriptor: RunEventDescriptor = {
         time: formatEventTime(event.createdAt),
         kind,
         label: style.label,
         icon: style.icon,
         severity: style.severity,
-        detail: eventDetail(event),
-        origin: sandboxType != null ? "sandbox" : "run",
+        detail: coordination != null ? coordinationDetail(coordination) : eventDetail(event),
+        origin: coordination != null ? "coordination" : sandboxType != null ? "sandbox" : "run",
+        ...(typeof event.eventId == "string" && event.eventId != "" ? { eventId: event.eventId } : {}),
+        ...(coordination != null ? { coordination } : {}),
     };
     if (kind == "approval_requested") {
         const approvalId = extractApprovalId(event);
@@ -142,7 +179,9 @@ function describeRunEvent(event: RunEventLike): RunEventDescriptor {
 // plain scrollback renderer and the rich renderer stay in lockstep. A sandbox
 // frame heads with "sandbox" (its wire type is always "log", which would hide it).
 function formatRunEventLine(descriptor: RunEventDescriptor): string {
-    const head = `[${descriptor.time}] ${descriptor.origin == "sandbox" ? "sandbox" : descriptor.kind}`;
+    const head = `[${descriptor.time}] ${
+        descriptor.origin == "sandbox" ? "sandbox" : descriptor.origin == "coordination" ? "coordination" : descriptor.kind
+    }`;
     return descriptor.detail != "" ? `${head}  ${descriptor.detail}` : head;
 }
 
@@ -152,6 +191,7 @@ export {
     formatRunEventLine,
     isTerminalRunEvent,
     type RunEventDescriptor,
+    type CoordinationDescriptor,
     type RunEventLike,
     type RunEventOrigin,
     type RunEventSeverity,

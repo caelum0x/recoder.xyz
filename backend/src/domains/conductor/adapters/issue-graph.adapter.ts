@@ -8,7 +8,8 @@
  * bootstrap at the composition root — never on the engines module, never on
  * `bd` directly (the memory facet composes typed verbs over the ONE engine
  * transport). Every write carries an `actor` (`conductor:<workspaceId>` on
- * launch, `conductor` on completion) so bd's audit trail is attributable.
+ * launch, `conductor` on run completion, and `conductor:<workspaceId>` on
+ * delivery) so bd's audit trail is attributable.
  *
  * SEAM LAW (degrade-safe, truthful): every call folds an absent slice, a
  * refused write (`false`), a slow write (bounded at {@link BEADS_TIMEOUT_MS}),
@@ -114,13 +115,27 @@ export function createIssueGraphTracker(deps: IssueGraphTrackerDeps): IssueGraph
         () => beads.note(id, `Recoder workspace run ${outcome}`, actor),
         logger, { taskId: id, outcome }, 'note run outcome',
       );
-      // Close only on success — a failed run keeps the issue open for follow-up.
-      if (outcome === 'completed') {
-        await run(
-          () => beads.close(id, 'Completed via Recoder workspace run', actor),
-          logger, { taskId: id }, 'close issue',
-        );
+    },
+
+    async deliverWork(taskId: string, workspaceId: string): Promise<void> {
+      const id = taskId?.trim();
+      if (!id) {
+        logger.debug({ workspaceId }, 'issue-graph: no taskId on merge — deliverWork skipped');
+        return;
       }
+      if (!beads) {
+        logger.debug({ taskId: id, workspaceId }, 'issue-graph: seam not wired — deliverWork skipped');
+        return;
+      }
+      const actor = `conductor:${workspaceId}`;
+      await run(
+        () => beads.note(id, `Recoder workspace ${workspaceId} merged and delivered this issue`, actor),
+        logger, { taskId: id, workspaceId }, 'note delivery evidence',
+      );
+      await run(
+        () => beads.close(id, 'Delivered via governed Recoder merge', actor),
+        logger, { taskId: id, workspaceId }, 'close delivered issue',
+      );
     },
 
     async readIssue(id: string): Promise<IssueRead | null> {

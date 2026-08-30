@@ -29,10 +29,10 @@ import {
     PHASE,
     pickFreePort,
     pollHealth,
+    removeRetiredWidgetConfig,
     resolveBeadsBinPath,
     resolveLoginShellPath,
     resolveTmuxBin,
-    removeRetiredWidgetConfig,
     RestoredWidgetKeys,
     RetiredWidgetKeys,
     writeWaveAIGatewayConfig,
@@ -1221,6 +1221,52 @@ describe("BackendSupervisor crash + stop lifecycle", () => {
         // 60s window. Reaching READY again must NOT forgive the crash budget,
         // otherwise a health-pass-then-crash backend restarts forever.
         expect(sup.restartCount).toBe(1);
+    });
+
+    it("re-advertises a reassigned port when the preferred port is occupied during recovery", async () => {
+        const children: ReturnType<typeof makeFakeChild>[] = [];
+        const spawn = vi.fn(() => {
+            const child = makeFakeChild();
+            children.push(child);
+            return child;
+        });
+        const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
+        const onReady = vi.fn();
+        const portIsFree = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false);
+        const pickFreePort = vi.fn().mockResolvedValue(45679);
+        const sup = new BackendSupervisor(
+            baseOptions({
+                spawn,
+                fetchImpl,
+                onReady,
+                preferredPort: 3100,
+                portIsFree,
+                pickFreePort,
+                restartJitterMs: 0,
+            }) as any
+        );
+
+        await sup.start();
+        expect(onReady).toHaveBeenLastCalledWith({
+            port: 3100,
+            backendUrl: "http://127.0.0.1:3100",
+            apiKey: "sk_test_minted_key",
+        });
+
+        children[0]._emit("exit", 1, null);
+        if (sup._restartTimer) {
+            clearTimeout(sup._restartTimer);
+            sup._restartTimer = null;
+        }
+        await sup._startOnce();
+
+        expect(pickFreePort).toHaveBeenCalledTimes(1);
+        expect(onReady).toHaveBeenLastCalledWith({
+            port: 45679,
+            backendUrl: "http://127.0.0.1:45679",
+            apiKey: "sk_test_minted_key",
+        });
+        expect(sup.getAuth()).toEqual({ backendUrl: "http://127.0.0.1:45679", apiKey: "sk_test_minted_key" });
     });
 
     it("bounds a health-pass-then-crash storm — reaches FAILED instead of restarting forever", async () => {

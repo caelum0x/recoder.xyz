@@ -347,6 +347,16 @@ type RecoderMergeOutcome = {
     // review flags). Present only when the gate is not `off` and there is something to
     // flag; turns the bare tier/score badge into an actionable checklist.
     trustFlags?: string[];
+    convergenceFeedback?: {
+        durable: boolean;
+        totalDeliveries: number;
+        contestedPickDecisions: number;
+        proceededWithFlagDecisions: number;
+        totalFlagFeedbackDecisions: number;
+        acceptedFlagRules: number;
+        dismissedFlagRules: number;
+        updatedAt?: string;
+    };
 };
 
 // One entry of the durable governance Merkle chain returned by GET
@@ -371,7 +381,7 @@ type RecoderAuditEntry = {
 // a 200; a blocked (403) or could-not-complete (503) attempt retains only its
 // truthful status + the backend's verbatim reason. Never fabricates a merge.
 type RecoderMergeRecord = {
-    status: "merged" | "no_change" | "blocked" | "failed";
+    status: "merged" | "no_change" | "blocked" | "escalated" | "failed";
     reason?: string;
     merge?: RecoderMergeOutcome;
     verdict?: RecoderMergeVerdict;
@@ -650,7 +660,8 @@ function isClusterConvergeReady(cluster: ClusterState | null): boolean {
 }
 
 // Snapshot every multi-sibling group's converge-readiness (keyed by taskGroup) so
-// the next poll can detect the group that JUST became ready. Mirrors
+// the next canonical refresh (live state frame or fallback poll) can detect the
+// group that JUST became ready. Mirrors
 // workspaceAttentionMap: solo/ungrouped rows are skipped (nothing to converge), and
 // a group present here — ready or not — lets a first-seen group seed silently rather
 // than fire a stale ping.
@@ -669,7 +680,20 @@ function clusterConvergeReadyMap(
     return map;
 }
 
-// Pure: fold the current poll's converge-readiness against the previous poll's map
+// Revision key for the compare aggregate that proves a settled parallel group is
+// converge-ready. Compare may be opened while agents are still working; caching
+// that early snapshot past the final state event would hide newly-contested files.
+// Workspace settlement advances state/updatedAt, so the final sibling produces a
+// new key and forces exactly one authoritative compare reload. Sort by id so list
+// ordering alone never creates a fake revision.
+function convergeCompareFetchKey(workspaces: readonly RecoderWorkspace[]): string {
+    return workspaces
+        .map((workspace) => `${workspace.workspaceId}:${workspace.state}:${workspace.updatedAt ?? ""}`)
+        .sort()
+        .join("|");
+}
+
+// Pure: fold the current refresh's converge-readiness against the previous refresh
 // and return only groups that JUST TRANSITIONED into converge-ready — the moment the
 // parallel-run payoff becomes available. A group absent from `prevReady` (first poll
 // of the session, or one whose siblings only just grouped) seeds silently; a group
@@ -1620,6 +1644,7 @@ export {
     deriveClusterState,
     isClusterConvergeReady,
     clusterConvergeReadyMap,
+    convergeCompareFetchKey,
     detectConvergeReadyTransitions,
     deriveClusterNudge,
     SETTLED_SIBLING_STATES,

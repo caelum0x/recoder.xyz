@@ -216,47 +216,56 @@ export function createConductorCodeIntel(
   const issueGraph =
     deps.issueGraph ?? createIssueGraphTracker({ beads, logger });
 
+  async function indexRepoWithResult(repoPath: string, repoId: string): Promise<{
+    indexed: boolean;
+    reason?: string;
+  }> {
+    const root = repoPath?.trim();
+    const id = repoId?.trim();
+    if (!root || !id) {
+      logger.debug({ repoPath, repoId }, 'code-intel: missing repoPath/repoId — index skipped');
+      return { indexed: false, reason: 'missing repository path or id' };
+    }
+    if (!recodergit) {
+      logger.debug({ repoId: id }, 'code-intel: recodergit engine not wired — index skipped');
+      return { indexed: false, reason: 'recodergit engine not wired' };
+    }
+    try {
+      const result = await recodergit.invoke({
+        op: 'index',
+        input: { repoRoot: root, repoId: id },
+        timeoutMs: INDEX_TIMEOUT_MS,
+      });
+      if (!result.ok) {
+        logger.info(
+          { repoId: id, reason: result.reason, code: result.code },
+          'code-intel: repo index skipped (recodergit unavailable)'
+        );
+        return { indexed: false, reason: result.reason };
+      }
+      const state = result.value && typeof result.value === 'object'
+        ? result.value as { status?: unknown }
+        : null;
+      if (state?.status !== 'indexed') {
+        const reason = typeof state?.status === 'string'
+          ? `recodergit returned ${state.status}`
+          : 'recodergit returned no indexed state';
+        logger.info({ repoId: id, reason }, 'code-intel: repo index unavailable');
+        return { indexed: false, reason };
+      }
+      logger.info({ repoId: id }, 'code-intel: repo indexed via recodergit');
+      return { indexed: true };
+    } catch (err) {
+      logger.warn({ repoId: id, err }, 'code-intel: repo index errored — skipped');
+      return { indexed: false, reason: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   return {
     async indexRepo(repoPath: string, repoId: string): Promise<void> {
-      const root = repoPath?.trim();
-      const id = repoId?.trim();
-      if (!root || !id) {
-        logger.debug(
-          { repoPath, repoId },
-          'code-intel: missing repoPath/repoId — index skipped'
-        );
-        return;
-      }
-      if (!recodergit) {
-        logger.debug(
-          { repoId: id },
-          'code-intel: recodergit engine not wired — index skipped'
-        );
-        return;
-      }
-      try {
-        const result = await recodergit.invoke({
-          op: 'index',
-          input: { repoRoot: root, repoId: id },
-          timeoutMs: INDEX_TIMEOUT_MS,
-        });
-        if (!result.ok) {
-          // Disabled / unbuilt / bad input — truthful skip, run proceeds.
-          logger.info(
-            { repoId: id, reason: result.reason, code: result.code },
-            'code-intel: repo index skipped (recodergit unavailable)'
-          );
-          return;
-        }
-        logger.info({ repoId: id }, 'code-intel: repo indexed via recodergit');
-      } catch (err) {
-        // Defensive: the seam should not throw, but an index must never crash launch.
-        logger.warn(
-          { repoId: id, err },
-          'code-intel: repo index errored — skipped'
-        );
-      }
+      await indexRepoWithResult(repoPath, repoId);
     },
+    indexRepoWithResult,
 
     async reindexRepo(repoId: string): Promise<void> {
       const id = repoId?.trim();
@@ -382,6 +391,8 @@ export function createConductorCodeIntel(
     trackWork: (taskId, workspaceId) =>
       issueGraph.trackWork(taskId, workspaceId),
     completeWork: (taskId, outcome) => issueGraph.completeWork(taskId, outcome),
+    deliverWork: (taskId, workspaceId) =>
+      issueGraph.deliverWork?.(taskId, workspaceId) ?? Promise.resolve(),
     // Read a bd issue to START a workspace from it (reverse of trackWork). The
     // tracker's readIssue is always present here; the guard keeps the type honest.
     readIssue: (id) => issueGraph.readIssue?.(id) ?? Promise.resolve(null),

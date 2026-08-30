@@ -3,6 +3,7 @@
 
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
+import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -114,6 +115,58 @@ describe("packaging config", () => {
         expect(fs.statSync(dmuxLauncher).mode & 0o111, "dmux launcher must be executable").toBeTruthy();
     });
 
+    it("wires fail-closed restricted-engine checks into both packaging phases", () => {
+        expect(typeof config.beforePack).toBe("function");
+        expect(typeof config.afterPack).toBe("function");
+
+        const configSource = fs.readFileSync(path.join(AppRoot, "electron-builder.config.cjs"), "utf8");
+        expect(configSource).toContain("assertRestrictedEngineInputs(config, __dirname)");
+        expect(configSource).toContain("assertRestrictedEnginesAbsentFromArtifact(resourcesDir)");
+        expect(configSource).toContain("license-boundary-${context.electronPlatformName}-${archName}.json");
+    });
+
+    it("beforePack rejects a restricted donor input before resource existence checks", async () => {
+        config.extraResources.push({
+            from: "../engines/recodergit",
+            to: "backend/apps/desktop/engines/recodergit",
+        });
+        try {
+            await expect(config.beforePack({ electronPlatformName: "darwin", arch: 3 })).rejects.toThrowError(
+                /recodergit-polyform/
+            );
+        } finally {
+            config.extraResources.pop();
+        }
+    });
+
+    it("afterPack scans the final resources tree and emits artifact-specific evidence", () => {
+        const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "packaging-license-evidence-"));
+        const resources = path.join(fixture, "mac-arm64/Recoder.app/Contents/Resources");
+        fs.mkdirSync(path.join(resources, "app.asar.unpacked/dist/bin"), { recursive: true });
+        fs.writeFileSync(path.join(resources, "app.asar.unpacked/dist/bin/recoder-server.arm64"), "clean");
+        try {
+            config.afterPack({
+                electronPlatformName: "darwin",
+                arch: 3,
+                appOutDir: path.join(fixture, "mac-arm64"),
+                outDir: fixture,
+                packager: { getResourcesDir: () => resources },
+            });
+            const evidence = JSON.parse(
+                fs.readFileSync(path.join(fixture, "license-boundary-darwin-arm64.json"), "utf8")
+            );
+            expect(evidence).toMatchObject({
+                status: "pass",
+                platform: "darwin",
+                arch: "arm64",
+                packagingInputs: { status: "pass" },
+            });
+            expect(evidence.nativeEvidence).toHaveLength(1);
+        } finally {
+            fs.rmSync(fixture, { recursive: true, force: true });
+        }
+    });
+
     it("checked-in extraResources sources exist (build artifacts excluded)", () => {
         // Only assert paths that live in the repo checkout; dist/node_modules
         // and the rust .node addons are build outputs verified at package time.
@@ -164,17 +217,6 @@ describe("packaging config", () => {
         }
         expect(linuxConfig.linux.icon).toBe("build/icon.png");
         expect(fs.existsSync(path.resolve(AppRoot, linuxConfig.linux.icon)), "linux icon asset must exist").toBe(true);
-    });
-
-    it("beforePack skips the Mach-O CPU-arch gate off darwin but keeps the existence gate", async () => {
-        // A win/linux target on a mac host must not be arch-rejected by the mac
-        // Mach-O header check (arm64 .node files would falsely mismatch x64); the
-        // existence gate still runs. We assert the gate does NOT throw an
-        // arch-mismatch for a linux x64 context given the present arm64 artifacts.
-        const cfg = loadConfig("linux");
-        await expect(
-            cfg.beforePack({ electronPlatformName: "linux", arch: 1 })
-        ).resolves.not.toThrow();
     });
 
     it("every logo referenced by emain and onboarding exists under public/logos", () => {

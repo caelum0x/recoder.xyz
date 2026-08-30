@@ -17,11 +17,13 @@ import { Router, type Request, type Response } from 'express';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
 import type { BetterAuthAdapter } from '../adapters/better-auth.adapter.js';
 import type { SessionVerifier } from '../ports/session-verifier.port.js';
+import type { Principal } from '../types.js';
 import { credentialFromRequest } from '../middleware/authenticate.middleware.js';
 
 export interface AuthRouterDeps {
   readonly adapter: BetterAuthAdapter;
   readonly verifier: SessionVerifier;
+  readonly onSignOut?: (principal: Principal) => Promise<void>;
 }
 
 /** Reconstruct a Web `Request` from an express request (body-order independent). */
@@ -98,6 +100,15 @@ export function buildAuthRouter(deps: AuthRouterDeps): Router {
       if (!deps.adapter.isReady()) {
         sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Authentication service is not configured.'));
         return;
+      }
+      // Resolve and revoke owner-bound remote continuations BEFORE Better Auth
+      // destroys the credential. This exact backend hook covers website,
+      // desktop, and any future client using the canonical sign-out endpoint.
+      if (req.method === 'POST' && req.path === '/sign-out' && deps.onSignOut) {
+        const principal = await deps.verifier.verify(credentialFromRequest(req));
+        if (principal && !principal.isAnonymous && principal.kind === 'session') {
+          await deps.onSignOut(principal);
+        }
       }
       const webRes = await deps.adapter.handler(toWebRequest(req));
       await writeWebResponse(res, webRes);

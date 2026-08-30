@@ -22,8 +22,7 @@ module.exports = {
         HOSTNAME: '0.0.0.0',
         NEXT_PUBLIC_APP_URL: 'https://recoder.xyz',
         BETTER_AUTH_URL: 'https://recoder.xyz',
-        MAIN_SITE_URL: 'https://recoder.xyz',
-        NEXT_PUBLIC_RECODER_WEB_URL: 'https://web.recoder.xyz'
+        MAIN_SITE_URL: 'https://recoder.xyz'
       }
     },
 

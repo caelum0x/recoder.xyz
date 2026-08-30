@@ -21,6 +21,16 @@ function readErrorReason(body: unknown): string {
     return "";
 }
 
+function readErrorOutcome(body: unknown): "escalated" | "trust_blocked" | "" {
+    if (body == null || typeof body != "object") return "";
+    const error = (body as { error?: unknown }).error;
+    if (error == null || typeof error != "object") return "";
+    const details = (error as { details?: unknown }).details;
+    if (details == null || typeof details != "object") return "";
+    const outcome = (details as { outcome?: unknown }).outcome;
+    return outcome === "escalated" ? "escalated" : outcome === "trust_blocked" ? "trust_blocked" : "";
+}
+
 // Response convenience: parse the body once and pull the real reason out of it.
 // A body that isn't JSON (or an already-consumed stream) falls to "" so the
 // caller can substitute a truthful capability-scoped fallback.
@@ -44,4 +54,4 @@ function isConnectivityError(message: string): boolean {
     return /failed to fetch|networkerror|econnrefused|network request failed|load failed|fetch failed/i.test(message);
 }
 
-export { isConnectivityError, readErrorReason, readFetchError };
+export { isConnectivityError, readErrorOutcome, readErrorReason, readFetchError };

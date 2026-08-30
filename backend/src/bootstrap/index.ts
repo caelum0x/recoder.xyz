@@ -49,6 +49,7 @@ import { FilesystemApiKeyStore } from '../domains/identity/repositories/filesyst
 import { createApiKeyService } from '../domains/identity/api-key.service.js';
 import { buildApiKeysRouter } from '../domains/identity/routes/api-keys.routes.js';
 import { createOrgsRbacFeature } from '../domains/identity/orgs-rbac.feature.js';
+import type { Principal } from '../domains/identity/types.js';
 import { createGovernanceModule } from '../domains/governance/index.js';
 import { createInteropModule } from '../domains/interop/index.js';
 import { createAgentOsModule } from '../domains/agent-os/index.js';
@@ -59,6 +60,7 @@ import { sliceMemoryConfig } from '../domains/memory/config.js';
 import { createEmbeddingAdapter } from '../domains/memory/adapters/embedding.adapter.js';
 import { createQdrantAdapter } from '../domains/memory/adapters/qdrant.adapter.js';
 import {
+  createPermissiveImpactFallback,
   createPermissiveSymbolSearchFallback,
   embeddingPortFrom,
   vectorStorePortFrom,
@@ -77,6 +79,10 @@ import { createLoomSteerTransport } from '../domains/conductor/adapters/loom-ste
 import { createSteerTransportRouter } from '../domains/conductor/adapters/steer-transport-router.adapter.js';
 import { createSwarmUnblockDeps } from '../domains/conductor/adapters/swarm-unblock-wiring.js';
 import { createRemoteAttachDeps } from '../domains/conductor/adapters/remote-attach-wiring.js';
+import { createRemoteAttachSessionStore } from '../domains/conductor/adapters/remote-attach-session-store.adapter.js';
+import { createSkillTrustStore } from '../domains/conductor/adapters/skill-trust-store.adapter.js';
+import { createSkillInvocationEvidenceStore } from '../domains/conductor/adapters/skill-invocation-store.adapter.js';
+import { createConvergenceFeedbackStore } from '../domains/conductor/adapters/convergence-feedback.adapter.js';
 import { LoomSocketClient } from '@recoder/agent-runtimes/loom';
 import type { LoomResult } from '@recoder/agent-runtimes/loom';
 import {
@@ -106,6 +112,7 @@ import { createConductorPlanAdapter } from '../domains/conductor/adapters/plan.a
 import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
 import { createGithubPrReviewAdapter } from '../domains/conductor/adapters/github-review.adapter.js';
 import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-transport.adapter.js';
+import { createTmuxInteractiveTerminal } from '../domains/conductor/adapters/tmux-interactive-terminal.adapter.js';
 import { createTmuxScanSource } from '../domains/conductor/adapters/tmux-scan-source.adapter.js';
 import { createDmuxGridAdapter } from '../domains/conductor/adapters/dmux-grid.adapter.js';
 import { createRecoderMcpInjector } from '../domains/conductor/adapters/mcp-inject.adapter.js';
@@ -114,6 +121,9 @@ import { createCloudSandboxSubstrate } from '../domains/conductor/adapters/cloud
 import {
   createEnginesModule,
   createOpenfangWorkflowDriver,
+  createRecoderGitGraphSnapshotStore,
+  createRecoderGitIndexStateStore,
+  createRecoderGitRepositoryNetwork,
 } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 // The inference domain's PUBLIC degrade-safe one-shot — bound into the conductor's
@@ -170,9 +180,15 @@ import {
   createCloudRunEventBridge,
 } from './cloud-seams.js';
 import {
+  createPullRequestReviewDispatch,
+  createPullRequestReviewFeedbackStore,
+  createPullRequestReviewPublisher,
+  createPullRequestReviewSource,
   createSquadAutopilotDispatch,
   parseSquadSeedEnv,
 } from './agent-os-seams.js';
+import { createAgentAutomationStateStore } from '../domains/agent-os/adapters/automation-state.adapter.js';
+import { createJiraRequirementAdapter } from '../domains/agent-os/adapters/jira-requirement.adapter.js';
 import { createMemoryModule } from '../domains/memory/index.js';
 import type { Mem0EnginePort } from '../domains/memory/ports/mem0-engine.port.js';
 // Composition root: value-imports the engines mem0 client, injected as the memory
@@ -249,6 +265,7 @@ export interface StartOptions {
 function parseSkillConfig(env: Record<string, string | undefined>): {
   publisherKeys: Record<string, string>;
   manifests: SkillManifest[];
+  pins: Record<string, string>;
 } {
   const publisherKeys: Record<string, string> = {};
   const rawKeys = env.SKILL_PUBLISHER_KEYS?.trim();
@@ -274,7 +291,21 @@ function parseSkillConfig(env: Record<string, string | undefined>): {
       /* malformed ⇒ no manifests ⇒ registry admits nothing (truthful) */
     }
   }
-  return { publisherKeys, manifests };
+  const pins: Record<string, string> = {};
+  const rawPins = env.SKILL_PINS?.trim();
+  if (rawPins) {
+    try {
+      const parsed = JSON.parse(rawPins) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        for (const [id, version] of Object.entries(parsed as Record<string, unknown>)) {
+          if (typeof version === 'string' && version.trim() !== '') pins[id] = version.trim();
+        }
+      }
+    } catch {
+      /* malformed ⇒ no external pins ⇒ external manifests remain untrusted */
+    }
+  }
+  return { publisherKeys, manifests, pins };
 }
 
 function routerProvider(
@@ -416,6 +447,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     logger: childLogger('identity-orgs'),
   });
 
+  let revokeRemoteSessionsOnSignOut: ((principal: Principal) => Promise<void>) | undefined;
   const identity = createIdentityModule({
     config,
     logger: childLogger('identity'),
@@ -423,6 +455,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     deviceTokenValidator: deviceFlow,
     apiKeyValidator: apiKeyService,
     evaluator: orgsRbac.evaluator,
+    onSignOut: principal =>
+      revokeRemoteSessionsOnSignOut?.(principal) ?? Promise.resolve(),
   });
   container.registerValue(DOMAIN_TOKENS.identity, identity);
   healthRegistry.register(identity);
@@ -512,11 +546,20 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     embedder: embeddingPortFrom(texts => codeSearchEmbed.embed(texts)),
     store: vectorStorePortFrom(codeSearchStore),
   });
+  const codeIndexKv = persistence.kvStore();
+  const codeRepositoryNetwork = createRecoderGitRepositoryNetwork(codeIndexKv);
+  const codeImpactFallback = createPermissiveImpactFallback({
+    snapshotStore: createRecoderGitGraphSnapshotStore(codeIndexKv),
+    repositoryNetwork: codeRepositoryNetwork,
+  });
+  const codeIndexStateStore = createRecoderGitIndexStateStore(codeIndexKv);
 
   const engines = await createEnginesModule({
     config,
     logger: childLogger('engines'),
     codeSearchFallback,
+    codeImpactFallback,
+    codeIndexStateStore,
     executor: persistence.executor(),
     middleware: identity.middleware(),
     kernel: governance.kernel(),
@@ -645,6 +688,41 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // injected as agent-os's consumer-owned `BrowserVerifyRunner` port. The default
     // workflow driver wires the `browser-check` node handler over it + `browserEngine`.
     browserVerifyRunner: executeBrowserVerification,
+    // Installed-app PR watcher source: read-only gh list/view/diff. Delivery is
+    // deliberately absent here; a human owns anything posted back to GitHub.
+    pullRequestSource: createPullRequestReviewSource(() => engines.github()),
+    pullRequestReviewPublisher: createPullRequestReviewPublisher(() => engines.github()),
+    pullRequestReviewFeedback: createPullRequestReviewFeedbackStore(persistence.kvStore()),
+    jiraRequirements: createJiraRequirementAdapter({
+      baseUrl: bootEnv.JIRA_BASE_URL,
+      email: bootEnv.JIRA_EMAIL,
+      apiToken: bootEnv.JIRA_API_TOKEN,
+    }),
+    automationState: createAgentAutomationStateStore(persistence.kvStore()),
+    pullRequestReviewApprovals: {
+      findPending: async ({ taskId, action, requestedBy }) => {
+        const pending = await governance.approvals().list({
+          taskId,
+          requestedBy,
+          status: 'pending',
+          limit: 50,
+        });
+        const match = pending.find((approval) => approval.action === action);
+        return match ? { id: match.id } : null;
+      },
+      request: async (input) => {
+        const approval = await governance.approvals().request({
+          action: input.action,
+          riskTier: input.riskTier,
+          requestedBy: input.requestedBy,
+          taskId: input.taskId,
+          runId: null,
+          reason: input.reason,
+          target: input.target,
+        });
+        return { id: approval.id };
+      },
+    },
     // Native openfang workflow engine (§4e): the FIRST real consumer of
     // `createOpenfangWorkflowDriver` — a `tool` node marked `config.workflow`
     // dispatches register_workflow/run_workflow inside the kernel `.node` via the
@@ -842,12 +920,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // `conductor-seams.ts`. `cloudRef` is resolved LAZILY through a getter so the
   // Phase-10 late-bind (`cloudRef = cloud`) is observed; the tenant is CACHED so
   // provision/exec/destroy all scope to the SAME auto-provisioned tenant id.
+  const cloudDaytonaGateway = createCloudSandboxGateway({
+    cloudRef: () => cloudRef,
+    tenantOwner: 'conductor',
+    substrateId: 'daytona',
+  });
   const cloudDaytonaSub = createCloudSandboxSubstrate({
-    gateway: createCloudSandboxGateway({
-      cloudRef: () => cloudRef,
-      tenantOwner: 'conductor',
-      substrateId: 'daytona',
-    }),
+    gateway: cloudDaytonaGateway,
     logger: childLogger('conductor-daytona'),
   });
   // PATH (d) ACP: the `acp` substrate drives an Agent Client Protocol agent
@@ -999,8 +1078,18 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   const loomInteractiveTerminalClient = new LoomSocketClient({
     socketPath: loomDaemon.socketPath,
   });
+  const tmuxInteractiveTerminal = createTmuxInteractiveTerminal({
+    config: conductorSubstrateConfig,
+    logger: childLogger('conductor-tmux-terminal'),
+  });
   const conductorInteractiveTerminal = {
-    async attach(input: { paneId: string; cols: number; rows: number }) {
+    async attach(input: { paneId: string; substrate: string; cols: number; rows: number }) {
+      if (input.substrate === 'tmux_worktree') {
+        return tmuxInteractiveTerminal.attach(input);
+      }
+      if (input.substrate !== 'loom') {
+        throw new Error(`interactive terminal unavailable for substrate ${input.substrate}`);
+      }
       return loomInteractiveTerminalClient.terminalStream({
         pane_id: input.paneId,
         // Observe owns only this renderer viewport. Keyboard input remains on
@@ -1114,6 +1203,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
         : Promise.reject(new Error('conductor not yet composed')),
     approvals: governance.approvals(),
     audit: governance.audit(),
+    sessionStore: createRemoteAttachSessionStore(persistence.kvStore()),
     logger: childLogger('conductor-remote-attach'),
   });
   // LIVE Needs-You queue (LOOM-ROADMAP.md build-now #4): subscribe ONCE to the Loom
@@ -1201,6 +1291,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   const skillModel = await createGovernedSkillModel({
     publisherKeys: skillCfg.publisherKeys,
     manifests: skillCfg.manifests,
+    extraPins: skillCfg.pins,
+    trustStore: createSkillTrustStore(persistence.kvStore()),
+    evidenceStore: createSkillInvocationEvidenceStore(persistence.kvStore()),
     getWorkspace: id =>
       conductorRef ? conductorRef.getWorkspace(id) : Promise.resolve(null),
     approval: skillApproval,
@@ -1213,7 +1306,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     executor: persistence.executor(),
     middleware: identity.middleware(),
     gate: governance.gate(),
-    ...(skillModel ? { skillRegistry: skillModel.registry, skillActions: skillModel.service } : {}),
+    ...(skillModel ? {
+      skillRegistry: skillModel.registry,
+      skillActions: skillModel.service,
+      ...(skillModel.trust ? { skillTrust: skillModel.trust } : {}),
+    } : {}),
     // Idempotency-Key replay guard on the duplicate-spawning POST /workspaces (BE-10.3).
     idempotency,
     runEventSink: conductorRunSink,
@@ -1222,6 +1319,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // history + RunEvents survive a backend restart. Same executor ⇒ degrades in
     // lockstep (isDurable ⇒ false, in-process fallback) when the DB is unavailable.
     canonicalRunStore: agentOs.repository(),
+    // Outward PR delivery is attached to that same state-of-record so the Runs
+    // read model can expose the PR artifact/link immediately and after restart.
+    deliveryEvidence: agentOs.repository(),
+    convergenceFeedback: createConvergenceFeedbackStore(persistence.kvStore()),
+    offboxChecks: cloudDaytonaGateway,
     substrates: [cliSub, openfangSub, cloudDaytonaSub, acpSub, loomSub],
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,
@@ -1335,7 +1437,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       // authority and falls back to the attach marker for unregistered substrates).
       tmuxControlMode: config.conductor.tmuxControlMode,
       caps: config.conductor.caps,
-      // Merge trust-gate posture (RECODER_MERGE_TRUST_GATE): off (default) / warn /
+      // Merge trust-gate posture (RECODER_MERGE_TRUST_GATE): warn (default) / off /
       // block. `block` refuses a low-trust converged merge before it delivers.
       mergeTrustGate: parseMergeTrustGateMode(bootEnv.RECODER_MERGE_TRUST_GATE),
     },
@@ -1346,6 +1448,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // conductor (the closures above run only at request time, so binding here is
   // safe and avoids a construction cycle).
   conductorRef = conductor;
+  revokeRemoteSessionsOnSignOut = async principal => {
+    await conductor.remoteRevokeAll({ principal });
+  };
 
   // Engine-source RunEvents → the live workspace `/stream` (recoder-uivh): the
   // agent-os bus is where every NON-conductor emitter lands (cloud sandbox
@@ -1422,12 +1527,14 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // governed `createWorkspace` path; a refused/faulted launch surfaces as a
   // truthful `ok:false` — never a fabricated workspace/run. The dispatch closure
   // (fixed internal principal + launch shape) lives in `agent-os-seams.ts`;
-  // bootstrap owns only the env-derived repo root.
+  // Wave pins the explicit repo/project/runtime profile used by every pass.
   agentOs.attachSquadAutopilotConductor(
     createSquadAutopilotDispatch({
       conductor,
-      repoRoot: bootEnv.CONDUCTOR_REPO_ROOT ?? process.cwd(),
     })
+  );
+  agentOs.attachPullRequestReviewConductor(
+    createPullRequestReviewDispatch(conductor),
   );
 
   // --- Phase 9: Billing — THE EntitlementGate (plans/metering/quotas/webhooks).
@@ -1671,7 +1778,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // Conductor launch target resolver: an ADMITTED chat resolves through its
   // explicit channel binding (hostile-by-default: no binding / `allow:false` ⇒
   // null ⇒ truthful "unbound chat" error). The binding's owner is the launch
-  // principal; the repo root mirrors the squad-autopilot convention.
+  // principal; this separate social ingress keeps its configured bootstrap root.
   let socialRef: SocialComposite | null = null;
   const socialTargetResolver = createSocialTargetResolver({
     socialRef: () => socialRef,
@@ -2116,13 +2223,17 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       // `server.on('upgrade')` dispatcher (conflict #6 — the edge owns it):
       // `/terminal` (control-mode output + steer) and the run-screen live stream
       // `/api/conductor/workspaces/:id/stream` (full RunEvents — what the shared
-      // conductor-ui client connects to). The bare `/sync` backend is intentionally
-      // DROPPED (collaboration cut).
+      // conductor-ui client connects to), plus `/sync`, the narrow workspace
+      // state/attention feed the live Board uses to make finished parallel runs
+      // immediately reviewable and converge-ready.
       wsBackends: conductor
         .terminal()
         .terminalBackends()
         .filter(
-          b => b.path === '/terminal' || b.path === '/api/conductor/workspaces'
+          b =>
+            b.path === '/terminal' ||
+            b.path === '/sync' ||
+            b.path === '/api/conductor/workspaces'
         ),
     },
     // Every mount keeps its own guard; the edge adds only the GLOBAL chain.
@@ -2154,6 +2265,15 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // Observability starts LAST among domains (its alert-eval loop reads the fused
   // health of everything already started); the tap is already in the edge chain.
   await observability.start();
+
+  // Restored standing automation should catch up once the FULL control plane is
+  // ready, not one polling interval later. Both services serialize scans and
+  // dedupe through canonical workspaces, so this cannot double-launch.
+  void Promise.all([
+    agentOs.squadAutopilot()?.catchUpIfRunning(),
+    agentOs.pullRequestReviewAgents().catchUpIfRunning(),
+  ]).catch(error =>
+    log.warn({ error }, 'restored agent automation catch-up failed'));
 
   // Reconcile-on-boot (item #7): the conductor reconciler is only wired to a
   // manual operator endpoint, so after a restart surviving `recoder-*` runs stop

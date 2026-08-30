@@ -1,9 +1,9 @@
 /**
  * `recoder_swarm_unblock` MCP tool -- proves the GOVERNED, owner-scoped binding
  * (mirrors the wait tool): an authenticated owner may unblock; an unowned workspace
- * is refused (403, no oracle); an unknown workspace is a truthful miss; `autoAnswer`
- * defaults to `false` (escalate by default); and the {@link SwarmUnblockResult}
- * flows straight back from the surface.
+ * is refused (403, no oracle); an unknown workspace is a truthful miss; the
+ * workspace's durable policy owns auto-answer posture; and the
+ * {@link SwarmUnblockResult} flows straight back from the surface.
  */
 import { describe, it, expect } from 'vitest';
 import type { Workspace } from '@recoder/agent-os';
@@ -78,8 +78,16 @@ describe('recoder_swarm_unblock tool', () => {
     expect(passed.actor.userId).toBe('user-1');
   });
 
-  it('passes autoAnswer:true through only when explicitly requested', async () => {
-    const surface = new FakeSurface(workspace(), {
+  it('takes auto-answer from the durable workspace profile, not request args', async () => {
+    const surface = new FakeSurface(workspace({
+      policyProfile: {
+        version: 1,
+        revision: 3,
+        defaultToolEffect: 'allow',
+        toolRules: [],
+        swarm: { autoAnswer: true, minConfidence: 0.9 },
+      },
+    }), {
       action: 'answered',
       answer: 'a',
       source: 'memory',
@@ -87,11 +95,12 @@ describe('recoder_swarm_unblock tool', () => {
     });
     const reg = tool(surface);
     const out = (await reg.handler(
-      { workspaceId: 'ws-1', autoAnswer: true },
+      { workspaceId: 'ws-1', autoAnswer: false },
       OWNER
     )) as SwarmUnblockResult;
     expect(out.action).toBe('answered');
     expect(surface.resolves[0].policy.autoAnswer).toBe(true);
+    expect(surface.resolves[0].policy.minConfidence).toBe(0.9);
   });
 
   it('refuses (403) when a non-privileged caller does not own the workspace', async () => {

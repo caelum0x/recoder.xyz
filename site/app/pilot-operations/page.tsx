@@ -88,12 +88,13 @@ export default function PilotOperationsPage() {
       setRecords(null);
       return;
     }
-    setRecords(result.records);
-    setAccess(result.state);
+    const ok = result as Extract<LoadResult, { records: AdminRecords }>;
+    setRecords(ok.records);
+    setAccess(ok.state);
     setAccessMessage(
-      result.state === "empty"
+      ok.state === "empty"
         ? "No design-partner leads or pilots are recorded."
-        : `${result.records.leadRefs.length} lead refs and ${result.records.pilots.length} pilots loaded.`,
+        : `${ok.records.leadRefs.length} lead refs and ${ok.records.pilots.length} pilots loaded.`,
     );
   }
 

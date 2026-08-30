@@ -36,56 +36,96 @@ export interface HeartbeatSloDeps {
 
 export interface HeartbeatSloService {
   /** Record a heartbeat sample (server stamps `seenAt` when omitted). */
-  record(sample: Omit<HeartbeatSample, 'seenAt'> & { seenAt?: string }): Promise<void>;
-  /** Compute the current liveness verdict for an agent from its last sample. */
-  liveness(agentId: string): Promise<LivenessVerdict>;
+  record(
+    sample: Omit<HeartbeatSample, 'seenAt'> & { seenAt?: string }
+  ): Promise<void>;
+  /** Compute the current liveness verdict for an owner-scoped agent. */
+  liveness(agentId: string, userId: string): Promise<LivenessVerdict>;
   /** Compute + persist the derived status back onto the agent row (owner-scoped). */
   reconcile(agentId: string, userId: string): Promise<LivenessVerdict>;
 }
 
 /** Build the heartbeat-SLO service over the frozen registry repo. */
-export function createHeartbeatSloService(deps: HeartbeatSloDeps): HeartbeatSloService {
+export function createHeartbeatSloService(
+  deps: HeartbeatSloDeps
+): HeartbeatSloService {
   const now = deps.now ?? (() => Date.now());
   const staleMs = deps.staleMs;
 
-  function verdictFrom(agentId: string, sample: HeartbeatSample | null): LivenessVerdict {
+  function verdictFrom(
+    agentId: string,
+    sample: HeartbeatSample | null
+  ): LivenessVerdict {
     if (!sample) {
-      return { agentId, status: 'unknown', reason: 'No heartbeat recorded yet.' };
+      return {
+        agentId,
+        status: 'unknown',
+        reason: 'No heartbeat recorded yet.',
+      };
     }
     if (!sample.ok) {
       const ageMs = ageOf(sample, now());
-      return { agentId, status: 'down', ageMs, reason: 'Last heartbeat reported failure.' };
+      return {
+        agentId,
+        status: 'down',
+        ageMs,
+        reason: 'Last heartbeat reported failure.',
+      };
     }
     const ageMs = ageOf(sample, now());
     if (ageMs > staleMs) {
-      return { agentId, status: 'down', ageMs, reason: `Last heartbeat is stale (${ageMs}ms > ${staleMs}ms).` };
+      return {
+        agentId,
+        status: 'down',
+        ageMs,
+        reason: `Last heartbeat is stale (${ageMs}ms > ${staleMs}ms).`,
+      };
     }
     if (ageMs > staleMs / 2) {
-      return { agentId, status: 'degraded', ageMs, reason: `Heartbeat aging (${ageMs}ms > half window).` };
+      return {
+        agentId,
+        status: 'degraded',
+        ageMs,
+        reason: `Heartbeat aging (${ageMs}ms > half window).`,
+      };
     }
-    return { agentId, status: 'up', ageMs, reason: 'Recent healthy heartbeat.' };
+    return {
+      agentId,
+      status: 'up',
+      ageMs,
+      reason: 'Recent healthy heartbeat.',
+    };
   }
 
   return {
-    async record(sample: Omit<HeartbeatSample, 'seenAt'> & { seenAt?: string }): Promise<void> {
+    async record(
+      sample: Omit<HeartbeatSample, 'seenAt'> & { seenAt?: string }
+    ): Promise<void> {
       await deps.registry.recordHeartbeat({
         agentId: sample.agentId,
+        userId: sample.userId,
         seenAt: sample.seenAt ?? new Date(now()).toISOString(),
         latencyMs: sample.latencyMs,
         ok: sample.ok,
       });
     },
 
-    async liveness(agentId: string): Promise<LivenessVerdict> {
-      const sample = await safe(() => deps.registry.lastHeartbeat(agentId));
+    async liveness(agentId: string, userId: string): Promise<LivenessVerdict> {
+      const sample = await safe(() =>
+        deps.registry.lastHeartbeat(agentId, userId)
+      );
       return verdictFrom(agentId, sample ?? null);
     },
 
     async reconcile(agentId: string, userId: string): Promise<LivenessVerdict> {
-      const sample = await safe(() => deps.registry.lastHeartbeat(agentId));
+      const sample = await safe(() =>
+        deps.registry.lastHeartbeat(agentId, userId)
+      );
       const verdict = verdictFrom(agentId, sample ?? null);
       // Persist the derived status; a fault leaves the stored value untouched.
-      await safe(() => deps.registry.setStatus(agentId, userId, verdict.status));
+      await safe(() =>
+        deps.registry.setStatus(agentId, userId, verdict.status)
+      );
       return verdict;
     },
   };

@@ -8,6 +8,8 @@
  *   GET /api/conductor/workspaces/compare/:taskGroup/converge-plan  step-2 per-file converge plan (read; `?probe=1` adds synthesizability)
  *   POST /api/conductor/workspaces/compare/:taskGroup/converge      step-2 compose (GATED workspace.branch)
  *   GET /api/conductor/workspaces/compare/ad-hoc                    AD-HOC compare of an explicit `?ids=ws1,ws2` set (PW1 #1)
+ *   GET /api/conductor/workspaces/compare/ad-hoc/pairwise           AD-HOC true A-vs-B diff (`?ids=&a=&b=&paths=`)
+ *   GET /api/conductor/workspaces/compare/ad-hoc/file-versions      AD-HOC N-up file read (`?ids=&path=`)
  *   GET /api/conductor/workspaces/compare/ad-hoc/converge-plan      AD-HOC converge plan (`?ids=&selection=&probe=`)
  *   POST /api/conductor/workspaces/compare/ad-hoc/converge          AD-HOC compose (GATED; body `{workspaceIds,selection,branch?}`)
  *
@@ -78,6 +80,66 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
         return;
       }
       sendSuccess(res, { compare: outcome.view });
+    }),
+  );
+
+  // Deep inspection for the same explicit ad-hoc set. These mirrors matter because
+  // its synthetic `adhoc:…` id is provenance, not a persisted metadata.taskGroup;
+  // routing it through the task-group endpoints would truthfully find zero siblings.
+  router.get(
+    '/workspaces/compare/ad-hoc/pairwise',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const ids = parseIdsQuery(req.query.ids);
+      if (!ids) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`ids` query param is required (comma-separated workspace ids)'));
+        return;
+      }
+      const a = firstString(req.query.a);
+      const b = firstString(req.query.b);
+      if (!a || !b) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`a` and `b` workspace-id query params are required'));
+        return;
+      }
+      const outcome = await module.pairwiseDiffAdHoc(
+        ids,
+        a,
+        b,
+        parsePathsQuery(req.query.paths),
+        req.principal!,
+      );
+      if (!outcome.ok) {
+        finishAdHocReject(res, outcome);
+        return;
+      }
+      sendSuccess(res, { pairwise: outcome.pairwise });
+    }),
+  );
+
+  router.get(
+    '/workspaces/compare/ad-hoc/file-versions',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const ids = parseIdsQuery(req.query.ids);
+      if (!ids) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`ids` query param is required (comma-separated workspace ids)'));
+        return;
+      }
+      const relPath = firstString(req.query.path);
+      if (!relPath) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`path` query param is required'));
+        return;
+      }
+      const outcome = await module.fileVersionsAdHoc(
+        ids,
+        relPath,
+        req.principal!,
+      );
+      if (!outcome.ok) {
+        finishAdHocReject(res, outcome);
+        return;
+      }
+      sendSuccess(res, { fileVersions: outcome.fileVersions });
     }),
   );
 

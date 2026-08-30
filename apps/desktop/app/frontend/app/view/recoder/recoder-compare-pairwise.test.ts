@@ -120,6 +120,20 @@ describe("fetchPairwiseDiff — envelope unwrap + truthful degrade", () => {
         expect(seen.url).toContain("/api/conductor/workspaces/compare/grp%201/pairwise?a=ws-a&b=ws-b");
     });
 
+    it("routes a synthetic ad-hoc group to the explicit-id pairwise edge", async () => {
+        const seen: { url?: string } = {};
+        const result = await fetchPairwiseDiff(
+            "adhoc:ws-a+ws-b",
+            "ws-a",
+            "ws-b",
+            ["shared.ts"],
+            stubFetch({ ok: true, status: 200, json: async () => ({ data: { pairwise: payload() } }) }, seen)
+        );
+        expect(result.ok).toBe(true);
+        expect(seen.url).toContain("/api/conductor/workspaces/compare/ad-hoc/pairwise?ids=ws-a%2Cws-b");
+        expect(seen.url).toContain("&a=ws-a&b=ws-b&paths=shared.ts");
+    });
+
     it("passes an explicit paths list as a comma query", async () => {
         const seen: { url?: string } = {};
         await fetchPairwiseDiff(
