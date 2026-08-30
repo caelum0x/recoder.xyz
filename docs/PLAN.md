@@ -112,9 +112,9 @@ credentials/authority; none is a code gap.
 
 1. **Prod website deploy** (bd `recoder-qtac`) — prod is behind the shipped
    convergence positioning + cli-auth identity. Approval-gated deploy.
-2. **Canonical trunk** (bd `recoder-mhyt`) — `origin/main` is frozen ~2 months and
-   ~552-conflict-diverged from `feat/enterprise-s0-p0`. No repeatable release until
-   one branch is authoritative. Owner call: promote the shipped branch or hand-drive.
+2. ~~**Canonical trunk** (bd `recoder-mhyt`)~~ — **product-complete
+   2026-08-31**. The reconciled release line was fast-forwarded to `main`; local
+   and `origin/main` resolve to `ffbda52cb`. Release only from this canonical line.
 3. **Billing cutover to Creem** (bd `recoder-t24j`, C6) — wire the approved Creem
    key + one enforcing webhook path; rotate after. Also decide the free-tier
    inference policy (bd `recoder-bb1n`, `[OWNER]`).

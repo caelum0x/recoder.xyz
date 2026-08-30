@@ -167,8 +167,9 @@ output for the exact site env to wire.
 
 - Human end-to-end boot of the installed DMG: sign in, create a workspace on a
   real repo, run an agent in a worktree, review the diff, merge.
-- Related open gates: `recoder-mhyt` (release only from `main`), `recoder-fi6w`
-  (release operation gate), and `recoder-a7ut` (CI). Hosted-plane integrity gate
+- Related open gates: `recoder-fi6w` (release operation gate) and `recoder-a7ut`
+  (CI). Canonical-trunk gate `recoder-mhyt` landed on `main` at `ffbda52cb` on
+  2026-08-31. Hosted-plane integrity gate
   `recoder-5iqy` was closed 2026-08-17 after the deletion was traced to the local
   v3 monitor glob, coreutils was restored, and `dpkg -V` was clean. See
   [`docs/OPEN-BEADS.md`](docs/OPEN-BEADS.md).

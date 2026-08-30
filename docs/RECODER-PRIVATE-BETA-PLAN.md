@@ -45,8 +45,10 @@ Outcome: one trustworthy release source and one installable candidate.
 
 ### 0.1 Establish `main`
 
-- Resolve `recoder-mhyt`: reconcile the verified feature branch into `main` in small,
-  reviewable batches or explicitly promote the shipped branch.
+- Completed 2026-08-31: the reconciled release line was fast-forwarded to
+  `origin/main` at `ffbda52cb`; the local `main` tracks the same commit.
+- `recoder-mhyt` reconciliation is complete; preserve the fast-forward history and
+  keep the shipped branch reachable as an audit trail.
 - After reconciliation, build and release only from `main`.
 - Preserve a tag/commit mapping for the last known signed artifact and the new
   candidate.
