@@ -45,6 +45,15 @@ export function broadcastRecoderBackendUrl(backendUrl: string): void {
     }
 }
 
+export function broadcastRecoderRemoteStatus(status: unknown): void {
+    for (const wc of electron.webContents.getAllWebContents()) {
+        if (wc.isDestroyed()) {
+            continue;
+        }
+        wc.send("recoder:remote-status", status);
+    }
+}
+
 export function increaseZoomLevel(webContents: electron.WebContents): void {
     const newZoom = Math.min(MaxZoomLevel, webContents.getZoomFactor() + ZoomDelta);
     webContents.setZoomFactor(newZoom);

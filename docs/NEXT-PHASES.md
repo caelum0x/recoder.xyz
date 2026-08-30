@@ -23,8 +23,10 @@ Context: v0.16.1 signed+notarized+stapled macOS-arm64 DMG is publicly downloadab
 > longer "build these phases" — it is **(a) deepen the moat** (line-level/AST merge
 > synthesis `recoder-8ti9`, diff-review depth `recoder-p8f3`, auth-package split
 > `recoder-sxmn`, DT-7 resilience) and **(b) owner go-live gates** (canonical trunk
-> `recoder-mhyt`, prod deploy `recoder-qtac`, billing `recoder-t24j`, prod-box P0
-> `recoder-5iqy`, CI `recoder-a7ut`). Phase-level DONE evidence is inline per section.
+> `recoder-mhyt`, prod deploy `recoder-qtac`, billing `recoder-t24j`, CI
+> `recoder-a7ut`). The historical prod-box P0 `recoder-5iqy` was closed 2026-08-17
+> after its local-monitor root cause was proven. Phase-level DONE evidence is inline
+> per section.
 
 ---
 

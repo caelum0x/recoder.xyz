@@ -62,6 +62,8 @@ const previewElectronApi: ElectronApi = {
     setIsActive: async () => {},
     getRecoderBackendUrl: () => null,
     onRecoderBackendUrl: (_callback: (url: string) => void) => {},
+    getRecoderRemoteStatus: () => ({ phase: "disabled", mode: "off", backendUrl: null, publicUrl: null }),
+    onRecoderRemoteStatus: (_callback: (status: RecoderRemoteTunnelStatus) => void) => {},
     getRecoderIdentity: () => Promise.resolve(null),
     recoderSignIn: () => Promise.resolve({ ok: false }),
     recoderSignOut: () => Promise.resolve({ ok: true }),

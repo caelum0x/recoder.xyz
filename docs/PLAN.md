@@ -118,9 +118,9 @@ credentials/authority; none is a code gap.
 3. **Billing cutover to Creem** (bd `recoder-t24j`, C6) — wire the approved Creem
    key + one enforcing webhook path; rotate after. Also decide the free-tier
    inference policy (bd `recoder-bb1n`, `[OWNER]`).
-4. **Prod-box security remediation** (bd `recoder-5iqy`, **P0**) — `dpkg -V` shows
-   `cp/tr/su` missing + `rm` checksum modified on the Hetzner box (recurring XMRig
-   history); reinstall coreutils + rootkit check + likely secret rotation.
+4. ~~**Prod-box security remediation** (bd `recoder-5iqy`)~~ — **closed
+   2026-08-17**. The v3 miner-monitor glob deleted genuine coreutils; v4 corrected
+   the match, coreutils was restored, and `dpkg -V` was clean. No host compromise.
 5. **License resolution** (bd `recoder-rxn0`, P1) — recodergit (PolyForm-Noncommercial)
    is already **un-bundled** from the DMG (`electron-builder.config.cjs` comment);
    confirm `multica` (restricted-Apache) does not ship in the Go server binary.

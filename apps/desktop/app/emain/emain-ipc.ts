@@ -19,10 +19,10 @@ import {
     incrementTermCommandsWsl,
     setWasActive,
 } from "./emain-activity";
-import { getBackendAuth } from "./emain-backend";
+import { getBackendAuth, getRemoteTunnelStatus } from "./emain-backend";
+import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
 import { getDeviceAuthManager } from "./emain-device-auth";
 import { expandLeadingTilde } from "./emain-path-util";
-import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
 import { handleCtrlShiftState } from "./emain-util";
@@ -279,6 +279,9 @@ export function initIpcHandlers() {
     // keeps its default and picks up the pushed URL below once ready).
     electron.ipcMain.on("recoder:get-backend-url", (event) => {
         event.returnValue = getBackendAuth()?.backendUrl ?? null;
+    });
+    electron.ipcMain.on("recoder:get-remote-status", (event) => {
+        event.returnValue = getRemoteTunnelStatus();
     });
     electron.ipcMain.on("open-external", (event, url) => {
         if (url && typeof url === "string") {

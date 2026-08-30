@@ -62,6 +62,7 @@ const ARCH_SENSITIVE_EXTRA_RESOURCES = new Set([
     "../../../backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node",
     "../server/engines/beads/bin/bd",
     "../engines/loom/target/release/loom",
+    "../engines/cloudflared/cloudflared",
 ]);
 
 /**
@@ -137,6 +138,21 @@ const config = {
         {
             from: "../engines/loom/target/release/loom",
             to: "backend/engines/loom/loom",
+        },
+        // Outbound-only host-to-host transport. The signed arm64 app launches
+        // this pinned Apache-2.0 connector with a remotely managed named-tunnel
+        // token and retargets it whenever the embedded backend changes port.
+        {
+            from: "../engines/cloudflared/cloudflared",
+            to: "backend/engines/cloudflared/cloudflared",
+        },
+        {
+            from: "../engines/cloudflared/LICENSE",
+            to: "backend/engines/cloudflared/LICENSE",
+        },
+        {
+            from: "../engines/cloudflared/RECODER-VENDOR.md",
+            to: "backend/engines/cloudflared/RECODER-VENDOR.md",
         },
         // Owned beads `bd` binary (issue-graph memory). Host-arch local build
         // like tmux/the .node addons — DELIBERATELY NOT in git (>100MB, stripped
@@ -257,6 +273,12 @@ const config = {
         // context.arch is an Arch enum member; universal is a merged binary so the
         // per-arch check is skipped (null targetArch), matching the gate contract.
         const platform = context && context.electronPlatformName;
+        if (platform !== "darwin") {
+            throw new Error(
+                `Recoder ${platform || "unknown"} packaging is intentionally unshippable during the macOS arm64 beta; ` +
+                    "build and validate the complete native engine set on that platform before enabling it."
+            );
+        }
         const archName = context && context.arch != null ? Arch[context.arch] : null;
         assertRestrictedEngineInputs(config, __dirname);
         // The Mach-O CPU-arch gate only applies to the mac build: every path in
