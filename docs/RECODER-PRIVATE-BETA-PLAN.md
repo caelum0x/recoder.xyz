@@ -46,7 +46,8 @@ Outcome: one trustworthy release source and one installable candidate.
 ### 0.1 Establish `main`
 
 - Completed 2026-08-31: the reconciled release line was fast-forwarded to
-  `origin/main` at `ffbda52cb`; the local `main` tracks the same commit.
+  `origin/main` with product commit `ffbda52cb`; the local `main` tracks the same
+  canonical line.
 - `recoder-mhyt` reconciliation is complete; preserve the fast-forward history and
   keep the shipped branch reachable as an audit trail.
 - After reconciliation, build and release only from `main`.
