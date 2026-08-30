@@ -59,6 +59,14 @@ herdr bundles two permissively-licensed vendored dependencies, retained here:
 No GPL/AGPL/LGPL or other copyleft content is present in the vendored tree
 (audited 2026-08-12). Marketing docs/website/workers were excluded from the vendor.
 ================================================================================
+cloudflared — https://github.com/cloudflare/cloudflared
+Copyright (c) Cloudflare, Inc. Licensed under the Apache License, Version 2.0.
+
+The unmodified cloudflared 2026.5.2 macOS arm64 executable is bundled under
+apps/desktop/engines/cloudflared to provide Recoder's outbound-only remote Loom
+transport. Its Apache-2.0 license, pinned version, and binary checksum are retained
+beside the artifact.
+================================================================================
 Crystal — https://github.com/stravu/crystal
 Copyright (c) 2024 Stravu. Licensed under the MIT License.
 

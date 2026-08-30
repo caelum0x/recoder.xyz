@@ -76,6 +76,9 @@ contextBridge.exposeInMainWorld("api", {
     getRecoderBackendUrl: () => ipcRenderer.sendSync("recoder:get-backend-url"),
     onRecoderBackendUrl: (callback: (url: string) => void) =>
         ipcRenderer.on("recoder:backend-url", (_event, url: string) => callback(url)),
+    getRecoderRemoteStatus: () => ipcRenderer.sendSync("recoder:get-remote-status"),
+    onRecoderRemoteStatus: (callback: (status: RecoderRemoteTunnelStatus) => void) =>
+        ipcRenderer.on("recoder:remote-status", (_event, status: RecoderRemoteTunnelStatus) => callback(status)),
     getRecoderIdentity: () => ipcRenderer.invoke("recoder:get-identity"),
     recoderSignIn: () => ipcRenderer.invoke("recoder:sign-in"),
     recoderSignOut: () => ipcRenderer.invoke("recoder:sign-out"),

@@ -97,6 +97,14 @@ declare global {
         identity?: RecoderIdentity;
     };
 
+    type RecoderRemoteTunnelStatus = {
+        phase: "disabled" | "starting" | "ready" | "failed" | "stopped";
+        mode: "off" | "named" | "quick";
+        backendUrl: string | null;
+        publicUrl: string | null;
+        reason?: string;
+    };
+
     type ElectronApi = {
         getAuthKey(): string; // get-auth-key
         getIsDev(): boolean; // get-is-dev
@@ -158,6 +166,8 @@ declare global {
         setIsActive: () => Promise<void>; // set-is-active
         getRecoderBackendUrl: () => string; // recoder:get-backend-url (null before backend READY)
         onRecoderBackendUrl: (callback: (url: string) => void) => void; // recoder:backend-url
+        getRecoderRemoteStatus: () => RecoderRemoteTunnelStatus; // recoder:get-remote-status
+        onRecoderRemoteStatus: (callback: (status: RecoderRemoteTunnelStatus) => void) => void; // recoder:remote-status
         getRecoderIdentity: () => Promise<RecoderIdentity>; // recoder:get-identity
         recoderSignIn: () => Promise<RecoderSignInResult>; // recoder:sign-in
         recoderSignOut: () => Promise<{ ok: boolean }>; // recoder:sign-out

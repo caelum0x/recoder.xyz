@@ -94,6 +94,28 @@ Connect **API key**. Set these in the environment instead of `APPLE_ID`/…:
 | `RECODER_BACKEND_NODE_MODULES` | path to a **self-contained** backend `node_modules` (via `pnpm deploy --prod`) so the bundle's symlinks resolve inside the `.app` — **required** for a signed build |
 | `RECODER_MAC_ARCH` | `arm64` (default) / `x64` / `universal` — only change once cross-built natives exist (runbook §1b) |
 
+### Provision remote Loom transport
+
+The arm64 app bundles the pinned Apache-2.0 `cloudflared` connector. Create a
+remotely managed named tunnel in the Recoder Cloudflare account, route one
+`<device>.remote.recoder.xyz` hostname to it, then provision the Mac without
+placing the tunnel token in argv or the signed app:
+
+```bash
+scripts/provision-desktop-remote-tunnel.sh https://<device>.remote.recoder.xyz
+```
+
+Paste the named-tunnel token when prompted and restart Recoder. The script writes
+mode `0600` files below `~/Library/Application Support/Recoder/remote-tunnel/`;
+the connector is outbound-only, disables self-update, and automatically follows
+Electron's current loopback backend port. The Remote access panel must say
+`Connected` before its receiver link is shared. `RECODER_REMOTE_TUNNEL_MODE=quick`
+is an explicit development-only escape hatch and is rejected by packaged apps.
+
+Set `RECODER_REMOTE_ALLOWED_ORIGINS` on the hosted Next app only for exact HTTPS
+origins outside the default `*.remote.recoder.xyz` namespace. The receiver rejects
+arbitrary origins before forwarding signed-in credentials.
+
 No cert or key is stored in the repo. `git`-check any release commit:
 `git grep -nE 'BEGIN (RSA |EC )?PRIVATE KEY|APPLE_.*=.+|CSC_.*=.+'` should return nothing.
 
@@ -146,6 +168,7 @@ output for the exact site env to wire.
 - Human end-to-end boot of the installed DMG: sign in, create a workspace on a
   real repo, run an agent in a worktree, review the diff, merge.
 - Related open gates: `recoder-mhyt` (release only from `main`), `recoder-fi6w`
-  (release operation gate), `recoder-a7ut` (CI), and the P0 `recoder-5iqy`
-  (hosted-plane host-integrity) — hosted auth is not trusted until `5iqy` is
-  resolved. See [`docs/OPEN-BEADS.md`](docs/OPEN-BEADS.md).
+  (release operation gate), and `recoder-a7ut` (CI). Hosted-plane integrity gate
+  `recoder-5iqy` was closed 2026-08-17 after the deletion was traced to the local
+  v3 monitor glob, coreutils was restored, and `dpkg -V` was clean. See
+  [`docs/OPEN-BEADS.md`](docs/OPEN-BEADS.md).

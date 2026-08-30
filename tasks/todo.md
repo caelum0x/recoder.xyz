@@ -16,7 +16,7 @@ artifact (test / script / live check). Do not fake done.
 - [ ] **Canonical trunk** — `recoder-mhyt` (P0): promote `feat/enterprise-s0-p0` or hand-drive; no repeatable release without it.
 - [ ] **Billing cutover to Creem** — `recoder-t24j` (C6): wire approved key + one enforcing webhook path; rotate after.
 - [ ] **Free-tier inference policy** decision — `recoder-bb1n` `[OWNER]`.
-- [ ] **Prod-box security remediation** — `recoder-5iqy` (**P0**): reinstall coreutils, rootkit check, rotate secrets.
+- [x] **Prod-box integrity resolution** — `recoder-5iqy`: v3 monitor glob identified as root cause, v4 corrected, coreutils restored, and `dpkg -V` clean; bead closed 2026-08-17.
 - [ ] **License resolution** — `recoder-rxn0` (P1): recodergit already un-bundled; confirm `multica` not in the Go binary.
 - [ ] **Re-enable minimal green CI** — `recoder-a7ut` (P0): 33 workflows disabled; test + secret-scan per PR.
 

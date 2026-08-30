@@ -26,17 +26,19 @@ import {
     gatewayEndpointForPort,
     pickFreePortWithRetry,
     portIsFree,
+    removeRetiredWidgetConfig,
     resolveTmuxBin,
     SupervisorStatus,
-    removeRetiredWidgetConfig,
     writeWaveAIGatewayConfig,
 } from "./emain-backend-core";
 import { CONNECTOR_SECRET_ENV_NAMES, readByokSecretsFromStore } from "./emain-backend-runtime-env";
 import { getElectronAppBasePath, getWaveConfigDir } from "./emain-platform";
-import { broadcastRecoderBackendUrl } from "./emain-util";
+import { RemoteTunnelController, RemoteTunnelStatus } from "./emain-remote-tunnel";
+import { broadcastRecoderBackendUrl, broadcastRecoderRemoteStatus } from "./emain-util";
 
 let supervisor: BackendSupervisor = null;
 let plannedPort: number = null;
+let remoteTunnel: RemoteTunnelController = null;
 
 function getRepoRoot(): string {
     // dev: getElectronAppBasePath() -> <repo>/apps/desktop/app/dist
@@ -86,6 +88,15 @@ export function getPlannedGatewayEndpoint(): string {
  * failures degrade truthfully into getBackendStatus() instead of throwing.
  */
 export async function startBackendSupervisor(): Promise<void> {
+    if (remoteTunnel == null) {
+        remoteTunnel = new RemoteTunnelController({
+            isPackaged: app.isPackaged,
+            resourcesPath: process.resourcesPath,
+            userDataDir: app.getPath("userData"),
+            log: (level, message) => console.log(`[remote-tunnel:${level}] ${message}`),
+            onStatus: broadcastRecoderRemoteStatus,
+        });
+    }
     if (supervisor == null) {
         supervisor = new BackendSupervisor({
             userDataDir: app.getPath("userData"),
@@ -126,11 +137,15 @@ export async function startBackendSupervisor(): Promise<void> {
             },
             onReady: ({ port, apiKey }) => {
                 plannedPort = port;
+                const backendUrl = `http://127.0.0.1:${port}`;
                 try {
-                    broadcastRecoderBackendUrl(`http://127.0.0.1:${port}`);
+                    broadcastRecoderBackendUrl(backendUrl);
                 } catch (e) {
                     console.log("[backend-supervisor] failed to broadcast backend URL", e);
                 }
+                void remoteTunnel.start(backendUrl).catch((e) => {
+                    console.log("[remote-tunnel] failed to follow backend URL", e);
+                });
                 try {
                     const result = writeWaveAIGatewayConfig({ configDir: getWaveConfigDir(), port, apiKey });
                     console.log(
@@ -167,7 +182,19 @@ export function getBackendStatus(): SupervisorStatus {
     return supervisor?.getStatus() ?? null;
 }
 
+export function getRemoteTunnelStatus(): RemoteTunnelStatus {
+    return (
+        remoteTunnel?.getStatus() ?? {
+            phase: "disabled",
+            mode: "off",
+            backendUrl: null,
+            publicUrl: null,
+        }
+    );
+}
+
 /** Stop the backend child (SIGTERM, then SIGKILL after grace) and prevent restarts. */
 export async function stopBackend(): Promise<void> {
+    await remoteTunnel?.stop();
     await supervisor?.stop();
 }

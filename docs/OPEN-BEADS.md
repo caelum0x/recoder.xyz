@@ -1,6 +1,6 @@
 # Open Beads Architecture Map
 
-Snapshot: 2026-08-17. The unresolved graph contains 59 beads: 32 with
+Snapshot: 2026-08-17 (gate dispositions refreshed 2026-08-31). The unresolved graph contains 59 beads: 32 with
 `status=open` and 27 with `status=in_progress`. By priority that is one P0, 13 P1,
 44 P2, and one P3. The live graph remains authoritative:
 
@@ -15,6 +15,9 @@ This document maps that graph to product architecture. It is not a second tracke
 
 Resolved/advanced this session (see each bead's notes for evidence + commits):
 
+- `recoder-5iqy` **closed** — the missing `rm` binary was traced to
+  `recoder-miner-monitor.sh` v3 glob friendly-fire, not host compromise. v4 uses
+  dirname-based matching; coreutils was restored and `dpkg -V` was clean.
 - `recoder-vbg2` **closed** — the permissive synthetic swarm-unblock policy actor is
   gone; replaced with a deny-biased actor (commit `8b76edf6`).
 - `recoder-trk0` **product-complete 2026-08-30** — the auto-unblock gate remains
@@ -41,7 +44,6 @@ Disposition vocabulary:
 
 | ID | P | Product disposition | Required outcome |
 |---|---:|---|---|
-| `recoder-5iqy` | 0 | Hosted-plane security gate | Re-establish production host integrity or conclusively invalidate the finding before hosted auth is trusted. |
 | `recoder-rxn0` | 1 | Distribution license gate | Keep RecoderGit and Multica out of the DMG; attach final provenance/non-linking evidence. |
 | `recoder-mhyt` | 2 | Canonical release-line gate | Reconcile verified work into `main`; release only from `main`. |
 | `recoder-4d8i` | 2 | Control-plane security gate | Owner must disposition each applicable gated finding; disabled surfaces remain truthful. |

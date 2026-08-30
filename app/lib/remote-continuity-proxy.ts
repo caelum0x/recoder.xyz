@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isIP } from 'node:net';
 import { requireAuth } from '@/lib/auth-helpers';
 
 const CONDUCTOR_URL = (
@@ -11,6 +12,90 @@ const CONDUCTOR_URL = (
     : 'http://localhost:3100')
 ).replace(/\/+$/, '');
 
+const RECODER_REMOTE_HOST_SUFFIX = '.remote.recoder.xyz';
+
+type OriginResolution = { origin: string } | { response: NextResponse };
+
+function configuredRemoteOrigins(): Set<string> {
+  return new Set(
+    (process.env.RECODER_REMOTE_ALLOWED_ORIGINS || '')
+      .split(',')
+      .map(value => value.trim())
+      .filter(Boolean)
+      .flatMap(value => {
+        try {
+          return [new URL(value).origin];
+        } catch {
+          return [];
+        }
+      })
+  );
+}
+
+function invalidOrigin(message: string): OriginResolution {
+  return {
+    response: NextResponse.json(
+      { success: false, error: { code: 'INVALID_REMOTE_ORIGIN', message } },
+      { status: 400 }
+    ),
+  };
+}
+
+function resolveConductorOrigin(request: NextRequest): OriginResolution {
+  const requested = request.nextUrl.searchParams.get('api')?.trim();
+  if (!requested) return { origin: CONDUCTOR_URL };
+
+  let parsed: URL;
+  try {
+    parsed = new URL(requested);
+  } catch {
+    return invalidOrigin('The remote Recoder origin is invalid.');
+  }
+  if (
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== '/' ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    return invalidOrigin('The remote Recoder origin must be a bare origin.');
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const isProduction = process.env.NODE_ENV === 'production';
+  const isLoopback =
+    hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  const isQuickTunnel = hostname.endsWith('.trycloudflare.com');
+  const isRecoderTunnel = hostname.endsWith(RECODER_REMOTE_HOST_SUFFIX);
+  const exactAllowlist = configuredRemoteOrigins();
+  const isExplicitlyAllowed = exactAllowlist.has(parsed.origin);
+
+  if (isProduction) {
+    if (
+      parsed.protocol !== 'https:' ||
+      parsed.port ||
+      isIP(hostname) !== 0 ||
+      (!isRecoderTunnel && !isExplicitlyAllowed)
+    ) {
+      return invalidOrigin(
+        'Production remote access requires an approved HTTPS Recoder tunnel origin.'
+      );
+    }
+  } else if (
+    !isExplicitlyAllowed &&
+    !isRecoderTunnel &&
+    !(isQuickTunnel && parsed.protocol === 'https:') &&
+    !(
+      isLoopback &&
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:')
+    )
+  ) {
+    return invalidOrigin('This development remote origin is not approved.');
+  }
+
+  return { origin: parsed.origin };
+}
+
 /**
  * Fixed-surface proxy for the signed-in web receiver. Route handlers build the
  * conductor path from encoded route params, so this cannot become an arbitrary
@@ -18,10 +103,12 @@ const CONDUCTOR_URL = (
  */
 export async function proxyRemoteContinuity(
   request: NextRequest,
-  conductorPath: string,
+  conductorPath: string
 ): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth.error) return auth.response;
+  const resolved = resolveConductorOrigin(request);
+  if ('response' in resolved) return resolved.response;
 
   const headers = new Headers({ accept: 'application/json' });
   const cookie = request.headers.get('cookie');
@@ -39,18 +126,19 @@ export async function proxyRemoteContinuity(
 
   try {
     const upstream = await fetch(
-      `${CONDUCTOR_URL}/api/conductor${conductorPath}`,
+      `${resolved.origin}/api/conductor${conductorPath}`,
       {
         method: request.method,
         headers,
         body,
         cache: 'no-store',
         redirect: 'manual',
-      },
+      }
     );
     const responseHeaders = new Headers({
       'cache-control': 'no-store, max-age=0',
-      'content-type': upstream.headers.get('content-type') || 'application/json',
+      'content-type':
+        upstream.headers.get('content-type') || 'application/json',
     });
     return new NextResponse(await upstream.arrayBuffer(), {
       status: upstream.status,
@@ -62,12 +150,13 @@ export async function proxyRemoteContinuity(
         success: false,
         error: {
           code: 'SERVICE_UNAVAILABLE',
-          message: error instanceof Error
-            ? `Remote continuity is unavailable: ${error.message}`
-            : 'Remote continuity is unavailable.',
+          message:
+            error instanceof Error
+              ? `Remote continuity is unavailable: ${error.message}`
+              : 'Remote continuity is unavailable.',
         },
       },
-      { status: 503 },
+      { status: 503 }
     );
   }
 }
@@ -75,10 +164,12 @@ export async function proxyRemoteContinuity(
 /** Keep the upstream SSE body streaming; never buffer it into a fake snapshot. */
 export async function proxyRemoteContinuityStream(
   request: NextRequest,
-  conductorPath: string,
+  conductorPath: string
 ): Promise<NextResponse> {
   const auth = await requireAuth(request);
   if (auth.error) return auth.response;
+  const resolved = resolveConductorOrigin(request);
+  if ('response' in resolved) return resolved.response;
 
   const headers = new Headers({ accept: 'text/event-stream' });
   const cookie = request.headers.get('cookie');
@@ -88,20 +179,21 @@ export async function proxyRemoteContinuityStream(
 
   try {
     const upstream = await fetch(
-      `${CONDUCTOR_URL}/api/conductor${conductorPath}`,
+      `${resolved.origin}/api/conductor${conductorPath}`,
       {
         method: 'GET',
         headers,
         cache: 'no-store',
         redirect: 'manual',
         signal: request.signal,
-      },
+      }
     );
     return new NextResponse(upstream.body, {
       status: upstream.status,
       headers: {
         'cache-control': 'no-cache, no-transform',
-        'content-type': upstream.headers.get('content-type') || 'application/json',
+        'content-type':
+          upstream.headers.get('content-type') || 'application/json',
         'x-accel-buffering': 'no',
       },
     });
@@ -111,12 +203,13 @@ export async function proxyRemoteContinuityStream(
         success: false,
         error: {
           code: 'SERVICE_UNAVAILABLE',
-          message: error instanceof Error
-            ? `Remote continuity stream is unavailable: ${error.message}`
-            : 'Remote continuity stream is unavailable.',
+          message:
+            error instanceof Error
+              ? `Remote continuity stream is unavailable: ${error.message}`
+              : 'Remote continuity stream is unavailable.',
         },
       },
-      { status: 503 },
+      { status: 503 }
     );
   }
 }

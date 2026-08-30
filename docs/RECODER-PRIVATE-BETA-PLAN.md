@@ -65,9 +65,9 @@ Outcome: one trustworthy release source and one installable candidate.
 
 ### 0.3 Resolve security gates in beta scope
 
-- Revalidate `recoder-5iqy` and either document the production host as clean or carry
-  explicit remediation. The hosted device-auth surface cannot be trusted while host
-  integrity is unresolved.
+- `recoder-5iqy` closed 2026-08-17: the missing coreutils binary was caused by the
+  local v3 miner-monitor glob, v4 corrected the match, coreutils was restored, and
+  `dpkg -V` was clean. Keep that evidence with the hosted device-auth release record.
 - Preserve the shipped exact-target approval contract: clearance must bind to the
   same normalized action and target that produced the verdict.
 - Resolve or explicitly disable the affected swarm-unblock surface for the overlapping

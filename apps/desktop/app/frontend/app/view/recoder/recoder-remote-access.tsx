@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getApi } from "@/app/store/global";
 import { useEffect, useState } from "react";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { readFetchError } from "./recoder-errors";
@@ -70,6 +71,13 @@ function isLoopbackUrl(value: string): boolean {
     }
 }
 
+function receiverUrlFor(receiverBase: string, sessionId: string, accessBase: string): string {
+    const receiver = `${cleanBaseUrl(receiverBase)}/${encodeURIComponent(sessionId)}`;
+    const api = cleanBaseUrl(accessBase);
+    if (!api || isLoopbackUrl(api)) return receiver;
+    return `${receiver}?api=${encodeURIComponent(api)}`;
+}
+
 function RecoderRemoteAccess({ workspaceId, onClose }: { workspaceId: string; onClose: () => void }) {
     const [includeSteer, setIncludeSteer] = useState(false);
     const [creating, setCreating] = useState(false);
@@ -78,7 +86,11 @@ function RecoderRemoteAccess({ workspaceId, onClose }: { workspaceId: string; on
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
     const [copied, setCopied] = useState("");
-    const [accessBase, setAccessBase] = useState(getRecoderBackendUrl());
+    const initialRemoteStatus = getApi()?.getRecoderRemoteStatus?.();
+    const [remoteStatus, setRemoteStatus] = useState<RecoderRemoteTunnelStatus>(
+        initialRemoteStatus ?? { phase: "disabled", mode: "off", backendUrl: null, publicUrl: null }
+    );
+    const [accessBase, setAccessBase] = useState(initialRemoteStatus?.publicUrl ?? getRecoderBackendUrl());
     const [receiverBase, setReceiverBase] = useState("https://recoder.xyz/remote");
 
     useEffect(() => {
@@ -87,6 +99,13 @@ function RecoderRemoteAccess({ workspaceId, onClose }: { workspaceId: string; on
         setError("");
         setCopied("");
     }, [workspaceId]);
+
+    useEffect(() => {
+        getApi()?.onRecoderRemoteStatus?.((status) => {
+            setRemoteStatus(status);
+            if (status.phase == "ready" && status.publicUrl) setAccessBase(status.publicUrl);
+        });
+    }, []);
 
     const refreshSnapshot = async (active: RemoteSession) => {
         setRefreshing(true);
@@ -156,7 +175,7 @@ function RecoderRemoteAccess({ workspaceId, onClose }: { workspaceId: string; on
             setCopied("Enter the receiver app URL first");
             return;
         }
-        const receiverUrl = `${receiver}/${encodeURIComponent(session.sessionId)}`;
+        const receiverUrl = receiverUrlFor(receiver, session.sessionId, base);
         const packet = JSON.stringify(
             {
                 receiver: receiverUrl,
@@ -181,7 +200,7 @@ function RecoderRemoteAccess({ workspaceId, onClose }: { workspaceId: string; on
             setCopied("Enter the receiver app URL first");
             return;
         }
-        const url = `${receiver}/${encodeURIComponent(session.sessionId)}`;
+        const url = receiverUrlFor(receiver, session.sessionId, accessBase);
         setCopied((await copyText(url)) ? "Receiver link copied" : "Clipboard unavailable");
     };
 
@@ -208,7 +227,9 @@ function RecoderRemoteAccess({ workspaceId, onClose }: { workspaceId: string; on
             <div className="flex items-center justify-between gap-3 px-3 py-2">
                 <div className="min-w-0">
                     <div className={SECTION_TITLE}>Remote access</div>
-                    <div className="text-xs text-meta">Continue this workspace from another signed-in Recoder client</div>
+                    <div className="text-xs text-meta">
+                        Continue this workspace from another signed-in Recoder client
+                    </div>
                 </div>
                 <button className={QUIET_BTN_XS} onClick={onClose} aria-label="Close remote access">
                     Close
@@ -226,7 +247,19 @@ function RecoderRemoteAccess({ workspaceId, onClose }: { workspaceId: string; on
                     />
                     {isLoopbackUrl(accessBase) && (
                         <span className="text-meta">
-                            Loopback works only on this computer. Enter the same backend&apos;s reachable URL before copying for another device.
+                            Loopback works only on this computer. Enter the same backend&apos;s reachable URL before
+                            copying for another device.
+                        </span>
+                    )}
+                    {remoteStatus.phase == "starting" && (
+                        <span className="text-meta">Provisioned tunnel is connecting to this desktop…</span>
+                    )}
+                    {remoteStatus.phase == "ready" && remoteStatus.publicUrl && (
+                        <span className="text-accent">Connected through {remoteStatus.publicUrl}</span>
+                    )}
+                    {remoteStatus.phase == "failed" && (
+                        <span className="text-error">
+                            Tunnel unavailable — {remoteStatus.reason || "connector exited"}
                         </span>
                     )}
                 </label>
@@ -258,7 +291,9 @@ function RecoderRemoteAccess({ workspaceId, onClose }: { workspaceId: string; on
                 ) : (
                     <div className="flex flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                            <span className="font-medium text-primary">Active until {expiresLabel(session.expiresAt)}</span>
+                            <span className="font-medium text-primary">
+                                Active until {expiresLabel(session.expiresAt)}
+                            </span>
                             <span className="text-secondary">{session.capabilities.join(" · ")}</span>
                             <span className={session.durable ? "text-accent" : "text-secondary"}>
                                 {session.durable ? "restart-survivable" : "available while this backend is running"}
@@ -289,14 +324,17 @@ function RecoderRemoteAccess({ workspaceId, onClose }: { workspaceId: string; on
                         {snapshot != null && (
                             <div className="text-xs text-secondary">
                                 {snapshot.total} live pane{snapshot.total == 1 ? "" : "s"} in scope
-                                {snapshot.degraded ? ` · degraded${snapshot.reason ? ` — ${snapshot.reason}` : ""}` : ""}
+                                {snapshot.degraded
+                                    ? ` · degraded${snapshot.reason ? ` — ${snapshot.reason}` : ""}`
+                                    : ""}
                             </div>
                         )}
                     </div>
                 )}
                 {error != "" && <div className="mt-2 text-xs text-error">{error}</div>}
                 <div className="mt-2 text-[11px] text-meta">
-                    The session id limits scope but does not bypass sign-in, ownership checks, policy, approvals, or audit.
+                    The session id limits scope but does not bypass sign-in, ownership checks, policy, approvals, or
+                    audit.
                 </div>
             </div>
         </section>

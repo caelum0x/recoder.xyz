@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
 import styles from './remote.module.css';
 
@@ -66,9 +66,13 @@ const LABELS: Record<AttentionState, string> = {
 
 function errorMessage(payload: unknown, fallback: string): string {
   if (payload && typeof payload === 'object') {
-    const value = payload as { error?: string | { message?: string }; message?: string };
+    const value = payload as {
+      error?: string | { message?: string };
+      message?: string;
+    };
     if (typeof value.error === 'string') return value.error;
-    if (value.error && typeof value.error.message === 'string') return value.error.message;
+    if (value.error && typeof value.error.message === 'string')
+      return value.error.message;
     if (typeof value.message === 'string') return value.message;
   }
   return fallback;
@@ -84,13 +88,18 @@ async function requestData<T>(url: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
-  const payload = await response.json().catch(() => null) as
-    | { data?: T; error?: unknown; message?: string }
-    | null;
+  const payload = (await response.json().catch(() => null)) as {
+    data?: T;
+    error?: unknown;
+    message?: string;
+  } | null;
   if (!response.ok) {
-    throw new Error(errorMessage(payload, `Request failed (${response.status})`));
+    throw new Error(
+      errorMessage(payload, `Request failed (${response.status})`)
+    );
   }
-  if (!payload?.data) throw new Error('Remote continuity returned an incomplete response.');
+  if (!payload?.data)
+    throw new Error('Remote continuity returned an incomplete response.');
   return payload.data;
 }
 
@@ -111,8 +120,17 @@ function formatMoment(value: string): string {
 export default function RemoteReceiverPage() {
   const params = useParams<{ sessionId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: identity, isPending: identityPending } = useSession();
   const sessionId = params.sessionId;
+  const apiOrigin = searchParams.get('api')?.trim() || '';
+  const remotePath = useCallback(
+    (suffix = '') => {
+      const path = `/api/remote/sessions/${encodeURIComponent(sessionId)}${suffix}`;
+      return apiOrigin ? `${path}?api=${encodeURIComponent(apiOrigin)}` : path;
+    },
+    [apiOrigin, sessionId]
+  );
   const [session, setSession] = useState<RemoteSession | null>(null);
   const [snapshot, setSnapshot] = useState<StatusSnapshot | null>(null);
   const [selectedWorkspace, setSelectedWorkspace] = useState('');
@@ -134,46 +152,51 @@ export default function RemoteReceiverPage() {
     }
   }, [identity, identityPending, router]);
 
-  const refreshSnapshot = useCallback(async (quiet = false) => {
-    if (!sessionId || ended) return;
-    if (!quiet) setRefreshing(true);
-    try {
-      const data = await requestData<{ snapshot: StatusSnapshot }>(
-        `/api/remote/sessions/${encodeURIComponent(sessionId)}/snapshot`,
-      );
-      setSnapshot(data.snapshot);
-      setUpdatedAt(new Date());
-      setError('');
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      if (!quiet) setRefreshing(false);
-    }
-  }, [ended, sessionId]);
+  const refreshSnapshot = useCallback(
+    async (quiet = false) => {
+      if (!sessionId || ended) return;
+      if (!quiet) setRefreshing(true);
+      try {
+        const data = await requestData<{ snapshot: StatusSnapshot }>(
+          remotePath('/snapshot')
+        );
+        setSnapshot(data.snapshot);
+        setUpdatedAt(new Date());
+        setError('');
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      } finally {
+        if (!quiet) setRefreshing(false);
+      }
+    },
+    [ended, remotePath, sessionId]
+  );
 
   useEffect(() => {
     if (identityPending || !identity || !sessionId) return;
     let cancelled = false;
     void Promise.all([
-      requestData<{ session: RemoteSession }>(
-        `/api/remote/sessions/${encodeURIComponent(sessionId)}`,
-      ),
-      requestData<{ snapshot: StatusSnapshot }>(
-        `/api/remote/sessions/${encodeURIComponent(sessionId)}/snapshot`,
-      ),
-    ]).then(([sessionData, snapshotData]) => {
-      if (cancelled) return;
-      setSession(sessionData.session);
-      setSnapshot(snapshotData.snapshot);
-      setUpdatedAt(new Date());
-      setError('');
-    }).catch((caught) => {
-      if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught));
-    }).finally(() => {
-      if (!cancelled) setLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, [identity, identityPending, sessionId]);
+      requestData<{ session: RemoteSession }>(remotePath()),
+      requestData<{ snapshot: StatusSnapshot }>(remotePath('/snapshot')),
+    ])
+      .then(([sessionData, snapshotData]) => {
+        if (cancelled) return;
+        setSession(sessionData.session);
+        setSnapshot(snapshotData.snapshot);
+        setUpdatedAt(new Date());
+        setError('');
+      })
+      .catch(caught => {
+        if (!cancelled)
+          setError(caught instanceof Error ? caught.message : String(caught));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [identity, identityPending, remotePath, sessionId]);
 
   useEffect(() => {
     if (!session || ended) return;
@@ -181,13 +204,12 @@ export default function RemoteReceiverPage() {
       setStreamState('unavailable');
       return;
     }
-    const source = new EventSource(
-      `/api/remote/sessions/${encodeURIComponent(sessionId)}/stream`,
-      { withCredentials: true },
-    );
+    const source = new EventSource(remotePath('/stream'), {
+      withCredentials: true,
+    });
     setStreamState('connecting');
     source.onopen = () => setStreamState('live');
-    source.onmessage = (event) => {
+    source.onmessage = event => {
       try {
         const frame = JSON.parse(event.data) as {
           type?: unknown;
@@ -195,16 +217,26 @@ export default function RemoteReceiverPage() {
           at?: unknown;
           reason?: unknown;
         };
-        if (frame.type === 'snapshot' && frame.snapshot && typeof frame.snapshot.total === 'number') {
+        if (
+          frame.type === 'snapshot' &&
+          frame.snapshot &&
+          typeof frame.snapshot.total === 'number'
+        ) {
           setSnapshot(frame.snapshot);
-          setUpdatedAt(typeof frame.at === 'string' ? new Date(frame.at) : new Date());
+          setUpdatedAt(
+            typeof frame.at === 'string' ? new Date(frame.at) : new Date()
+          );
           setStreamState('live');
           setError('');
           return;
         }
         if (frame.type === 'closed') {
           setStreamState('unavailable');
-          setError(typeof frame.reason === 'string' ? frame.reason : 'Remote stream closed.');
+          setError(
+            typeof frame.reason === 'string'
+              ? frame.reason
+              : 'Remote stream closed.'
+          );
           source.close();
         }
       } catch {
@@ -213,13 +245,19 @@ export default function RemoteReceiverPage() {
     };
     source.onerror = () => setStreamState('reconnecting');
     return () => source.close();
-  }, [ended, session, sessionId]);
+  }, [ended, remotePath, session, sessionId]);
 
   // A slow recovery path only while SSE is unavailable/reconnecting. The normal
   // product path is push-driven; this preserves truthful visibility on older
   // browsers and transient proxy failures without returning to rapid polling.
   useEffect(() => {
-    if (!session || ended || streamState === 'live' || streamState === 'connecting') return;
+    if (
+      !session ||
+      ended ||
+      streamState === 'live' ||
+      streamState === 'connecting'
+    )
+      return;
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') void refreshSnapshot(true);
     }, 15_000);
@@ -228,8 +266,8 @@ export default function RemoteReceiverPage() {
 
   const panes = useMemo(() => {
     if (!snapshot) return [];
-    return COLUMN_ORDER.flatMap((attention) =>
-      (snapshot.columns[attention] || []).map((cell) => ({ attention, ...cell })),
+    return COLUMN_ORDER.flatMap(attention =>
+      (snapshot.columns[attention] || []).map(cell => ({ attention, ...cell }))
     );
   }, [snapshot]);
 
@@ -238,7 +276,7 @@ export default function RemoteReceiverPage() {
       setSelectedWorkspace('');
       return;
     }
-    if (!panes.some((pane) => pane.workspaceId === selectedWorkspace)) {
+    if (!panes.some(pane => pane.workspaceId === selectedWorkspace)) {
       setSelectedWorkspace(panes[0].workspaceId);
     }
   }, [panes, selectedWorkspace]);
@@ -253,14 +291,22 @@ export default function RemoteReceiverPage() {
     setError('');
     try {
       const data = await requestData<{ result: SteerResult }>(
-        `/api/remote/sessions/${encodeURIComponent(sessionId)}/workspaces/${encodeURIComponent(selectedWorkspace)}/steer`,
-        { method: 'POST', body: JSON.stringify({ input: instruction.trim() }) },
+        remotePath(
+          `/workspaces/${encodeURIComponent(selectedWorkspace)}/steer`
+        ),
+        { method: 'POST', body: JSON.stringify({ input: instruction.trim() }) }
       );
       if (data.result.status === 'delivered') {
-        setOutcome(data.result.auditId ? `Delivered · audit ${shortId(data.result.auditId)}` : 'Delivered · audit unavailable');
+        setOutcome(
+          data.result.auditId
+            ? `Delivered · audit ${shortId(data.result.auditId)}`
+            : 'Delivered · audit unavailable'
+        );
         setInstruction('');
       } else if (data.result.status === 'needs_approval') {
-        setOutcome(`Approval ${shortId(data.result.requestId)} opened · input not delivered`);
+        setOutcome(
+          `Approval ${shortId(data.result.requestId)} opened · input not delivered`
+        );
       } else {
         setOutcome(`Refused · ${data.result.reason}`);
       }
@@ -277,10 +323,7 @@ export default function RemoteReceiverPage() {
     setEnding(true);
     setError('');
     try {
-      await requestData<{ revoked: true }>(
-        `/api/remote/sessions/${encodeURIComponent(sessionId)}`,
-        { method: 'DELETE' },
-      );
+      await requestData<{ revoked: true }>(remotePath(), { method: 'DELETE' });
       setEnded(true);
       setSession(null);
       setSnapshot(null);
@@ -292,13 +335,19 @@ export default function RemoteReceiverPage() {
   };
 
   if (identityPending || loading) {
-    return <div className={styles.loading}><span>Connecting to live work…</span></div>;
+    return (
+      <div className={styles.loading}>
+        <span>Connecting to live work…</span>
+      </div>
+    );
   }
 
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
-        <Link href="/" className={styles.wordmark}>REC/REMOTE</Link>
+        <Link href="/" className={styles.wordmark}>
+          REC/REMOTE
+        </Link>
         <div className={styles.identity}>
           <span className={styles.liveDot} aria-hidden="true" />
           {identity?.user.email || 'Signed in'}
@@ -307,12 +356,21 @@ export default function RemoteReceiverPage() {
 
       <main className={styles.main}>
         <section className={styles.hero}>
-          <div className={styles.kicker}>Remote continuity / {shortId(sessionId)}</div>
-          <div className={styles.count} aria-label={`${snapshot?.total || 0} live panes`}>
+          <div className={styles.kicker}>
+            Remote continuity / {shortId(sessionId)}
+          </div>
+          <div
+            className={styles.count}
+            aria-label={`${snapshot?.total || 0} live panes`}
+          >
             {snapshot?.total ?? '—'}
           </div>
           <div className={styles.heroCopy}>
-            <h1>Live panes.<br />One signed-in view.</h1>
+            <h1>
+              Live panes.
+              <br />
+              One signed-in view.
+            </h1>
             <p>
               {ended
                 ? 'This remote session has ended.'
@@ -323,18 +381,32 @@ export default function RemoteReceiverPage() {
           </div>
           <div className={styles.sessionMeta}>
             <span>{session?.durable ? 'DURABLE' : 'PROCESS-BOUND'}</span>
-            <span>{session ? session.capabilities.join(' + ').toUpperCase() : 'NO ACCESS'}</span>
-            <span>{session ? `EXPIRES ${formatMoment(session.expiresAt)}` : 'ENDED'}</span>
+            <span>
+              {session
+                ? session.capabilities.join(' + ').toUpperCase()
+                : 'NO ACCESS'}
+            </span>
+            <span>
+              {session ? `EXPIRES ${formatMoment(session.expiresAt)}` : 'ENDED'}
+            </span>
           </div>
         </section>
 
-        {error && <div className={styles.error} role="alert">{error}</div>}
+        {error && (
+          <div className={styles.error} role="alert">
+            {error}
+          </div>
+        )}
 
         {!ended && snapshot && (
           <section className={styles.board} aria-label="Live agent panes">
             <div className={styles.sectionHead}>
               <span>01 / STATUS BOARD</span>
-              <button type="button" onClick={() => void refreshSnapshot()} disabled={refreshing}>
+              <button
+                type="button"
+                onClick={() => void refreshSnapshot()}
+                disabled={refreshing}
+              >
                 {refreshing ? 'REFRESHING' : 'REFRESH NOW'}
               </button>
             </div>
@@ -342,7 +414,10 @@ export default function RemoteReceiverPage() {
             {panes.length === 0 ? (
               <div className={styles.empty}>
                 <strong>No live panes in scope.</strong>
-                <span>The receiver is connected and will update when an agent pane appears.</span>
+                <span>
+                  The receiver is connected and will update when an agent pane
+                  appears.
+                </span>
               </div>
             ) : (
               <div className={styles.paneGrid}>
@@ -354,12 +429,20 @@ export default function RemoteReceiverPage() {
                     onClick={() => setSelectedWorkspace(pane.workspaceId)}
                     aria-pressed={selectedWorkspace === pane.workspaceId}
                   >
-                    <span className={styles.paneNumber}>{String(index + 1).padStart(2, '0')}</span>
+                    <span className={styles.paneNumber}>
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
                     <span className={styles.paneBody}>
-                      <span className={styles.paneState}>{LABELS[pane.attention]}</span>
+                      <span className={styles.paneState}>
+                        {LABELS[pane.attention]}
+                      </span>
                       <strong>{shortId(pane.workspaceId)}</strong>
-                      <span>{pane.agentKind} / {pane.nativeStatus}</span>
-                      {pane.taskGroup && <span>group {shortId(pane.taskGroup)}</span>}
+                      <span>
+                        {pane.agentKind} / {pane.nativeStatus}
+                      </span>
+                      {pane.taskGroup && (
+                        <span>group {shortId(pane.taskGroup)}</span>
+                      )}
                     </span>
                   </button>
                 ))}
@@ -367,7 +450,11 @@ export default function RemoteReceiverPage() {
             )}
 
             <div className={styles.boardFoot}>
-              <span>{updatedAt ? `UPDATED ${formatMoment(updatedAt.toISOString())}` : 'NOT UPDATED'}</span>
+              <span>
+                {updatedAt
+                  ? `UPDATED ${formatMoment(updatedAt.toISOString())}`
+                  : 'NOT UPDATED'}
+              </span>
               <span>
                 {streamState === 'live'
                   ? 'LIVE STREAM'
@@ -391,7 +478,7 @@ export default function RemoteReceiverPage() {
                 <textarea
                   id="remote-instruction"
                   value={instruction}
-                  onChange={(event) => setInstruction(event.target.value)}
+                  onChange={event => setInstruction(event.target.value)}
                   placeholder="Tell this agent what to do next"
                   rows={4}
                 />
@@ -400,14 +487,25 @@ export default function RemoteReceiverPage() {
                 {sending ? 'CHECKING POLICY…' : 'SEND TO PANE →'}
               </button>
             </form>
-            {outcome && <div className={styles.outcome} role="status">{outcome}</div>}
+            {outcome && (
+              <div className={styles.outcome} role="status">
+                {outcome}
+              </div>
+            )}
           </section>
         )}
 
         <footer className={styles.footer}>
-          <p>The session ID limits scope. Sign-in, ownership, policy, approvals, and audit still apply.</p>
+          <p>
+            The session ID limits scope. Sign-in, ownership, policy, approvals,
+            and audit still apply.
+          </p>
           {!ended && (
-            <button type="button" onClick={() => void endSession()} disabled={ending}>
+            <button
+              type="button"
+              onClick={() => void endSession()}
+              disabled={ending}
+            >
               {ending ? 'ENDING…' : 'END REMOTE SESSION'}
             </button>
           )}
