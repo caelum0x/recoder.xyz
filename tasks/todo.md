@@ -13,7 +13,7 @@ artifact (test / script / live check). Do not fake done.
 
 ## Track A — Go-live gates (OWNER-gated)
 - [ ] **Prod website deploy** behind shipped positioning + cli-auth — `recoder-qtac` (approval-gated).
-- [ ] **Canonical trunk** — `recoder-mhyt` (P0): promote `feat/enterprise-s0-p0` or hand-drive; no repeatable release without it.
+- [x] **Canonical trunk** — `recoder-mhyt`: reconciled release line fast-forwarded to `main` at `ffbda52cb` on 2026-08-31.
 - [ ] **Billing cutover to Creem** — `recoder-t24j` (C6): wire approved key + one enforcing webhook path; rotate after.
 - [ ] **Free-tier inference policy** decision — `recoder-bb1n` `[OWNER]`.
 - [x] **Prod-box integrity resolution** — `recoder-5iqy`: v3 monitor glob identified as root cause, v4 corrected, coreutils restored, and `dpkg -V` clean; bead closed 2026-08-17.
