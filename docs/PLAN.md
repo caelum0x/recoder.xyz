@@ -114,7 +114,8 @@ credentials/authority; none is a code gap.
    convergence positioning + cli-auth identity. Approval-gated deploy.
 2. ~~**Canonical trunk** (bd `recoder-mhyt`)~~ — **product-complete
    2026-08-31**. The reconciled release line was fast-forwarded to `main`; local
-   and `origin/main` resolve to `ffbda52cb`. Release only from this canonical line.
+   and `origin/main` contain product commit `ffbda52cb`. Release only from this
+   canonical line.
 3. **Billing cutover to Creem** (bd `recoder-t24j`, C6) — wire the approved Creem
    key + one enforcing webhook path; rotate after. Also decide the free-tier
    inference policy (bd `recoder-bb1n`, `[OWNER]`).

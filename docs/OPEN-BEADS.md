@@ -19,8 +19,8 @@ Resolved/advanced this session (see each bead's notes for evidence + commits):
   `recoder-miner-monitor.sh` v3 glob friendly-fire, not host compromise. v4 uses
   dirname-based matching; coreutils was restored and `dpkg -V` was clean.
 - `recoder-mhyt` **product-complete 2026-08-31** — the reconciled 44-commit
-  release line was fast-forwarded to `main`; local and `origin/main` both resolve
-  to `ffbda52cb`.
+  release line was fast-forwarded to `main`; local and `origin/main` both contain
+  product commit `ffbda52cb`.
 - `recoder-vbg2` **closed** — the permissive synthetic swarm-unblock policy actor is
   gone; replaced with a deny-biased actor (commit `8b76edf6`).
 - `recoder-trk0` **product-complete 2026-08-30** — the auto-unblock gate remains
