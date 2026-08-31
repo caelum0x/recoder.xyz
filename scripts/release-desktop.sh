@@ -77,7 +77,7 @@ app_version() { node -e "console.log(require('./$APP_DIR/package.json').version)
 
 # ── notarize creds present? (mirrors the env-gate in electron-builder.config.cjs)
 notarize_creds_present() {
-  [[ -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_KEY_ID:-}" && -n "${APPLE_API_ISSUER:-}" ]] && return 0
+  [[ -r "${APPLE_API_KEY:-}" && -n "${APPLE_API_KEY_ID:-}" && -n "${APPLE_API_ISSUER:-}" ]] && return 0
   [[ -n "${APPLE_ID:-}" && -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]] && return 0
   return 1
 }
