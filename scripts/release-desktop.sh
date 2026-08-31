@@ -53,6 +53,22 @@ DESKTOP_DIR="apps/desktop"
 APP_DIR="$DESKTOP_DIR/app"
 CONFIG="$APP_DIR/electron-builder.config.cjs"
 ARCH="${RECODER_MAC_ARCH:-arm64}"
+GENERATED_BACKEND_RUNTIME=""
+
+cleanup_generated_backend_runtime() {
+  [[ -n "$GENERATED_BACKEND_RUNTIME" ]] || return 0
+  local temp_root="${TMPDIR:-/tmp}"
+  temp_root="${temp_root%/}"
+  case "$GENERATED_BACKEND_RUNTIME" in
+    "$temp_root"/recoder-backend-runtime.*)
+      [[ -d "$GENERATED_BACKEND_RUNTIME" ]] && find "$GENERATED_BACKEND_RUNTIME" -depth -delete
+      ;;
+    *)
+      echo "Refusing to clean unexpected generated runtime path: $GENERATED_BACKEND_RUNTIME" >&2
+      ;;
+  esac
+}
+trap cleanup_generated_backend_runtime EXIT
 
 MODE="${1:-dry-run}"; shift || true
 BUMP=""
@@ -127,7 +143,7 @@ cmd_dry_run() {
 
   for s in check-desktop-release-readiness.sh sign-desktop-inside-out.sh \
            publish-desktop-release-local.sh verify-desktop-release.sh \
-           set-desktop-release-secrets.sh; do
+           set-desktop-release-secrets.sh prepare-desktop-backend-runtime.sh; do
     if [[ -f "scripts/$s" ]]; then
       if bash -n "scripts/$s" 2>/dev/null; then pass "script OK (bash -n): $s"; else fail "syntax error: $s"; fi
     else
@@ -148,7 +164,7 @@ cmd_dry_run() {
   if [[ -n "${RECODER_BACKEND_NODE_MODULES:-}" ]]; then
     pass "RECODER_BACKEND_NODE_MODULES set (self-contained backend for codesign)"
   else
-    info "RECODER_BACKEND_NODE_MODULES unset — required for a SIGNED build (source pnpm symlinks dangle in the bundle). See RELEASE.md."
+    pass "RECODER_BACKEND_NODE_MODULES unset — release will generate and Electron-verify a self-contained runtime"
   fi
 
   step "Summary"
@@ -164,12 +180,24 @@ cmd_dry_run() {
 cmd_build() {
   step "Pack desktop app (unsigned) via electron-builder"
   command -v task >/dev/null 2>&1 || { echo "Task not installed (https://taskfile.dev). Required to build." >&2; exit 1; }
+  if [[ -z "${RECODER_BACKEND_NODE_MODULES:-}" ]]; then
+    local temp_root="${TMPDIR:-/tmp}"
+    temp_root="${temp_root%/}"
+    GENERATED_BACKEND_RUNTIME="$(mktemp -d "$temp_root/recoder-backend-runtime.XXXXXX")"
+    info "preparing a self-contained Electron-native backend runtime…"
+    bash scripts/prepare-desktop-backend-runtime.sh "$GENERATED_BACKEND_RUNTIME" >/dev/null
+    export RECODER_BACKEND_NODE_MODULES="$GENERATED_BACKEND_RUNTIME/node_modules"
+  else
+    info "verifying the supplied backend runtime against Electron…"
+    bash scripts/prepare-desktop-backend-runtime.sh --verify "$RECODER_BACKEND_NODE_MODULES"
+  fi
   info "building engines/server/frontend + packaging (this is heavy)…"
   ( cd "$DESKTOP_DIR" && \
     env -u APPLE_API_KEY -u APPLE_API_KEY_ID -u APPLE_API_ISSUER \
         -u APPLE_ID -u APPLE_APP_SPECIFIC_PASSWORD -u APPLE_TEAM_ID \
         -u CSC_LINK -u CSC_KEY_PASSWORD \
         RECODER_MAC_ARCH="$ARCH" \
+        RECODER_REUSE_NODE_MODULES=1 \
         task package -- --mac --"$ARCH" )
   local app="$APP_DIR/make/mac-$ARCH/Recoder.app"
   local license_evidence="$APP_DIR/make/license-boundary-darwin-$ARCH.json"

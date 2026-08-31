@@ -102,7 +102,7 @@ For a local release, set these directly instead:
 | Env var | Purpose |
 |---|---|
 | `RECODER_SIGN_ID` | Developer ID Application identity name in the keychain (defaults to the owner's identity; override for a different signer) |
-| `RECODER_BACKEND_NODE_MODULES` | path to a **self-contained** backend `node_modules` (via `pnpm deploy --prod`) so the bundle's symlinks resolve inside the `.app` — **required** for a signed build |
+| `RECODER_BACKEND_NODE_MODULES` | optional path to a prepared backend `node_modules`; the release command creates one when unset and always verifies contained symlinks plus the Electron native-addon ABI before packaging |
 | `RECODER_MAC_ARCH` | `arm64` (default) / `x64` / `universal` — only change once cross-built natives exist (runbook §1b) |
 
 ### Provision remote Loom transport
