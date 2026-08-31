@@ -8,13 +8,12 @@
  * against that same backend authority instead of the website's own local
  * Better Auth engine + direct Prisma reads.
  *
- * SAFETY: this is strictly ADDITIVE and OFF by default. It is gated behind
- * `RECODER_AUTH_BACKEND_SEAM`; when the flag is unset the function returns
- * `null` immediately and callers keep their existing local behavior byte-for-
- * byte. Even when enabled, a POSITIVE backend session is used, but a negative
- * or unreachable backend returns `null` and the caller FALLS BACK to the local
- * path — so a backend blip can never lock users out. Full cutover (making the
- * backend authoritative and deleting the compat bridge) is a later runbook step.
+ * SAFETY: this is OFF by default. `RECODER_AUTH_BACKEND_SEAM=1` is the staged
+ * migration mode: a positive backend session wins while a negative/unreachable
+ * backend falls back to the local compatibility path. Production must use
+ * `RECODER_AUTH_BACKEND_SEAM=strict`: the backend is then authoritative and a
+ * rejection or outage fails closed instead of resurrecting a locally accepted
+ * session.
  */
 import { logger } from '@/lib/logger';
 
@@ -28,6 +27,7 @@ export interface BackendSeamUser {
 
 export interface BackendSeamSession {
   user: BackendSeamUser;
+  sessionId: string;
   /** ISO-8601 session expiry. */
   expiresAt: string;
 }
@@ -44,7 +44,13 @@ function backendUrl(env: NodeJS.ProcessEnv): string {
 /** Whether the backend seam read is enabled for this deployment. */
 export function isBackendSeamEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const flag = (env.RECODER_AUTH_BACKEND_SEAM || '').toLowerCase();
-  return flag === '1' || flag === 'true' || flag === 'on';
+  return flag === '1' || flag === 'true' || flag === 'on' || flag === 'strict' || flag === 'required';
+}
+
+/** Production authority mode: never fall back after consulting the backend. */
+export function isBackendSeamStrict(env: NodeJS.ProcessEnv = process.env): boolean {
+  const flag = (env.RECODER_AUTH_BACKEND_SEAM || '').toLowerCase();
+  return flag === 'strict' || flag === 'required';
 }
 
 /**
@@ -60,7 +66,8 @@ function parseGetSessionBody(body: unknown): BackendSeamSession | null {
 
   const id = typeof user.id === 'string' ? user.id : null;
   const email = typeof user.email === 'string' ? user.email : null;
-  if (!id || !email) return null;
+  const sessionId = typeof session?.id === 'string' ? session.id : null;
+  if (!id || !email || !sessionId) return null;
 
   const expiresRaw = session?.expiresAt ?? session?.expires;
   let expiresAt: string;
@@ -75,6 +82,7 @@ function parseGetSessionBody(body: unknown): BackendSeamSession | null {
   }
 
   return {
+    sessionId,
     user: {
       id,
       email,
@@ -131,10 +139,16 @@ export async function fetchBackendSession(
     }
     return parseGetSessionBody(body);
   } catch (error) {
-    // Unreachable / timeout / abort — degrade to the local path truthfully.
-    logger.warn('Backend auth seam read failed; falling back to local session', {
-      error: String(error),
-    });
+    // Unreachable / timeout / abort. The caller chooses staged fallback versus
+    // strict fail-closed behavior; keep the production log truthful.
+    logger.warn(
+      isBackendSeamStrict(env)
+        ? 'Backend auth seam read failed; strict mode will fail closed'
+        : 'Backend auth seam read failed; staged mode will fall back to local session',
+      {
+        error: String(error),
+      },
+    );
     return null;
   }
 }

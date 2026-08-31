@@ -7,12 +7,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
+import { getSession } from '@/lib/auth-helpers';
 import { assertAuthSessionGetResponse } from '@/lib/contracts/auth-session-contracts';
 import { logger } from '@/lib/logger';
-import { extractSessionTokenFromHeader } from '@recoder/auth';
-import { findFallbackSessionByToken } from '@/lib/session-fallback';
 
 function getOptionalStringField(value: unknown, key: string): string | undefined {
   if (!value || typeof value !== 'object') return undefined;
@@ -23,8 +20,9 @@ function getOptionalStringField(value: unknown, key: string): string | undefined
 
 export async function GET(request: NextRequest) {
   try {
-    // Use Better Auth to get session
-    const reqHeaders = await headers();
+    // Resolve through the shared authority seam. In production strict mode this
+    // fails closed and never resurrects a backend-rejected local session.
+    const reqHeaders = request.headers;
     const cookieVal = reqHeaders.get('cookie') || 'NONE';
     const hasSessionCookie = cookieVal.includes('recoder.session_token');
     logger.info('Session check starting', {
@@ -35,46 +33,9 @@ export async function GET(request: NextRequest) {
       origin: reqHeaders.get('origin') || 'NONE',
     });
 
-    let session = await auth.api.getSession({
-      headers: reqHeaders
-    });
+    const session = await getSession(request);
 
-    const sessionToken = cookieVal ? extractSessionTokenFromHeader(cookieVal) : null;
-
-    if (!session?.user && sessionToken) {
-      try {
-        const fallbackSession = await findFallbackSessionByToken(sessionToken);
-
-        if (fallbackSession?.user) {
-          logger.info('Session verified via DB fallback', {
-            route: 'api/auth/session',
-            email: fallbackSession.user.email,
-          });
-
-          return NextResponse.json(assertAuthSessionGetResponse({
-            user: {
-              id: fallbackSession.user.id,
-              email: fallbackSession.user.email,
-              name: fallbackSession.user.name,
-              image: fallbackSession.user.image,
-              subscriptionPlan: 'free',
-              subscriptionStatus: 'active',
-            },
-            session: {
-              id: fallbackSession.sessionId,
-              expiresAt: fallbackSession.expiresAt.toISOString(),
-            }
-          }));
-        }
-      } catch (fallbackError) {
-        logger.warn('Session DB fallback failed', {
-          route: 'api/auth/session',
-          error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
-        });
-      }
-    }
-
-    if (!session?.user) {
+    if (!session?.user || !session.session?.id) {
       logger.info('No session found', { route: 'api/auth/session', hasCookie: hasSessionCookie });
       return NextResponse.json(assertAuthSessionGetResponse({ user: null }), { status: 200 });
     }
@@ -92,7 +53,7 @@ export async function GET(request: NextRequest) {
       },
       session: {
         id: session.session.id,
-        expiresAt: session.session.expiresAt,
+        expiresAt: session.session.expiresAt || session.expires,
       }
     }));
 
