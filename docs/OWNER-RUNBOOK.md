@@ -2,6 +2,35 @@
 
 Everything in this repo that can be built and verified **without owner credentials or a signed release** is done and pushed on `feat/enterprise-s0-p0`. This file is the single list of what genuinely needs your hands, each with exact steps. Nothing here was faked or half-claimed in code.
 
+## 2026-08-31 private-beta delta
+
+- Canonical development is now on `main`; the former 284-modified/96-untracked
+  working tree was reconciled into commits. A final hosted-auth commit may still
+  need `git push origin main` when GitHub is reachable.
+- Production auth supports `RECODER_AUTH_BACKEND_SEAM=strict`; a negative or
+  unavailable backend authority cannot resurrect a local session.
+- The arm64 installed app now contains the OpenZiti client and automatically
+  starts the remote Loom dial bridge when this command installs an enrolled dial
+  identity:
+
+  ```bash
+  scripts/provision-desktop-loom-ziti.sh /absolute/path/client.json loom-control
+  ```
+
+  On the Loom host, configure `loom-control` with bind/dial policies and a
+  `host.v1` target of `127.0.0.1:19020`, then run:
+
+  ```bash
+  node scripts/loom-ziti-bridge.mjs host \
+    --identity /absolute/path/host.json --service loom-control \
+    --loom-socket /absolute/path/loom.sock --listen-port 19020 \
+    --ziti-bin /absolute/path/ziti
+  ```
+
+  This leaves Loom on a Unix socket and exposes only a loopback hop to the host
+  tunneler. The remaining proof needs the two enrolled identities and live
+  controller service; do not reuse an unrelated Ziti identity.
+
 ## Summary of what shipped (2026-07-31)
 - **Backend:** isolation-correct + all 8 IDOR domains audited/fixed; org auto-provisioning + principal.orgId landed; A2A ed25519 external ingress enforced; dunning-grace + overage CTA code-landed; tsc 0, 3,076 tests green.
 - **Desktop:** agent-install + needs-input notification wired; git-init affordance live; Preact cockpit SPA deleted (Wave-only); real name/plan identity on the device-flow; **arm64 dmg (v0.16.1) SIGNED + NOTARIZED + stapled + PUBLISHED** (clean-install, no Gatekeeper warning) to https://dl.recoder.xyz/releases/ — the only remaining owner step is a human end-to-end boot of the installed dmg.

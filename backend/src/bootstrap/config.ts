@@ -89,6 +89,7 @@ const envSchema = z.object({
   CONDUCTOR_WORKTREE_ROOT: z.string().optional(),
   CONDUCTOR_TMUX_CONTROL_MODE: z.string().optional(),
   CONDUCTOR_DESKTOP_SINGLE_TENANT: z.string().optional(),
+  CONDUCTOR_REMOTE_LOOM_SOCKET_PATH: z.string().optional(),
   CONDUCTOR_MAX_CONCURRENT: z.coerce.number().int().positive().max(10_000).optional(),
   CONDUCTOR_MAX_CONCURRENT_PER_USER: z.coerce.number().int().positive().max(10_000).optional(),
   CONDUCTOR_MAX_TMUX_SESSIONS: z.coerce.number().int().positive().max(100_000).optional(),
@@ -512,6 +513,7 @@ function buildConfig(env: ParsedEnv, rawEnv: EnvSource): AppConfig {
     desktopSingleTenant: asBool(env.CONDUCTOR_DESKTOP_SINGLE_TENANT, false),
     // Absent ⇒ null ⇒ evidence packs export unsigned (loadEvidenceSigningKey no-ops).
     evidenceSigningKey: env.EVIDENCE_SIGNING_KEY ?? null,
+    remoteLoomSocketPath: opt(env.CONDUCTOR_REMOTE_LOOM_SOCKET_PATH) ?? null,
     caps: {
       maxConcurrentWorkspaces: env.CONDUCTOR_MAX_CONCURRENT ?? 10,
       maxConcurrentPerUser: env.CONDUCTOR_MAX_CONCURRENT_PER_USER ?? 5,

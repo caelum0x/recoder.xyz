@@ -34,11 +34,13 @@ import {
 import { CONNECTOR_SECRET_ENV_NAMES, readByokSecretsFromStore } from "./emain-backend-runtime-env";
 import { getElectronAppBasePath, getWaveConfigDir } from "./emain-platform";
 import { RemoteTunnelController, RemoteTunnelStatus } from "./emain-remote-tunnel";
+import { RemoteLoomController } from "./emain-remote-loom";
 import { broadcastRecoderBackendUrl, broadcastRecoderRemoteStatus } from "./emain-util";
 
 let supervisor: BackendSupervisor = null;
 let plannedPort: number = null;
 let remoteTunnel: RemoteTunnelController = null;
+let remoteLoom: RemoteLoomController = null;
 
 function getRepoRoot(): string {
     // dev: getElectronAppBasePath() -> <repo>/apps/desktop/app/dist
@@ -88,6 +90,16 @@ export function getPlannedGatewayEndpoint(): string {
  * failures degrade truthfully into getBackendStatus() instead of throwing.
  */
 export async function startBackendSupervisor(): Promise<void> {
+    if (remoteLoom == null) {
+        remoteLoom = new RemoteLoomController({
+            isPackaged: app.isPackaged,
+            resourcesPath: process.resourcesPath,
+            repoRoot: getRepoRoot(),
+            userDataDir: app.getPath("userData"),
+            log: (level, message) => console.log(`[remote-loom:${level}] ${message}`),
+        });
+    }
+    const remoteLoomSocketPath = remoteLoom.start() ?? undefined;
     if (remoteTunnel == null) {
         remoteTunnel = new RemoteTunnelController({
             isPackaged: app.isPackaged,
@@ -104,6 +116,7 @@ export async function startBackendSupervisor(): Promise<void> {
             isPackaged: app.isPackaged,
             resourcesPath: process.resourcesPath,
             preferredPort: plannedPort ?? undefined,
+            remoteLoomSocketPath,
             // BYOK provider keys for the native openfang/tensorzero runtimes:
             // read from the SAME encrypted secret store the terminal's secrets
             // UI writes (<configDir>/secrets.enc, safeStorage ciphertext). A
@@ -197,4 +210,5 @@ export function getRemoteTunnelStatus(): RemoteTunnelStatus {
 export async function stopBackend(): Promise<void> {
     await remoteTunnel?.stop();
     await supervisor?.stop();
+    await remoteLoom?.stop();
 }

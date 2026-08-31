@@ -377,6 +377,8 @@ export function assembleBackendEnv(opts: {
     byokSecrets?: Record<string, string>;
     /** Connector addressing secrets (mem0/colbert/qdrant URLs) from the store (fill-only). */
     connectorSecrets?: Record<string, string>;
+    /** Private Unix socket exposed by the app-owned OpenZiti Loom bridge. */
+    remoteLoomSocketPath?: string;
 }): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
         ...opts.baseEnv,
@@ -418,6 +420,9 @@ export function assembleBackendEnv(opts: {
         CONDUCTOR_TMUX_BIN: opts.tmuxBin,
         RECODER_TMUX_BUILD_PATH: opts.tmuxBin,
         TMUX_BIN: opts.tmuxBin,
+        ...(opts.remoteLoomSocketPath
+            ? { CONDUCTOR_REMOTE_LOOM_SOCKET_PATH: opts.remoteLoomSocketPath }
+            : {}),
     };
     // Shared-tmux-server invariant (durable-shell unify §A1b): TMUX_TMPDIR must
     // reach the backend UNCHANGED so the conductor's default-socket mirror
@@ -992,6 +997,7 @@ export interface BackendSupervisorOptions {
     isPackaged?: boolean;
     resourcesPath?: string;
     preferredPort?: number;
+    remoteLoomSocketPath?: string;
     // Injectable seams (tests pass fakes):
     spawn?: SpawnFn;
     fetchImpl?: typeof fetch;
@@ -1033,6 +1039,7 @@ export class BackendSupervisor {
     isPackaged: boolean;
     resourcesPath?: string;
     preferredPort?: number;
+    remoteLoomSocketPath?: string;
 
     healthTimeoutMs: number;
     healthIntervalMs: number;
@@ -1089,6 +1096,7 @@ export class BackendSupervisor {
         this.isPackaged = Boolean(options.isPackaged);
         this.resourcesPath = options.resourcesPath;
         this.preferredPort = options.preferredPort;
+        this.remoteLoomSocketPath = options.remoteLoomSocketPath;
 
         this._spawn = options.spawn || (childProcess.spawn as unknown as SpawnFn);
         this._fetch = options.fetchImpl || globalThis.fetch;
@@ -1290,6 +1298,7 @@ export class BackendSupervisor {
                 vector: vectorEnv,
                 byokSecrets,
                 connectorSecrets,
+                remoteLoomSocketPath: this.remoteLoomSocketPath,
             });
 
             this.port = port;

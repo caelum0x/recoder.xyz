@@ -90,6 +90,7 @@ import {
   NEEDS_YOU_SUBSCRIPTION,
 } from '../domains/conductor/attention/needs-you-loom-stream.js';
 import { createNeedsYouLoomResolver } from '../domains/conductor/attention/needs-you-loom-resolver.js';
+import { StatusBoardService } from '../domains/conductor/attention/status-board.service.js';
 import {
   createLoomDaemon,
   defaultRecoderLoomSocketPath,
@@ -1190,9 +1191,33 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // statusBoardSnapshot) are bound by the composer itself, so identity + ownership
   // are re-verified on every call. Absent seams degrade truthfully to
   // SERVICE_UNAVAILABLE — this wiring binds every one to the concrete system.
+  const remoteLoomSocketPath = config.conductor.remoteLoomSocketPath?.trim() || null;
   const loomRemoteAttachClient = new LoomSocketClient({
-    socketPath: loomDaemon.socketPath,
+    socketPath: remoteLoomSocketPath ?? loomDaemon.socketPath,
   });
+  const remoteLoomStatusBoard = remoteLoomSocketPath
+    ? new StatusBoardService({
+        loadPanes: async () => {
+          const res = await loomRemoteAttachClient.call('session.snapshot', {});
+          if (res.type !== 'session_snapshot') {
+            throw new Error(
+              `remote loom session.snapshot returned unexpected result type: ${res.type}`
+            );
+          }
+          const snapshot = (
+            res as Extract<LoomResult, { type: 'session_snapshot' }>
+          ).snapshot;
+          return snapshot.panes.map(pane => ({
+            paneId: pane.pane_id,
+            workspaceId: pane.workspace_id,
+            nativeStatus: pane.agent_status,
+          }));
+        },
+        getWorkspace: id =>
+          conductorRef ? conductorRef.getWorkspace(id) : Promise.resolve(null),
+        logger: childLogger('conductor-remote-loom-status'),
+      })
+    : null;
   const conductorRemoteAttach = createRemoteAttachDeps({
     loom: loomRemoteAttachClient,
     getWorkspace: id =>
@@ -1205,6 +1230,17 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     audit: governance.audit(),
     sessionStore: createRemoteAttachSessionStore(persistence.kvStore()),
     logger: childLogger('conductor-remote-attach'),
+    ...(remoteLoomStatusBoard
+      ? {
+          readStatusBoard: (scope, principal) => {
+            const scopes = principal.scopes ?? [];
+            const privileged = scopes.includes('admin') || scopes.includes('internal');
+            return remoteLoomStatusBoard.snapshot(
+              privileged ? scope : { ...scope, owner: principal.userId }
+            );
+          },
+        }
+      : {}),
   });
   // LIVE Needs-You queue (LOOM-ROADMAP.md build-now #4): subscribe ONCE to the Loom
   // `pane.agent_status_changed` stream over the SAME daemon socket (a dedicated CLIENT,

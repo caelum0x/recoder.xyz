@@ -1,11 +1,10 @@
 # Loom Remote Attach over Ziti — Design (herdr pillar #5)
 
-> Status: updated 2026-08-30. Owner-approved host-to-host transport: **on-box OpenZiti** (zero-trust
-> overlay, no public port). This is the design + wiring plan for "run agents on a
-> rented box, reattach from anything with a keyboard." It is a DESIGN, not shipped
-> code: the real dialer needs a provisioned ziti identity to build AND verify, and
-> we do not ship unverifiable network code. Everything below binds to seams that
-> ALREADY exist so the implementation is additive.
+> Status: source-complete 2026-08-31; live provisioning pending. The installed arm64
+> app now ships the OpenZiti binary, starts a private Unix-socket dial bridge from an
+> enrolled identity, and routes governed remote monitor + steer through that socket.
+> The host bridge binds only loopback before Ziti carries the stream. A real two-host
+> proof still requires the operator-owned `loom-control` service and dial/bind identities.
 
 ## 1. Where we are (verified 2026-08-13)
 
@@ -24,11 +23,10 @@ herdr pillar #5 is "where do agents run while you sleep" — a remote box. In Re
   edges through the session's still-owned scope rather than polling the UI.
   Canonical Better Auth sign-out revokes every remote session for the owner before
   invalidating the credential, so a second client cannot outlive global sign-out.
-- **Remaining host-to-host gap:** the `LoomClientPort` it drives is the **local Unix-domain socket**
-  (`loomDaemon.socketPath`). "Remote" today means a different *client on the same
-  host*, not a remote box. Ziti is still required when the agents themselves run
-  on another host; the client-facing transport, governance, ownership, policy,
-  approval, audit, and durable session state are already enforced.
+- The local path still uses `loomDaemon.socketPath`. When
+  `CONDUCTOR_REMOTE_LOOM_SOCKET_PATH` is present, remote attach uses that distinct
+  bridge socket for both `session.snapshot` and `agent.prompt`; local launches and
+  local status remain on the app-owned Loom daemon.
 
 Because `createRemoteAttachDeps` takes `loom: LoomClientPort` as an injected seam,
 **no refactor is required**: remote reach is a matter of supplying a ziti-backed
@@ -55,14 +53,11 @@ createRemoteAttachDeps({ loom, ... })  ────────┤
                                                              service: 'loom-control' })
 ```
 
-`LoomZitiClient` implements the SAME `LoomClientPort.call(verb, payload)` contract
-as `LoomSocketClient`, but its underlying stream is a ziti-dialed connection to the
-`loom-control` service on the target box instead of a local `net.connect(socketPath)`.
-The NDJSON framing, protocol-20 handshake, and request/response correlation are
-IDENTICAL and already implemented in `packages/agent-runtimes/src/adapters/loom/` —
-only the byte transport changes. Extract the socket plumbing behind a
-`LoomTransport` interface (`connect(): Duplex`) so `LoomSocketClient` and
-`LoomZitiClient` share the framing layer.
+The shipped bridge deliberately preserves `LoomSocketClient` unchanged: on the dial
+host, `scripts/loom-ziti-bridge.mjs dial` owns a mode-0600 Unix socket and opens one
+SDK-backed `ziti demo zcat` stream per Loom connection. On the Loom host, the same
+script's `host` mode binds a loopback-only TCP hop into the Loom Unix socket while
+`ziti tunnel host` binds the service. No Loom control port is public.
 
 ## 4. Identity & provisioning (the infra gate)
 
@@ -74,11 +69,29 @@ Required before implementation can be BUILT + VERIFIED:
 2. A ziti service `loom-control` whose terminator is the loom daemon's socket on the
    host (a ziti tunneler/host config binding the unix socket), and a service policy
    granting the backend identity `dial`, the host identity `bind`.
-3. The `@openziti/ziti-sdk-nodejs` (or the ziti-hosted tunneler + a local proxy) —
-   pick at implementation time based on which builds cleanly in the backend image.
+3. The arm64 OpenZiti CLI shipped in the app. The bridge uses its Go SDK-backed
+   `zcat` dialer and host tunneler; no Node native addon is required.
 
-Until (1)–(3) exist, `LoomZitiClient` cannot be exercised; shipping it blind would
-be an unverifiable stub, which we do not do.
+Provision the installed client after the controller objects exist:
+
+```bash
+scripts/provision-desktop-loom-ziti.sh /absolute/path/client.json loom-control
+```
+
+Run the host endpoint with a `host.v1` service configuration pointing at the same
+loopback port:
+
+```bash
+node scripts/loom-ziti-bridge.mjs host \
+  --identity /absolute/path/host.json \
+  --service loom-control \
+  --loom-socket /absolute/path/loom.sock \
+  --listen-port 19020 \
+  --ziti-bin /absolute/path/ziti
+```
+
+The missing live input is now only the enrolled identities plus the controller's
+service/policies; source and installed-app launch wiring are present.
 
 ## 5. Truthful degrade (unchanged invariant)
 
