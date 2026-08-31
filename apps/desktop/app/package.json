@@ -28,6 +28,7 @@
         "postinstall": "node ./postinstall.cjs"
     },
     "devDependencies": {
+        "@electron/rebuild": "^4.2.0",
         "@eslint/js": "^9.39",
         "@recoder/conductor-ui": "workspace:*",
         "@rollup/plugin-node-resolve": "^16.0.3",
