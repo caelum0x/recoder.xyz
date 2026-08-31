@@ -545,7 +545,7 @@ export default function HomePage() {
 
                 <div className="flex justify-center pt-2">
                   <a href="/download" className={PRIMARY_CTA}>
-                    Download for macOS, Windows &amp; Linux{' '}
+                    Request macOS Apple Silicon beta access{' '}
                     <ArrowRight className="h-5 w-5" />
                   </a>
                 </div>

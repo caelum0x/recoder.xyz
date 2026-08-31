@@ -218,7 +218,7 @@ function OnboardingContent() {
                     <span className="inline-flex items-center justify-center w-6 h-6 bg-neutral-800 border border-neutral-700 text-white rounded-full text-sm font-medium mr-3 flex-shrink-0">1</span>
                     <div>
                       <p className="font-medium text-white">Download the Recoder desktop app</p>
-                      <a href="/download" className="text-sm text-gray-300 underline hover:text-white mt-1 block">recoder.xyz/download — macOS, Windows &amp; Linux</a>
+                      <a href="/download" className="text-sm text-gray-300 underline hover:text-white mt-1 block">recoder.xyz/download — macOS Apple Silicon private beta</a>
                     </div>
                   </div>
                   <div className="flex items-start">

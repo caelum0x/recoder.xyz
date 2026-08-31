@@ -36,7 +36,7 @@ export function SoftwareApplicationSchema() {
     '@type': 'SoftwareApplication',
     name: 'Recoder Desktop',
     applicationCategory: 'DeveloperApplication',
-    operatingSystem: 'macOS, Windows, Linux',
+    operatingSystem: 'macOS 13 or later (Apple Silicon)',
     offers: {
       '@type': 'Offer',
       price: '0',
@@ -62,7 +62,7 @@ export function WebApplicationSchema() {
     '@type': 'SoftwareApplication',
     name: 'Recoder Desktop',
     applicationCategory: 'DeveloperApplication',
-    operatingSystem: 'macOS, Windows, Linux',
+    operatingSystem: 'macOS 13 or later (Apple Silicon)',
     offers: {
       '@type': 'Offer',
       price: '0',

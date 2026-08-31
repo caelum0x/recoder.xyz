@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'Recoder + Your Agent CLIs - Run Coding Agents in Parallel',
-    description: 'The terminal IDE for AI coding agents: run your agent CLIs in parallel isolated git worktrees, compare diffs, and converge the best. Desktop app for macOS, Windows & Linux.',
+    description: 'The terminal IDE for AI coding agents: run your agent CLIs in parallel isolated git worktrees, compare diffs, and converge the best. Current desktop private beta: macOS Apple Silicon only.',
     url: 'https://recoder.xyz/cli',
     type: 'website',
   },

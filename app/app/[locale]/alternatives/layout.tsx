@@ -49,7 +49,7 @@ const jsonLd = {
     '@type': 'SoftwareApplication',
     name: 'Recoder',
     applicationCategory: 'DeveloperApplication',
-    operatingSystem: 'Web, macOS, Linux, Windows',
+    operatingSystem: 'macOS 13 or later (Apple Silicon)',
     offers: {
       '@type': 'Offer',
       price: '0',
