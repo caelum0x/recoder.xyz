@@ -80,15 +80,17 @@ const DefaultPollIntervalMs = 5000;
 const MaxPollIntervalMs = 15000;
 
 /**
- * Only http(s) URLs may be handed to the OS opener (recoder-o896). A server-
- * supplied verification URL with any other scheme (file://, custom protocol, …)
- * is refused so a hostile/MITM'd device-flow response can't trigger local exec.
+ * Only URLs on the configured auth origin may be handed to the OS opener. The
+ * device-flow response is remote input: accepting an arbitrary https origin
+ * would turn sign-in into a phishing redirect even though custom schemes were
+ * already rejected.
  */
-function isHttpUrl(raw: string | undefined | null): boolean {
+function isTrustedVerificationUrl(raw: string | undefined | null, authBaseUrl: string): boolean {
     if (!raw) return false;
     try {
-        const u = new URL(raw);
-        return u.protocol === "https:" || u.protocol === "http:";
+        const candidate = new URL(raw);
+        const authOrigin = new URL(authBaseUrl).origin;
+        return candidate.origin === authOrigin && (candidate.protocol === "https:" || candidate.protocol === "http:");
     } catch {
         return false;
     }
@@ -204,25 +206,28 @@ export class DeviceAuthManager {
         }
 
         const expiresIn = typeof start.expires_in === "number" ? start.expires_in : 600;
-        const verificationUri = start.verification_uri || `${this.baseUrl}/cli/auth`;
+        const fallbackVerificationUri = `${this.baseUrl}/cli/auth`;
+        const verificationUri = isTrustedVerificationUrl(start.verification_uri, this.baseUrl)
+            ? start.verification_uri!
+            : fallbackVerificationUri;
+        const verificationUriComplete = isTrustedVerificationUrl(start.verification_uri_complete, this.baseUrl)
+            ? start.verification_uri_complete
+            : undefined;
         onPrompt?.({
             userCode: start.user_code,
             verificationUri,
-            verificationUriComplete: start.verification_uri_complete,
+            verificationUriComplete,
             expiresIn,
         });
-        // SECURITY (recoder-o896): only auto-open an http(s) URL. The
-        // verification_uri* come from the (possibly hostile or MITM'd) device-flow
-        // server; handing an arbitrary scheme (file://, smb://, a custom protocol)
-        // to the OS opener is a local-exec / phishing vector. A non-http(s) target
-        // is skipped — the prompt still shows the code for manual entry.
-        const openTarget = start.verification_uri_complete || verificationUri;
-        if (isHttpUrl(openTarget)) {
-            try {
-                await this.openExternal(openTarget);
-            } catch {
-                // The prompt still shows the URI + code for manual entry.
-            }
+        // SECURITY (recoder-o896): open only the sanitized same-origin target.
+        // Invalid, custom-scheme, and cross-origin values all degrade to the
+        // configured Recoder auth page, where the displayed user code can be
+        // entered manually.
+        const openTarget = verificationUriComplete || verificationUri;
+        try {
+            await this.openExternal(openTarget);
+        } catch {
+            // The prompt still shows the trusted URI + code for manual entry.
         }
 
         let intervalMs =

@@ -218,12 +218,9 @@ describe("device login", () => {
         expect(result.reason).toBe("expired");
     });
 
-    // recoder-o896: the device-flow server controls verification_uri*, so a hostile
-    // or MITM'd server could hand the OS opener a non-http(s) scheme (file://,
-    // smb://, a custom protocol) as a local-exec / phishing vector. The manager
-    // must only auto-open http(s) — anything else is skipped (the prompt still
-    // shows the code for manual entry), and the flow otherwise completes normally.
-    it("does NOT auto-open a non-http(s) verification_uri_complete (file:// is skipped)", async () => {
+    // recoder-o896: verification_uri* is remote input. Custom schemes and other
+    // HTTPS origins must never reach the OS opener or the renderer prompt.
+    it("falls back to the configured auth origin for a non-http(s) verification URL", async () => {
         const fetchFn = (async (url: string, init?: RequestInit) => {
             const body = init?.body ? JSON.parse(String(init.body)) : {};
             if (String(url).endsWith("/api/auth/cli/device")) {
@@ -252,10 +249,42 @@ describe("device login", () => {
         const result = await makeManager(fetchFn).deviceLogin((p) => prompts.push(p));
 
         expect(result.ok).toBe(true);
-        // The dangerous scheme was NEVER handed to the OS opener.
-        expect(opened).toEqual([]);
-        // The user can still complete the flow manually — the code is shown.
+        expect(opened).toEqual(["https://recoder.xyz/cli/auth"]);
         expect(prompts[0].userCode).toBe("ABCD-1234");
+        expect(prompts[0].verificationUri).toBe("https://recoder.xyz/cli/auth");
+        expect(prompts[0].verificationUriComplete).toBeUndefined();
+    });
+
+    it("falls back to the configured auth origin for a cross-origin https verification URL", async () => {
+        const fetchFn = (async (url: string) => {
+            if (String(url).endsWith("/api/auth/cli/device")) {
+                return {
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        device_code: "dev123",
+                        user_code: "ABCD-1234",
+                        verification_uri: "https://login.attacker.example/device",
+                        verification_uri_complete: "https://login.attacker.example/device?code=ABCD-1234",
+                        expires_in: 600,
+                        interval: 1,
+                    }),
+                };
+            }
+            return {
+                ok: true,
+                status: 200,
+                json: async () => ({ access_token: "at1", refresh_token: "rt1", user: identity }),
+            };
+        }) as unknown as typeof fetch;
+
+        const prompts: DeviceLoginPrompt[] = [];
+        const result = await makeManager(fetchFn).deviceLogin((p) => prompts.push(p));
+
+        expect(result.ok).toBe(true);
+        expect(opened).toEqual(["https://recoder.xyz/cli/auth"]);
+        expect(prompts[0].verificationUri).toBe("https://recoder.xyz/cli/auth");
+        expect(prompts[0].verificationUriComplete).toBeUndefined();
     });
 
     it("auto-opens an https verification_uri_complete (the safe path still works)", async () => {

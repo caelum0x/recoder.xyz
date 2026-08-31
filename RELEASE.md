@@ -77,8 +77,19 @@ pnpm run set:desktop-release-secrets -- --from-env-file .env.desktop-release --w
 | `DESKTOP_APPLE_APP_SPECIFIC_PASSWORD` | `APPLE_APP_SPECIFIC_PASSWORD` | app-specific password for that Apple ID | appleid.apple.com → Sign-In & Security → App-Specific Passwords |
 | `DESKTOP_APPLE_TEAM_ID` | `APPLE_TEAM_ID` | 10-char Apple Developer Team ID | Apple Developer → Membership |
 
-**Alternative to the Apple-ID trio** (preferred for CI stability): an App Store
-Connect **API key**. Set these in the environment instead of `APPLE_ID`/…:
+**Preferred alternative to the Apple-ID trio:** an App Store Connect API key.
+The secret bootstrap accepts `DESKTOP_APPLE_API_KEY_FILE=/path/to/AuthKey_*.p8`,
+base64-encodes it locally, and uploads the following three secrets. The workflow
+reconstructs the mode-`0600` `.p8` below `$RUNNER_TEMP`; key material is never
+written to the repository or command line.
+
+| GitHub secret | Maps to env | What it is |
+|---|---|---|
+| `DESKTOP_APPLE_API_KEY` | `APPLE_API_KEY` | base64 contents of the `.p8` API key |
+| `DESKTOP_APPLE_API_KEY_ID` | `APPLE_API_KEY_ID` | App Store Connect key ID |
+| `DESKTOP_APPLE_API_ISSUER` | `APPLE_API_ISSUER` | App Store Connect issuer UUID |
+
+For a local release, set these directly instead:
 
 | Env var | What it is |
 |---|---|

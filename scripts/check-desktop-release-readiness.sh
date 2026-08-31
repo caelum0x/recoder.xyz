@@ -34,9 +34,17 @@ else
 fi
 
 if [[ -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_KEY_ID:-}" && -n "${APPLE_API_ISSUER:-}" ]]; then
-  pass "Apple notarization API credentials present in environment"
+  if [[ -r "$APPLE_API_KEY" ]]; then
+    pass "Apple notarization API credentials present and .p8 is readable"
+  else
+    fail "APPLE_API_KEY does not point to a readable .p8 file"
+  fi
+elif [[ -n "${APPLE_API_KEY:-}${APPLE_API_KEY_ID:-}${APPLE_API_ISSUER:-}" ]]; then
+  fail "incomplete Apple notarization API credential set"
 elif [[ -n "${APPLE_ID:-}" && -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]; then
   pass "Apple ID notarization credentials present in environment"
+elif [[ -n "${APPLE_ID:-}${APPLE_APP_SPECIFIC_PASSWORD:-}${APPLE_TEAM_ID:-}" ]]; then
+  fail "incomplete Apple ID notarization credential set"
 else
   fail "missing Apple notarization credentials in environment"
 fi

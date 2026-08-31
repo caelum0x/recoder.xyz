@@ -14,6 +14,10 @@
 #   pnpm run set:desktop-release-secrets -- --from-env-file .env.desktop-release --write
 # Required secrets (see RELEASE.md for the full table):
 #   DESKTOP_CSC_LINK, DESKTOP_CSC_KEY_PASSWORD  (Developer ID Application .p12, base64)
+# And one notarization credential set:
+#   DESKTOP_APPLE_API_KEY (base64 .p8), DESKTOP_APPLE_API_KEY_ID,
+#   DESKTOP_APPLE_API_ISSUER
+# Or the legacy Apple-ID set:
 #   DESKTOP_APPLE_ID, DESKTOP_APPLE_APP_SPECIFIC_PASSWORD, DESKTOP_APPLE_TEAM_ID
 #
 # Release only from `main` (bd recoder-mhyt). Tags: v0.0.0 / v0.0.0-beta.N.
@@ -146,14 +150,42 @@ jobs:
           echo "RECODER_SIGN_ID=$SIGN_ID" >> "$GITHUB_ENV"
           rm -f "$CERT_P12"
 
+      - name: Prepare notarization credentials
+        env:
+          DESKTOP_APPLE_API_KEY: ${{ secrets.DESKTOP_APPLE_API_KEY }}
+          DESKTOP_APPLE_API_KEY_ID: ${{ secrets.DESKTOP_APPLE_API_KEY_ID }}
+          DESKTOP_APPLE_API_ISSUER: ${{ secrets.DESKTOP_APPLE_API_ISSUER }}
+          DESKTOP_APPLE_ID: ${{ secrets.DESKTOP_APPLE_ID }}
+          DESKTOP_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_APPLE_APP_SPECIFIC_PASSWORD }}
+          DESKTOP_APPLE_TEAM_ID: ${{ secrets.DESKTOP_APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -n "$DESKTOP_APPLE_API_KEY" ] && [ -n "$DESKTOP_APPLE_API_KEY_ID" ] && [ -n "$DESKTOP_APPLE_API_ISSUER" ]; then
+            API_KEY_PATH="$RUNNER_TEMP/AuthKey_${DESKTOP_APPLE_API_KEY_ID}.p8"
+            printf '%s' "$DESKTOP_APPLE_API_KEY" | base64 --decode > "$API_KEY_PATH"
+            chmod 600 "$API_KEY_PATH"
+            {
+              printf 'APPLE_API_KEY=%s\n' "$API_KEY_PATH"
+              printf 'APPLE_API_KEY_ID=%s\n' "$DESKTOP_APPLE_API_KEY_ID"
+              printf 'APPLE_API_ISSUER=%s\n' "$DESKTOP_APPLE_API_ISSUER"
+            } >> "$GITHUB_ENV"
+            echo "using App Store Connect API-key notarization"
+          elif [ -n "$DESKTOP_APPLE_ID" ] && [ -n "$DESKTOP_APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$DESKTOP_APPLE_TEAM_ID" ]; then
+            {
+              printf 'APPLE_ID=%s\n' "$DESKTOP_APPLE_ID"
+              printf 'APPLE_APP_SPECIFIC_PASSWORD=%s\n' "$DESKTOP_APPLE_APP_SPECIFIC_PASSWORD"
+              printf 'APPLE_TEAM_ID=%s\n' "$DESKTOP_APPLE_TEAM_ID"
+            } >> "$GITHUB_ENV"
+            echo "using Apple-ID notarization"
+          else
+            echo "no complete notarization credential set configured" >&2
+            exit 1
+          fi
+
       - name: Release — build, sign, notarize, staple, verify
         env:
           RECODER_BACKEND_NODE_MODULES: ${{ steps.backend_deploy.outputs.path }}
           RECODER_MAC_ARCH: arm64
-          # notarytool Apple-ID creds (mapped from DESKTOP_* secrets)
-          APPLE_ID: ${{ secrets.DESKTOP_APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.DESKTOP_APPLE_TEAM_ID }}
         run: |
           EXTRA=""
           if [ "${{ github.event.inputs.publish }}" = "true" ] || [ "${{ github.event_name }}" = "push" ]; then
