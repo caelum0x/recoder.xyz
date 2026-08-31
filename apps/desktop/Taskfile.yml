@@ -503,7 +503,14 @@ tasks:
         sources:
             - ../../pnpm-lock.yaml
             - app/package.json
-        cmd: cd app && pnpm install
+        cmd: |
+            if [ "${RECODER_REUSE_NODE_MODULES:-0}" = "1" ]; then
+              test -x app/node_modules/.bin/electron-vite
+              test -x app/node_modules/.bin/electron-builder
+              echo "using the prepared locked workspace install"
+            else
+              cd app && pnpm install --frozen-lockfile
+            fi
 
     go:mod:tidy:
         desc: Runs `go mod tidy`
@@ -597,8 +604,7 @@ tasks:
               ignore_error: true
             - mkdir -p scaffold
             - cp ../templates/package.json.tmpl scaffold/package.json
-            - cd scaffold && npm install
-            - mv scaffold/node_modules scaffold/nm
+            - node ../../scripts/stage-tsunami-scaffold.mjs scaffold
             - cp -r dist scaffold/
             - mkdir -p scaffold/dist/tw
             - cp ../templates/*.go.tmpl scaffold/
