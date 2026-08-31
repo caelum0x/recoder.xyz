@@ -44,7 +44,13 @@ const path = require("path");
 const root = fs.realpathSync(process.env.RUNTIME_NODE_MODULES);
 const required = ["express", "zod", "better-auth", "pg", "better-sqlite3"];
 for (const name of required) require.resolve(name, { paths: [path.dirname(root)] });
+const spawnHelpers = [];
 for (const entry of fs.readdirSync(root, { recursive: true, withFileTypes: true })) {
+  if (entry.isFile() && entry.name === "spawn-helper" && /node-pty.*prebuilds.*darwin-/.test(entry.parentPath || entry.path)) {
+    const helper = path.join(entry.parentPath || entry.path, entry.name);
+    spawnHelpers.push(helper);
+    if ((fs.statSync(helper).mode & 0o111) === 0) throw new Error(`node-pty helper is not executable: ${helper}`);
+  }
   if (!entry.isSymbolicLink()) continue;
   const link = path.join(entry.parentPath || entry.path, entry.name);
   const target = fs.realpathSync(link);
@@ -52,6 +58,7 @@ for (const entry of fs.readdirSync(root, { recursive: true, withFileTypes: true 
     throw new Error(`backend dependency escapes packaged runtime: ${link} -> ${target}`);
   }
 }
+if (spawnHelpers.length !== 2) throw new Error(`expected arm64+x64 node-pty spawn-helper files, found ${spawnHelpers.length}`);
 NODE
 
   RUNTIME_ROOT="$(dirname "$modules")" ELECTRON_RUN_AS_NODE=1 "$electron" -e '
@@ -92,6 +99,11 @@ node "$(rebuild_cli)" \
   --force \
   --build-from-source \
   --sequential
+
+# pnpm's deploy clone can lose the executable bit on node-pty's extensionless
+# helper. Besides breaking terminal creation at runtime, that caused Apple's
+# notary service to see electron-builder's non-hardened fallback signature.
+find "$TARGET/node_modules" -type f -path '*/node-pty@*/node_modules/node-pty/prebuilds/darwin-*/spawn-helper' -exec chmod 0755 {} +
 
 verify_runtime "$TARGET/node_modules"
 printf '%s\n' "$TARGET/node_modules"

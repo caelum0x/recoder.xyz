@@ -24,6 +24,13 @@ ENT="$REPO_ROOT/apps/desktop/app/build/entitlements.mac.plist"
 SIGN=(codesign --force --options runtime --timestamp --entitlements "$ENT" -s "$ID")
 
 echo "== 1/5 leaf Mach-O binaries in Resources (batched)"
+# node-pty ships extensionless Mach-O helpers. pnpm deploy may clone them as
+# mode 0644, which both breaks terminal launch and makes the executable-bit
+# candidate scan below miss them. Normalize before signing so they receive the
+# hardened-runtime signature required by Apple's notary service.
+find "$APP/Contents/Resources/backend/node_modules" -type f \
+    -path '*/node-pty@*/node_modules/node-pty/prebuilds/darwin-*/spawn-helper' \
+    -exec chmod 0755 {} +
 # Candidates: native modules/libs by extension plus executable files; filter to
 # real Mach-O by magic (thin arm64 cf fa ed fe / fat ca fe ba be) so shell
 # scripts in node_modules are skipped.
