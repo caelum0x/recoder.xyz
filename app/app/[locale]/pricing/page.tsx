@@ -261,7 +261,7 @@ export default function PricingPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                'Desktop app for macOS, Windows & Linux',
+                'macOS Apple Silicon desktop private beta (Windows/Linux unavailable)',
                 'Parallel agent runs in git worktrees',
                 'Unlimited free model usage',
                 'Project management',
