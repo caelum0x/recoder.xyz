@@ -10,7 +10,7 @@
 #
 #   version bump   -> apps/desktop/app/version.cjs  (task version)
 #   readiness      -> scripts/check-desktop-release-readiness.sh
-#   pack (unsigned)-> electron-builder via `task package`
+#   pack (unsigned)-> electron-builder unpacked .app via `task package`
 #   sign           -> scripts/sign-desktop-inside-out.sh   (native inside-out)
 #   dmg + notarize -> hdiutil + codesign + notarytool + stapler   (this file)
 #   verify         -> scripts/publish-desktop-release-local.sh verify
@@ -198,7 +198,7 @@ cmd_build() {
         -u CSC_LINK -u CSC_KEY_PASSWORD \
         RECODER_MAC_ARCH="$ARCH" \
         RECODER_REUSE_NODE_MODULES=1 \
-        task package -- --mac --"$ARCH" )
+        task package -- --dir --mac --"$ARCH" )
   local app="$APP_DIR/make/mac-$ARCH/Recoder.app"
   local license_evidence="$APP_DIR/make/license-boundary-darwin-$ARCH.json"
   [[ -d "$app" ]] && pass "unsigned .app packed: $app" || { fail "expected .app not found: $app"; exit 1; }
