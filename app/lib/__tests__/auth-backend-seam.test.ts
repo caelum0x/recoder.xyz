@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   fetchBackendSession,
   isBackendSeamEnabled,
+  isBackendSeamStrict,
 } from '@/lib/auth-backend-seam';
 
 const COOKIE = 'recoder.session_token=abc.def';
@@ -22,7 +23,7 @@ describe('isBackendSeamEnabled', () => {
   });
 
   it('accepts 1/true/on (case-insensitive)', () => {
-    for (const v of ['1', 'true', 'TRUE', 'on', 'On']) {
+    for (const v of ['1', 'true', 'TRUE', 'on', 'On', 'strict', 'required']) {
       expect(
         isBackendSeamEnabled({ RECODER_AUTH_BACKEND_SEAM: v } as unknown as NodeJS.ProcessEnv),
       ).toBe(true);
@@ -33,6 +34,21 @@ describe('isBackendSeamEnabled', () => {
     expect(
       isBackendSeamEnabled({ RECODER_AUTH_BACKEND_SEAM: 'no' } as unknown as NodeJS.ProcessEnv),
     ).toBe(false);
+  });
+});
+
+describe('isBackendSeamStrict', () => {
+  it('accepts strict/required and rejects staged/off modes', () => {
+    for (const v of ['strict', 'STRICT', 'required', 'REQUIRED']) {
+      expect(
+        isBackendSeamStrict({ RECODER_AUTH_BACKEND_SEAM: v } as unknown as NodeJS.ProcessEnv),
+      ).toBe(true);
+    }
+    for (const v of ['', '1', 'true', 'on', 'no']) {
+      expect(
+        isBackendSeamStrict({ RECODER_AUTH_BACKEND_SEAM: v } as unknown as NodeJS.ProcessEnv),
+      ).toBe(false);
+    }
   });
 });
 
@@ -62,7 +78,7 @@ describe('fetchBackendSession', () => {
   it('maps a valid Better Auth get-session body', async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
-        session: { expiresAt: '2030-01-01T00:00:00.000Z' },
+        session: { id: 's1', expiresAt: '2030-01-01T00:00:00.000Z' },
         user: { id: 'u1', email: 'a@b.com', name: 'Ada', image: 'x.png' },
       }),
     );
@@ -71,6 +87,7 @@ describe('fetchBackendSession', () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     expect(result).toEqual({
+      sessionId: 's1',
       user: { id: 'u1', email: 'a@b.com', name: 'Ada', image: 'x.png' },
       expiresAt: '2030-01-01T00:00:00.000Z',
     });
@@ -82,7 +99,7 @@ describe('fetchBackendSession', () => {
   it('derives a name from email when the backend omits one', async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
-        session: { expiresAt: '2030-01-01T00:00:00.000Z' },
+        session: { id: 's1', expiresAt: '2030-01-01T00:00:00.000Z' },
         user: { id: 'u1', email: 'solo@b.com' },
       }),
     );
@@ -106,6 +123,20 @@ describe('fetchBackendSession', () => {
   it('returns null when the session has no expiry (not a real session)', async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({ user: { id: 'u1', email: 'a@b.com' } }),
+    );
+    const result = await fetchBackendSession(COOKIE, {
+      env: enabledEnv,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the session has no id (not an authoritative session)', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        session: { expiresAt: '2030-01-01T00:00:00.000Z' },
+        user: { id: 'u1', email: 'a@b.com' },
+      }),
     );
     const result = await fetchBackendSession(COOKIE, {
       env: enabledEnv,

@@ -24,6 +24,7 @@ import {
 import {
   fetchBackendSession,
   isBackendSeamEnabled,
+  isBackendSeamStrict,
   type BackendSeamUser,
 } from '@/lib/auth-backend-seam';
 
@@ -33,7 +34,7 @@ import {
  * Kept non-fatal: an API-key lookup failure still returns an authenticated
  * session (hasApiKey=false) rather than dropping the user.
  */
-async function enrichSeamSession(user: BackendSeamUser, expiresAtIso: string) {
+async function enrichSeamSession(user: BackendSeamUser, expiresAtIso: string, sessionId: string) {
   let hasApiKey = false;
   try {
     const appUser = await prisma.users.findUnique({
@@ -60,6 +61,10 @@ async function enrichSeamSession(user: BackendSeamUser, expiresAtIso: string) {
       role: 'user',
     },
     expires: expiresAtIso,
+    session: {
+      id: sessionId,
+      expiresAt: expiresAtIso,
+    },
   };
 }
 
@@ -151,9 +156,10 @@ export async function getSession(request?: NextRequest) {
   try {
     // Phase A backend seam (OFF by default, gated by RECODER_AUTH_BACKEND_SEAM):
     // resolve against the ONE backend-owned Better Auth authority first. A
-    // positive backend session is authoritative; a negative/unreachable backend
-    // returns null and we fall through to the existing local resolution below,
-    // so this can never lock users out. See lib/auth-backend-seam.ts.
+    // positive backend session is authoritative. Staged mode falls back on a
+    // negative/unreachable backend; strict production mode fails closed so a
+    // revoked backend session cannot be resurrected by the local compatibility
+    // store. See lib/auth-backend-seam.ts.
     if (isBackendSeamEnabled()) {
       try {
         const cookieHeader = request
@@ -161,12 +167,18 @@ export async function getSession(request?: NextRequest) {
           : (await headers()).get('cookie');
         const seam = await fetchBackendSession(cookieHeader);
         if (seam?.user) {
-          return await enrichSeamSession(seam.user, seam.expiresAt);
+          return await enrichSeamSession(seam.user, seam.expiresAt, seam.sessionId);
+        }
+        if (isBackendSeamStrict()) {
+          return null;
         }
       } catch (seamError) {
-        logger.warn('Backend auth seam resolution failed, falling back to local', {
+        logger.warn('Backend auth seam resolution failed', {
           error: String(seamError),
         });
+        if (isBackendSeamStrict()) {
+          return null;
+        }
       }
     }
 
@@ -208,6 +220,10 @@ export async function getSession(request?: NextRequest) {
             role: 'user',
           },
           expires: new Date(betterAuthSession.session.expiresAt).toISOString(),
+          session: {
+            id: betterAuthSession.session.id,
+            expiresAt: new Date(betterAuthSession.session.expiresAt).toISOString(),
+          },
         };
       }
     } catch (error) {
@@ -316,7 +332,11 @@ export async function getSession(request?: NextRequest) {
               subscription: 'free',
               role: 'user',
             },
-            expires: session.expiresAt.toISOString()
+            expires: session.expiresAt.toISOString(),
+            session: {
+              id: session.id,
+              expiresAt: session.expiresAt.toISOString(),
+            },
           };
         }
       } catch (error) {
@@ -381,7 +401,12 @@ export async function ensureAppUserFromAuthUser(authUser: {
  */
 export async function requireAuth(request?: NextRequest) {
   // Try cookie-based session first
-  let session = await getSession(request);
+  let session:
+    | Awaited<ReturnType<typeof getSession>>
+    | {
+        user: NonNullable<Awaited<ReturnType<typeof getUserFromToken>>>;
+        expires: string;
+      } = await getSession(request);
 
   // If no cookie session, try Bearer token auth (used by cross-origin calls from agents.recoder.xyz)
   if (!session?.user && request) {
