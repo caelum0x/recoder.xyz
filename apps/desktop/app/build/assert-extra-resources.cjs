@@ -90,7 +90,8 @@ function readBinaryArch(file) {
  * Three outcomes per entry, resolved against `appRoot`:
  *   1. missing + REQUIRED  → collected + THROW (abort pack) with the exact list.
  *   2. missing + OPTIONAL   → collected + printed LOUDLY, non-fatal (deliberate
- *      degrade, e.g. the Lance embedded store falling back to Qdrant/no-op).
+ *      degrade, e.g. an optional NAPI accelerator falling back to its owned
+ *      subprocess/TypeScript adapter).
  *   3. present + ARCH-SENSITIVE → header read; if CPU arch ≠ targetArch → THROW
  *      (catches the arm64-in-x64-dmg hazard the plain existence check misses).
  *

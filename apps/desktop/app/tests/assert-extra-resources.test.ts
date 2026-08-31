@@ -87,12 +87,12 @@ describe("extraResources fail-loud gate", () => {
             expect(typeof config.beforePack).toBe("function");
         });
 
-        it("the gate names the tensorzero napi artifact when engine sources are absent", () => {
-            // Resolving the real extraResources against an empty root makes every
-            // source missing — the thrown list must include the release .node the
-            // packaged backend loads in-process (the previously-silent failure).
+        it("the gate keeps the Recoder Loom fork mandatory", () => {
+            // Loom owns terminal and agent continuity in the beta. Unlike the
+            // optional NAPI accelerators, a package without it is not a truthful
+            // degraded product and must fail before electron-builder copies files.
             expect(() => assertExtraResourcesExist(config.extraResources, fixtureRoot)).toThrowError(
-                /tensorzero\/crates\/target\/release\/tensorzero_gateway_napi\.node/
+                /engines\/loom\/target\/release\/loom/
             );
         });
 

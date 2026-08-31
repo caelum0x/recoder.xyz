@@ -42,14 +42,31 @@ const buildTargets = new Set(
         .filter(Boolean)
 );
 
-// Deliberate cloud-or-degrade artifacts: absence is LOGGED LOUD by the
-// beforePack gate, never fatal. The Lance embedded vector store degrades to
-// Qdrant/no-op at runtime (backend/src/domains/memory). Its napi crate does not
-// yet exist at the repo root (crates/lance/npm-bindings is absent — it cannot be
-// built here), so the entry is retained purely so the gate emits an explicit
-// degrade line instead of silence. When Lance is later vendored + built, move
-// this out so its absence fails loud again.
-const OPTIONAL_EXTRA_RESOURCES = new Set(["../../../crates/lance/npm-bindings/target/release/lance_npm_bindings.node"]);
+// Owner/offline builds may deliberately reuse the already-prepared locked
+// workspace install. In that mode use the Electron distribution installed by
+// pnpm instead of asking electron-builder to download the identical archive
+// again. CI and ordinary release builds keep electron-builder's default fetch +
+// checksum path because this is unset there.
+const preparedElectronDist =
+    process.env.RECODER_REUSE_NODE_MODULES === "1"
+        ? path.join(path.dirname(require.resolve("electron")), "dist")
+        : undefined;
+
+// Deliberate degrade artifacts: absence is LOGGED LOUD by the beforePack gate,
+// never fatal. These are acceleration/deep-fusion paths, not the desktop's
+// control plane:
+//   - Lance falls back to Qdrant/no-op memory.
+//   - OpenFang falls back to its supervised subprocess/loopback adapter.
+//   - TensorZero falls back to its supervised gateway/direct-provider adapter.
+// Their loaders already implement these truthful fallbacks and never fake a
+// native engine. Loom is intentionally NOT in this set: it is the required
+// terminal/agent substrate for the private beta and packaging must abort without
+// the exact Recoder fork binary.
+const OPTIONAL_EXTRA_RESOURCES = new Set([
+    "../../../crates/lance/npm-bindings/target/release/lance_npm_bindings.node",
+    "../../../backend/engines/rust/openfang/target/release/openfang_napi.node",
+    "../../../backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node",
+]);
 
 // Native binaries whose CPU arch must match the dmg target arch. The gate reads
 // each Mach-O header and aborts on an arm64-in-x64-dmg (or vice-versa) mismatch.
@@ -78,6 +95,7 @@ const config = {
     npmRebuild: false,
     nodeGypRebuild: false,
     electronCompile: false,
+    ...(preparedElectronDist ? { electronDist: preparedElectronDist } : {}),
     files: [
         {
             from: "./dist",

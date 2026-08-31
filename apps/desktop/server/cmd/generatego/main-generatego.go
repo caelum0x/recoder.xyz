@@ -45,8 +45,8 @@ func GenerateWshClient() error {
 			panic("unsupported command type " + methodDecl.CommandType)
 		}
 	}
-	buf.WriteString("\n")
-	written, err := utilfn.WriteFileIfDifferent(WshClientFileName, []byte(buf.String()))
+	content := strings.TrimRight(buf.String(), "\n") + "\n"
+	written, err := utilfn.WriteFileIfDifferent(WshClientFileName, []byte(content))
 	if !written {
 		fmt.Fprintf(os.Stderr, "no changes to %s\n", WshClientFileName)
 	}
