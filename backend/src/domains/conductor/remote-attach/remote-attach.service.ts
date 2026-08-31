@@ -134,7 +134,7 @@ export interface RemoteAttachDeps {
 export type RemoteAttachExternalDeps = Omit<
   RemoteAttachDeps,
   'getWorkspace' | 'readStatusBoard'
->;
+> & Partial<Pick<RemoteAttachDeps, 'readStatusBoard'>>;
 
 /** The mint request — identity + the scope + the opt-in capabilities. */
 export interface RemoteAttachRequest {

@@ -80,6 +80,7 @@ const ARCH_SENSITIVE_EXTRA_RESOURCES = new Set([
     "../server/engines/beads/bin/bd",
     "../engines/loom/target/release/loom",
     "../engines/cloudflared/cloudflared",
+    "../server/engines/ziti/bin/ziti",
 ]);
 
 /**
@@ -171,6 +172,21 @@ const config = {
         {
             from: "../engines/cloudflared/RECODER-VENDOR.md",
             to: "backend/engines/cloudflared/RECODER-VENDOR.md",
+        },
+        // OpenZiti host-to-host Loom transport. The bridge keeps Loom on a Unix
+        // socket at both ends and uses the enrolled Ziti identity/service as the
+        // only network-visible path.
+        {
+            from: "../server/engines/ziti/bin/ziti",
+            to: "backend/engines/ziti/ziti",
+        },
+        {
+            from: "../server/engines/ziti/LICENSE",
+            to: "backend/engines/ziti/LICENSE",
+        },
+        {
+            from: "../../../scripts/loom-ziti-bridge.mjs",
+            to: "backend/scripts/loom-ziti-bridge.mjs",
         },
         // Owned beads `bd` binary (issue-graph memory). Host-arch local build
         // like tmux/the .node addons — DELIBERATELY NOT in git (>100MB, stripped

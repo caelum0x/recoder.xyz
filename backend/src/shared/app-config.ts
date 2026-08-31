@@ -136,6 +136,12 @@ export interface ConductorSliceConfig {
    * export pack — a SECRET from the deploy env. `null` ⇒ packs export unsigned.
    */
   readonly evidenceSigningKey: string | null;
+  /**
+   * Optional local Unix socket exposed by the Recoder OpenZiti Loom bridge.
+   * When set, governed remote monitor/steer uses the Loom daemon on the remote
+   * host while normal local launches keep using the app-owned Loom socket.
+   */
+  readonly remoteLoomSocketPath?: string | null;
   /** Resource-governor admission caps. */
   readonly caps: ConductorCapsConfig;
 }

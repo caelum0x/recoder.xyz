@@ -38,6 +38,7 @@ import type { LoggerPort } from '@recoder/substrate';
 import type { Workspace } from '@recoder/agent-os';
 import { evaluatePolicy } from '@recoder/agent-policy';
 import type { Principal } from '../../identity/types.js';
+import type { StatusBoardScope, StatusBoardSnapshot } from '../attention/status-board.service.js';
 import type { ApprovalService } from '../../governance/services/approval.service.js';
 import type { AuditChainService } from '../../governance/services/audit-chain.service.js';
 import type { CompareView } from '../services/compare.service.js';
@@ -70,6 +71,11 @@ export interface RemoteAttachWiringDeps {
   readonly audit: AuditChainService;
   /** Restart-survivable session persistence (KvStore adapter at bootstrap). */
   readonly sessionStore?: RemoteAttachSessionStore;
+  /** Optional remote Loom board read; absent keeps the local daemon board. */
+  readonly readStatusBoard?: (
+    scope: StatusBoardScope,
+    principal: Principal
+  ) => Promise<StatusBoardSnapshot>;
   /** Structured logger; defaults to a no-op. */
   readonly logger?: LoggerPort;
 }
@@ -156,6 +162,7 @@ export function createRemoteAttachDeps(
     deliver,
     audit,
     ...(deps.sessionStore ? { sessionStore: deps.sessionStore } : {}),
+    ...(deps.readStatusBoard ? { readStatusBoard: deps.readStatusBoard } : {}),
     async listWorkspaceIdsForTaskGroup(
       taskGroup: string,
       principal: Principal

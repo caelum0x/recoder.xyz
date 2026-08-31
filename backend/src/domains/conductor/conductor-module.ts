@@ -872,8 +872,9 @@ export class ConductorComposer implements ConductorModule {
     this.remoteAttachService = deps.remoteAttach
       ? new RemoteAttachService({
           getWorkspace: id => this.getWorkspace(id),
-          readStatusBoard: (scope, principal) =>
-            this.statusBoardSnapshot(scope, principal),
+          readStatusBoard:
+            deps.remoteAttach.readStatusBoard ??
+            ((scope, principal) => this.statusBoardSnapshot(scope, principal)),
           logger: loggerPort,
           ...deps.remoteAttach,
         })
