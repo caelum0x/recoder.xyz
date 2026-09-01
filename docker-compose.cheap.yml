@@ -251,11 +251,19 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # Lets Caddy reach the HOST PM2 process (co-hosted VCPeer/vcglass on
+    # VCPEER_HOST_PORT). Harmless when VCPeer is hosted elsewhere.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       ACME_EMAIL: ${ACME_EMAIL:-}
       RECODER_APP_DOMAIN: ${RECODER_APP_DOMAIN:-recoder.xyz}
       RECODER_AGENTS_DOMAIN: ${RECODER_AGENTS_DOMAIN:-agents.recoder.xyz}
       CADDY_AUTO_HTTPS: ${CADDY_AUTO_HTTPS:-on}
+      # Co-hosted VCPeer (vcglass) — the Caddyfile routes this domain to the
+      # host PM2 app on VCPEER_HOST_PORT. Defaults match production.
+      VCPEER_DOMAIN: ${VCPEER_DOMAIN:-vcpeer.com}
+      VCPEER_HOST_PORT: ${VCPEER_HOST_PORT:-3200}
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddydata:/data
