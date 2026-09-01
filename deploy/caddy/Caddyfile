@@ -45,3 +45,16 @@ api.{$RECODER_APP_DOMAIN:recoder.xyz} {
 	encode zstd gzip
 	reverse_proxy recoder-frontend:3001
 }
+
+# ── vcpeer.com — co-hosted VCPeer (the `vcglass` Next.js app) ──
+# VCPeer is NOT a Docker service; it runs on the HOST via PM2 (see the co-host
+# section in deploy/CHEAP-MIGRATION.md). One box serves both products, so Caddy —
+# the single TLS front — proxies vcpeer.com to the host PM2 process. Caddy reaches
+# the host via `host.docker.internal` (the host-gateway extra_host on the caddy
+# service in docker-compose.cheap.yml). Run the PM2 app on VCPEER_HOST_PORT
+# (default 3200) so it never collides with the container ports above. Delete this
+# block if you host VCPeer on a separate box.
+{$VCPEER_DOMAIN:vcpeer.com}, www.{$VCPEER_DOMAIN:vcpeer.com} {
+	encode zstd gzip
+	reverse_proxy host.docker.internal:{$VCPEER_HOST_PORT:3200}
+}

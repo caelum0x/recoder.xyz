@@ -62,13 +62,29 @@ Next.js build can OOM. If you pick CAX11, either:
 - build the images on the CAX21 / your Mac (`--platform linux/arm64`), push to a
   registry, and run `redeploy.sh --no-build` on the CAX11.
 
-### $0 option: **Oracle Cloud Always-Free ARM** (Ampere A1, up to 4 OCPU / 24 GB)
+### $0 option: **Oracle Cloud Always-Free ARM** (Ampere A1 — now 2 OCPU / 12 GB max)
 
-Genuinely free forever and the **best raw value** (24 GB dwarfs everything). Trade-offs:
-capacity for A1 shapes is frequently "out of capacity" in popular regions (retry,
-or pick a less busy region/AD), account/KYC friction is higher, and reclaim
-policies apply to idle always-free compute. If you can get an A1 instance, it's
-the cheapest by far.
+Genuinely free forever and the **best value** — 12 GB (the Always-Free A1 cap was
+reduced from 4 OCPU/24 GB to **2 OCPU/12 GB** in 2026, still plenty: the lean stack
+idles ~1–2 GB, plus VCPeer ~1–2 GB, with headroom for Node build spikes). Setup:
+
+1. **Create instance:** Compute → Instances → Create → Shape **Ampere /
+   VM.Standard.A1.Flex**, set **2 OCPU / 12 GB**. Image **Ubuntu 22.04 (aarch64)**.
+   Add your SSH key. If it says **"out of host capacity"** (common for A1), retry
+   or switch Availability Domain — it frees up.
+2. **⚠️ Two Oracle-only gotchas — do BOTH or the site is unreachable:**
+   - **VCN ingress:** the default Security List only opens port 22. Add ingress
+     rules for **80** and **443** (Source `0.0.0.0/0`) in the instance's subnet
+     Security List.
+   - **Instance iptables:** Oracle's Ubuntu image ships restrictive iptables. On
+     the box, open 80/443 and persist:
+     ```bash
+     sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+     sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+     sudo netfilter-persistent save
+     ```
+3. Reclaim policy applies to *idle* always-free compute — the running containers
+   keep it active enough. Then continue at §2 (Docker install).
 
 **Pick:** **CAX21** for a no-drama paid box you can build on; **Oracle A1** if you
 want $0 and can tolerate the capacity lottery. Avoid CAX11 unless you build
@@ -224,22 +240,52 @@ versus **$30** today. Even the safe pick is a **~75% cut**.
   VPS … via rsync + PM2, fronted by nginx + Cloudflare".)
 
 Because it is a distinct PM2/nginx app with its own database and ~660 API routes, a
-Docker service for it was **deliberately not fabricated** here. To also get VCPeer
-onto a cheap box you have two honest options:
+Docker service for it was **deliberately not fabricated**. But this box is wired to
+**co-host it turnkey**: Caddy already has a `vcpeer.com` site block that proxies to
+the host on `VCPEER_HOST_PORT` (default 3200), and the caddy service has the
+`host.docker.internal:host-gateway` mapping so it can reach a host PM2 process. So
+VCPeer runs on the HOST (its normal PM2 model), and recoder's Caddy provides its TLS
+— **drop VCPeer's own nginx; one proxy fronts both products.**
 
-- **Co-host on the same ARM box (no Docker):** install Node + PM2 + nginx + a local
-  Postgres 17 on the box, `rsync` the `vcglass` tree, `pm2 start` it, and add an
-  nginx (or a second Caddy site block) for `vcpeer.com`. This is VCPeer's existing
-  deploy model, just on the cheaper host. Its Postgres is separate from recoder's
-  compose Postgres.
-- **Keep VCPeer on its own tiny box** (a CAX11 is plenty for a 2-user app) and only
-  migrate recoder here.
+### 8a. Co-host VCPeer on this same box (recommended — one $0/cheap box for both)
+```bash
+# 1) Node 20 + PM2 (arm64) on the box
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+sudo npm i -g pm2 pnpm
 
-**What the owner must provide to actually move VCPeer:** confirm the `vcglass`
-repo is the deploy source, its production `.env` (DB URL, NextAuth secret, provider
-keys), the current VCPeer server's DB dump, and whether they want it co-hosted with
-recoder or on a separate cheap box. Until then, this runbook migrates **recoder
-only**; the DNS step above intentionally lists recoder hostnames, not `vcpeer.com`.
+# 2) Postgres for VCPeer — reuse the SAME in-compose Postgres (add a db) OR a
+#    host Postgres. Simplest: add a `vcpeer` database to recoder's compose
+#    Postgres and point VCPeer's DATABASE_URL at 127.0.0.1:5432 (the compose
+#    Postgres publishes 5432 on the host). Keep users/passwords distinct.
+
+# 3) Get the vcglass tree onto the box + install + build
+rsync -az --delete /path/to/vcglass/ deploy@BOX:/opt/vcpeer/   # or git clone
+cd /opt/vcpeer && pnpm install --frozen-lockfile
+# set /opt/vcpeer/.env from vcglass/.env.example:
+#   NEXT_PUBLIC_APP_URL=https://vcpeer.com   NEXTAUTH_URL=https://vcpeer.com
+#   DATABASE_URL=postgresql://vcpeer:...@127.0.0.1:5432/vcpeer   PORT=3200
+pnpm prisma migrate deploy && pnpm build
+
+# 4) Run it on port 3200 under PM2 (matches the Caddy route)
+PORT=3200 pm2 start pnpm --name vcpeer -- start
+pm2 save && pm2 startup   # survive reboots
+
+# 5) Restore the current VCPeer DB dump into the vcpeer database, then in §6
+#    ALSO point vcpeer.com (+ www) DNS at this box. Caddy issues its cert on
+#    first request. NO nginx needed — Caddy's vcpeer.com block handles TLS.
+```
+NextAuth/`NEXT_PUBLIC_APP_URL` must be the real `https://vcpeer.com` (never
+localhost) — VCPeer's callbacks depend on it.
+
+### 8b. Or keep VCPeer on its own tiny box
+A CAX11 (~$3.79) or a second Oracle A1 is plenty for a ~2-user app. Then delete the
+`vcpeer.com` block from the Caddyfile here and migrate recoder only.
+
+**What the owner must provide either way:** confirm `vcglass` is the deploy source,
+its production `.env` (DB URL, NextAuth secret, provider keys), and the current
+VCPeer server's DB dump. The Caddy + compose wiring for co-hosting is already in
+place; the only manual steps are the PM2 app + DB restore above.
 
 ---
 
