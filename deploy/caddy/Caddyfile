@@ -1,0 +1,47 @@
+# Recoder — lean single-box reverse proxy (auto-HTTPS via Let's Encrypt).
+#
+# Used by docker-compose.cheap.yml. Caddy provisions + renews TLS certificates
+# automatically for every site address below, so you do NOT manage certs, nginx
+# ssl blocks, or Cloudflare origin certs on the cheap box. Point the DNS A/AAAA
+# records for these hostnames at the box, open ports 80 + 443, and Caddy does
+# the rest on first request.
+#
+# Domains are overridable via env (compose passes them through). Defaults match
+# the production hostnames.
+#
+# LOCAL / STAGING WITHOUT DNS: set `ACME_EMAIL=internal` is not enough — instead
+# run with the env `CADDY_AUTO_HTTPS=off` and hit the box over plain HTTP, or
+# use a `*.sslip.io` style hostname. For real production leave auto-HTTPS on.
+
+{
+	# ACME account email for Let's Encrypt expiry notices. Set ACME_EMAIL in
+	# .env.cheap. If unset, Caddy still issues certs (email is optional) but you
+	# get no expiry warnings.
+	email {$ACME_EMAIL}
+	# Flip to "off" only for local HTTP testing (see header note).
+	auto_https {$CADDY_AUTO_HTTPS:on}
+}
+
+# ── recoder.xyz — the main public product (Next.js app on :3000) ──
+{$RECODER_APP_DOMAIN:recoder.xyz}, www.{$RECODER_APP_DOMAIN:recoder.xyz} {
+	encode zstd gzip
+	reverse_proxy recoder-app:3000
+}
+
+# ── api.recoder.xyz — control-plane backend (:3100) ──
+# flush_interval -1 keeps SSE / streaming responses unbuffered.
+api.{$RECODER_APP_DOMAIN:recoder.xyz} {
+	encode zstd gzip
+	reverse_proxy backend:3100 {
+		flush_interval -1
+	}
+}
+
+# ── agents.recoder.xyz — recoder-agents frontend (:3001) ──
+# Only serves if the recoder-frontend service is built + running (see the
+# build-prereq note in docker-compose.cheap.yml). If you dropped that service,
+# delete this block.
+{$RECODER_AGENTS_DOMAIN:agents.recoder.xyz}, app.{$RECODER_APP_DOMAIN:recoder.xyz} {
+	encode zstd gzip
+	reverse_proxy recoder-frontend:3001
+}

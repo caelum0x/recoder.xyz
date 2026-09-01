@@ -1,0 +1,293 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Recoder — LEAN single-box production stack for a CHEAP ARM box.
+#
+# Goal: run the ACTUAL public product (recoder.xyz + the control plane) on a
+# ~$4–7/mo ARM VPS (Hetzner CAX11/CAX21 or Oracle Ampere A1 Always-Free) instead
+# of the $30/mo Hetzner CPX42 the full docker-compose.deploy.yml stack needs.
+#
+# This file is SELF-CONTAINED: Postgres runs IN-compose (no host.docker.internal),
+# with a named volume + the same 3-database init as the self-host stack.
+#
+# It does NOT replace the full stacks — keep them for full deploys:
+#   • docker-compose.deploy.yml   — ~15 containers incl. full monitoring stack
+#   • docker-compose.selfhost.yml — backend + xds/governance/envoy service mesh
+#
+# ── KEPT (the minimum to serve the public product) ──────────────────────────
+#   postgres          in-compose pgvector/pg17, named volume, 3-DB init
+#   redis             sessions + A2A bus
+#   backend           the Recoder control plane (api.recoder.xyz / :3100)
+#   recoder-app       the recoder.xyz Next.js site (:3000)
+#   recoder-frontend  agents.recoder.xyz Next.js app (:3001)  [build-prereq gated]
+#   caddy             TLS reverse proxy, AUTO-HTTPS via Let's Encrypt
+#
+# ── DROPPED (re-enable via docker-compose.deploy.yml / .selfhost.yml) ───────
+#   • qdrant          — the backend's VectorStorePort is a TRUTHFUL NO-OP when
+#                       QDRANT_URL is unset (backend/src/domains/memory/
+#                       vector-store.ts: "no QDRANT_URL ⇒ every method is a
+#                       truthful no-op", keyword/lance fallback). Vector search
+#                       degrades safely; the backend still boots + serves. To add
+#                       it back: uncomment the `qdrant` service below and set
+#                       QDRANT_URL=http://qdrant:6333 on the backend.
+#   • monitoring      — grafana / victoria-metrics / prometheus exporters /
+#                       alertmanager / blackbox. Zero value for a 0-user site.
+#                       Re-enable: docker-compose.deploy.yml.
+#   • recoder-workspace / openclaw / daytona — agent sandboxes + social gateway.
+#                       Not needed to serve the public site.
+#   • xds / governance / envoy service mesh — the backend's @recoder/governance
+#                       facade FALLS BACK to its pure-TS deny-biased path when
+#                       GOVERNANCE_SOCKET is unset (deploy/README.md: "never a
+#                       hard dependency"), so the mesh is safe to omit here.
+#                       Re-enable: docker-compose.selfhost.yml.
+#
+# ── BUILD PREREQUISITES (same contract as the existing prod compose) ────────
+#   The custom images build from the repo root as context. Before first bring-up:
+#     1) backend/dist/server.js must exist   (cd backend && pnpm install && pnpm build)
+#     2) pi-mono-dist/ must exist            (real build, or the stub below)
+#          mkdir -p pi-mono-dist/coding-agent/dist
+#          printf '{"name":"@recoder/pi-coding-agent","version":"0.0.0","private":true}\n' \
+#            > pi-mono-dist/coding-agent/package.json
+#     3) recoder-frontend ONLY: the recoder-agents/ source tree + its Dockerfile
+#        must be staged at the repo root. These are gitignored build artifacts
+#        that the CURRENT production deploy already assumes; they are NOT in the
+#        repo. If they are absent, either stage them, or comment out the
+#        `recoder-frontend` service + its Caddyfile block and serve recoder.xyz
+#        only. `deploy/redeploy.sh` prints a clear error if they are missing.
+#   `deploy/redeploy.sh` handles (1) and (2) for you.
+#
+# Validate (no build, no secrets):
+#   docker compose --env-file .env.cheap -f docker-compose.cheap.yml config -q
+# Bring up:
+#   docker compose --env-file .env.cheap -f docker-compose.cheap.yml up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: recoder-cheap
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  # ── Postgres (in-compose; pgvector so recoder_pm embeddings work) ──────────
+  postgres:
+    # pgvector/pgvector:pg17 == postgres:17 + the `vector` extension, multi-arch
+    # (arm64 + amd64). Same init contract as the self-host stack.
+    image: pgvector/pgvector:pg17
+    <<: *restart
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: recoder_main
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Reuse the self-host init: creates recoder_main / recoder_backend /
+      # recoder_pm and the pgvector extension on first boot of an empty volume.
+      - ./deploy/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "pg_isready -U $${POSTGRES_USER} -d recoder_main && pg_isready -U $${POSTGRES_USER} -d recoder_backend && pg_isready -U $${POSTGRES_USER} -d recoder_pm"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    mem_limit: 512m
+    mem_reservation: 192m
+
+  # ── Redis (internal only; not published) ───────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    <<: *restart
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    mem_limit: 384m
+    mem_reservation: 64m
+
+  # ── Backend — the Recoder control plane (api.recoder.xyz) ──────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: recoder/backend:cheap
+    <<: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Port NOT published — Caddy reaches it over the compose network. Uncomment
+    # to expose the control plane directly (e.g. for debugging).
+    # ports:
+    #   - "127.0.0.1:3100:3100"
+    volumes:
+      # The Conductor manages sibling agent containers via the host Docker socket.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - backenddata:/app/backend/data
+    environment:
+      NODE_ENV: production
+      PORT: "3100"
+      # Cap the Node heap so the backend cannot balloon past its mem_limit and
+      # trip the OOM killer on a small box.
+      NODE_OPTIONS: "--max-old-space-size=1024"
+      # --- Datastores (compose-internal DNS names) ---
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_backend"
+      AGENT_OS_DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_backend"
+      AUTH_DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_main"
+      PM_DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_pm"
+      REDIS_URL: "redis://redis:6379"
+      # QDRANT_URL intentionally UNSET — vector store degrades to a truthful
+      # no-op (keyword/lance fallback). Set to http://qdrant:6333 after
+      # re-enabling the qdrant service to turn vector search back on.
+      # --- Control-plane identity / governance (required) ---
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required}
+      RECODER_GOVERNANCE_SIGNING_KEY: ${RECODER_GOVERNANCE_SIGNING_KEY:?RECODER_GOVERNANCE_SIGNING_KEY is required}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      # GOVERNANCE_SOCKET intentionally UNSET — the @recoder/governance facade
+      # uses its pure-TS deny-biased fallback (no Rust daemon in the lean stack).
+      # --- Billing (Polar) — optional; degrades safe when unset ---
+      POLAR_ACCESS_TOKEN: ${POLAR_ACCESS_TOKEN:-}
+      POLAR_ORGANIZATION_ID: ${POLAR_ORGANIZATION_ID:-}
+      POLAR_WEBHOOK_SECRET: ${POLAR_WEBHOOK_SECRET:-}
+      POLAR_SERVER: ${POLAR_SERVER:-production}
+      # --- Model providers (BYOK) — optional ---
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    mem_limit: 1536m
+    mem_reservation: 512m
+    stop_grace_period: 45s
+
+  # ── recoder.xyz — the main public Next.js site ─────────────────────────────
+  recoder-app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    image: recoder/app:cheap
+    <<: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    # Port NOT published — Caddy fronts it. Uncomment for direct debugging.
+    # ports:
+    #   - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      NEXT_PUBLIC_APP_URL: "https://${RECODER_APP_DOMAIN:-recoder.xyz}"
+      BACKEND_URL: "http://backend:3100"
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_main"
+      AUTH_DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_main"
+      REDIS_URL: "redis://redis:6379"
+    healthcheck:
+      # node -e (no curl fork) — avoids OOM-kill on a tight cgroup, per the
+      # 2026-04-05 incident noted in docker-compose.deploy.yml.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    mem_limit: 1024m
+    mem_reservation: 384m
+    stop_grace_period: 30s
+
+  # ── agents.recoder.xyz — recoder-agents frontend ───────────────────────────
+  # BUILD-PREREQ GATED: needs the recoder-agents/ source tree + Dockerfile staged
+  # at the repo root (gitignored build artifact; the current prod deploy already
+  # assumes it). If absent, comment out this whole service AND its Caddyfile block
+  # (deploy/caddy/Caddyfile) and serve recoder.xyz only.
+  recoder-frontend:
+    build:
+      context: .
+      dockerfile: recoder-agents/Dockerfile
+      args:
+        APP_PORT: "3001"
+        PNPM_LOCKFILE_MODE: --no-frozen-lockfile
+    image: recoder/frontend:cheap
+    <<: *restart
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      NEXT_PUBLIC_APP_URL: "https://${RECODER_AGENTS_DOMAIN:-agents.recoder.xyz}"
+      NEXT_PUBLIC_API_URL: "http://backend:3100"
+      NEXT_PUBLIC_AUTH_URL: "https://${RECODER_APP_DOMAIN:-recoder.xyz}"
+      AUTH_DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_main"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001',{redirect:'manual'}).then(r => process.exit(r.status < 400 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    mem_limit: 768m
+    mem_reservation: 256m
+    stop_grace_period: 30s
+
+  # ── Caddy — TLS reverse proxy with auto-HTTPS ──────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    <<: *restart
+    depends_on:
+      - backend
+      - recoder-app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      RECODER_APP_DOMAIN: ${RECODER_APP_DOMAIN:-recoder.xyz}
+      RECODER_AGENTS_DOMAIN: ${RECODER_AGENTS_DOMAIN:-agents.recoder.xyz}
+      CADDY_AUTO_HTTPS: ${CADDY_AUTO_HTTPS:-on}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    mem_limit: 128m
+    mem_reservation: 32m
+
+  # ── OPTIONAL: qdrant (vector search). Dropped by default — see header. ──────
+  # Uncomment this block AND set QDRANT_URL=http://qdrant:6333 on `backend` to
+  # re-enable vector search. Adds ~150–300MB RAM.
+  # qdrant:
+  #   image: qdrant/qdrant:v1.9.2
+  #   <<: *restart
+  #   volumes:
+  #     - qdrantdata:/qdrant/storage
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' || exit 1"]
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 10s
+  #   mem_limit: 512m
+  #   mem_reservation: 128m
+
+volumes:
+  pgdata:
+  redisdata:
+  backenddata:
+  caddydata:
+  caddyconfig:
+  # qdrantdata:   # uncomment with the qdrant service
+
+networks:
+  default:
+    name: recoder-cheap
