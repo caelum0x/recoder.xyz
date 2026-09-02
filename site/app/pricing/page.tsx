@@ -9,23 +9,23 @@ export const metadata: Metadata = {
 };
 
 /**
- * Subscribe CTA targets. Paid checkout is fulfilled by Dodo Payments, the
+ * Subscribe CTA targets. Paid checkout is fulfilled by Creem, the
  * Merchant of Record (legal seller, tax + invoicing). The exact hosted-checkout
  * URLs are environment-driven; when unset the CTA routes through the account
  * signup + subscribe flow on recoder.xyz/auth — never a dead or fake button.
  */
-// Paid checkout is fulfilled by Dodo Payments, the Merchant of Record. When a
-// Dodo hosted-checkout URL is configured we link straight to it; otherwise the
+// Paid checkout is fulfilled by Creem, the Merchant of Record. When a
+// Creem hosted-checkout URL is configured we link straight to it; otherwise the
 // CTA is a real "Get <plan>" that routes through the account signup + subscribe
 // flow on recoder.xyz/auth (never a dead button, never a bare waitlist).
-const DODO_PRO_CHECKOUT = process.env.NEXT_PUBLIC_DODO_PRO_CHECKOUT_URL?.trim();
-const DODO_TEAM_CHECKOUT = process.env.NEXT_PUBLIC_DODO_TEAM_CHECKOUT_URL?.trim();
+const CREEM_PRO_CHECKOUT = process.env.NEXT_PUBLIC_CREEM_PRO_CHECKOUT_URL?.trim();
+const CREEM_TEAM_CHECKOUT = process.env.NEXT_PUBLIC_CREEM_TEAM_CHECKOUT_URL?.trim();
 const isUrl = (v?: string) => Boolean(v && /^https?:\/\//.test(v));
-const PRO_CTA_HREF = isUrl(DODO_PRO_CHECKOUT)
-  ? (DODO_PRO_CHECKOUT as string)
+const PRO_CTA_HREF = isUrl(CREEM_PRO_CHECKOUT)
+  ? (CREEM_PRO_CHECKOUT as string)
   : "/auth/signup?plan=pro";
-const TEAM_CTA_HREF = isUrl(DODO_TEAM_CHECKOUT)
-  ? (DODO_TEAM_CHECKOUT as string)
+const TEAM_CTA_HREF = isUrl(CREEM_TEAM_CHECKOUT)
+  ? (CREEM_TEAM_CHECKOUT as string)
   : "/auth/signup?plan=team";
 
 interface Tier {
@@ -61,7 +61,7 @@ const TIERS: Tier[] = [
   {
     name: "Pro",
     price: "$29",
-    priceNote: "per developer / month · billed via Dodo Payments",
+    priceNote: "per developer / month · billed via Creem",
     blurb: "For solo devs running many agents who want more headroom.",
     features: [
       "Everything in Free",
@@ -74,17 +74,17 @@ const TIERS: Tier[] = [
     cta: {
       label: "Get Pro",
       href: PRO_CTA_HREF,
-      external: isUrl(DODO_PRO_CHECKOUT),
+      external: isUrl(CREEM_PRO_CHECKOUT),
     },
     featured: true,
     badge: "Most popular",
     footnote:
-      "$290/year (2 months free). Checkout is handled by Dodo Payments, the Merchant of Record.",
+      "$290/year (2 months free). Checkout is handled by Creem, the Merchant of Record.",
   },
   {
     name: "Team",
     price: "$99",
-    priceNote: "per month · billed via Dodo Payments",
+    priceNote: "per month · billed via Creem",
     blurb: "For teams sharing an audited agent fleet across machines.",
     features: [
       "Everything in Pro",
@@ -96,9 +96,9 @@ const TIERS: Tier[] = [
     cta: {
       label: "Get Team",
       href: TEAM_CTA_HREF,
-      external: isUrl(DODO_TEAM_CHECKOUT),
+      external: isUrl(CREEM_TEAM_CHECKOUT),
     },
-    footnote: "Checkout is handled by Dodo Payments, the Merchant of Record.",
+    footnote: "Checkout is handled by Creem, the Merchant of Record.",
   },
   {
     name: "Enterprise",
@@ -204,14 +204,14 @@ export default function Pricing() {
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted">
             Paid plans are sold through{" "}
             <a
-              href="https://dodopayments.com"
+              href="https://creem.io"
               target="_blank"
               rel="noreferrer"
               className="text-fg underline hover:opacity-80"
             >
-              Dodo Payments
+              Creem
             </a>{" "}
-            as the Merchant of Record — Dodo Payments is the legal seller and
+            as the Merchant of Record — Creem is the legal seller and
             handles tax and invoicing. You always bring your own agents and model
             keys; Recoder never resells tokens. See our{" "}
             <Link href="/refund" className="text-fg underline hover:opacity-80">
