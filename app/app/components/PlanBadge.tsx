@@ -34,6 +34,18 @@ const PLAN_STYLES: Record<PlanId, { bg: string; text: string; border: string; do
     border: 'border-purple-500/20',
     dot: 'bg-purple-400',
   },
+  'pro-annual': {
+    bg: 'bg-purple-500/10',
+    text: 'text-purple-400',
+    border: 'border-purple-500/20',
+    dot: 'bg-purple-400',
+  },
+  team: {
+    bg: 'bg-green-500/10',
+    text: 'text-green-400',
+    border: 'border-green-500/20',
+    dot: 'bg-green-400',
+  },
   enterprise: {
     bg: 'bg-yellow-500/10',
     text: 'text-yellow-400',
@@ -47,6 +59,8 @@ const PLAN_LABELS: Record<PlanId, string> = {
   weekly: 'Weekly',
   monthly: 'Monthly',
   pro: 'Pro',
+  'pro-annual': 'Pro (Annual)',
+  team: 'Team',
   enterprise: 'Enterprise',
 };
 

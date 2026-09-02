@@ -75,7 +75,23 @@ const PLAN_ENTITLEMENTS: Record<PlanId, EntitlementFeatures> = {
     assisted_synthesize: true,
     evidence_retention_days: 90,
     shared_team_memory: true,
-    team_members: 10,
+    team_members: 1,
+  },
+  'pro-annual': {
+    parallel_agents: 8,
+    sibling_awareness: true,
+    assisted_synthesize: true,
+    evidence_retention_days: 90,
+    shared_team_memory: true,
+    team_members: 1,
+  },
+  team: {
+    parallel_agents: 16,
+    sibling_awareness: true,
+    assisted_synthesize: true,
+    evidence_retention_days: 180,
+    shared_team_memory: true,
+    team_members: 25,
   },
   // "Unlimited everything"
   enterprise: {
