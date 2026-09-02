@@ -1,13 +1,24 @@
-import createMiddleware from 'next-intl/middleware';
 import { NextRequest, NextResponse } from 'next/server';
 import { hasSessionCookie } from '@recoder/auth/edge';
 import { locales, defaultLocale } from './i18n';
 
-const intlMiddleware = createMiddleware({
-  locales,
-  defaultLocale,
-  localePrefix: 'as-needed'
-});
+// Locale routing via a pure internal rewrite. Replaces next-intl's middleware,
+// which emits an absolute-URL rewrite to `localhost` that Next 16 standalone
+// behind a reverse proxy turns into a redirect loop (and an EPROTO 500 under
+// X-Forwarded-Proto: https). A rewrite is never surfaced to the client as a
+// redirect, so this serves the localized route without any 307 hop.
+function localeRewrite(request: NextRequest): NextResponse {
+  const { pathname } = request.nextUrl;
+  const hasLocale = locales.some(
+    (locale) => pathname === `/${locale}` || pathname.startsWith(`/${locale}/`)
+  );
+  if (hasLocale) {
+    return NextResponse.next();
+  }
+  const url = request.nextUrl.clone();
+  url.pathname = `/${defaultLocale}${pathname === '/' ? '' : pathname}`;
+  return NextResponse.rewrite(url);
+}
 
 const PROTECTED_PREFIXES = ['/dashboard', '/settings', '/billing', '/projects', '/remote'];
 const ADMIN_PREFIX = '/admin';
@@ -103,7 +114,7 @@ export default async function middleware(request: NextRequest) {
 
   // Payload admin stays outside locale rewrites. Its route tree lives at
   // /cms, not /{locale}/cms, and Payload handles its own auth/session flow.
-  const response = isPayloadCmsRoute ? NextResponse.next() : intlMiddleware(request);
+  const response = isPayloadCmsRoute ? NextResponse.next() : localeRewrite(request);
 
   // Check if route is protected
   const stripped = stripLocale(request.nextUrl.pathname);
