@@ -21,6 +21,8 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=6144
           NEXT_TELEMETRY_DISABLED: '1'
+          SITE_ASSET_PREFIX: /__site
+          NEXT_PUBLIC_APP_URL: https://recoder.xyz
         run: pnpm build
       - name: package standalone
         run: |
