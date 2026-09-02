@@ -1,0 +1,44 @@
+name: app-build
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: install (app + workspace deps)
+        run: pnpm install --filter "recoder-main-app..." --no-frozen-lockfile
+      - name: build app
+        working-directory: app
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+          NEXT_TELEMETRY_DISABLED: '1'
+          NEXT_PUBLIC_APP_URL: https://recoder.xyz
+        run: pnpm build
+      - name: package standalone
+        run: |
+          set -e
+          cd app
+          test -d .next/standalone || { echo "NO standalone"; ls -la .next; exit 1; }
+          SA=.next/standalone
+          SRV=$(find "$SA" -maxdepth 3 -name server.js | head -1)
+          echo "server.js at: $SRV"; APPDIR=$(dirname "$SRV")
+          mkdir -p "$APPDIR/.next"
+          cp -r .next/static "$APPDIR/.next/static"
+          [ -d public ] && cp -r public "$APPDIR/public" || true
+          printf '%s' "${APPDIR#$SA/}" > "$SA/.server-subdir"
+          echo "subdir: $(cat "$SA/.server-subdir")"
+          tar czf ../app-standalone.tar.gz -C "$SA" .
+          ls -lh ../app-standalone.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-standalone
+          path: app-standalone.tar.gz
+          retention-days: 1
