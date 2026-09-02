@@ -5,7 +5,7 @@
  * Used across the platform for consistency
  */
 
-export type PlanId = 'free' | 'weekly' | 'monthly' | 'pro' | 'enterprise';
+export type PlanId = 'free' | 'weekly' | 'monthly' | 'pro' | 'pro-annual' | 'team' | 'enterprise';
 
 export interface PlanLimits {
   sessionsPerDay: number;
@@ -169,39 +169,82 @@ export const PLANS: Record<PlanId, Plan> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 100,
+    price: 29,
     period: 'month',
-    description: 'For power users and teams',
+    description: 'For solo devs running many agents who want more headroom',
     limits: {
-      sessionsPerDay: 20,
-      tokensPerSessionPricey: 100000,
+      sessionsPerDay: 999,
+      tokensPerSessionPricey: 999999,
       freeModelsUnlimited: true,
-      teamMembers: 10,
+      teamMembers: 1,
     },
     features: {
-      requiresApiKey: false,
-      platformProvidesKey: true,
-      models: ['All AI models + Beta access'],
-      support: 'Priority support + Slack',
+      requiresApiKey: true,
+      platformProvidesKey: false,
+      models: ['Bring your own agents and keys'],
+      support: 'Priority changelog and early builds',
       features: [
-        'No API key needed - we provide it',
-        'All AI models + Beta access',
-        'Priority support + Slack',
-        'Team collaboration (10 members)',
-        'Advanced features',
-        'API access',
-        'Custom AI models',
-        'Dedicated account manager',
+        'Everything in Free',
+        'More parallel agents per console',
+        'Longer run history and retention',
+        'Context reuse across runs (repo intel)',
+        'Persistent shared brain across your own machines',
+        'Priority changelog and early builds',
       ],
     },
-    paddle: {
-      productId: process.env.NEXT_PUBLIC_PADDLE_PRODUCT_PRO || 'prod_pro_temp',
+  },
+
+  'pro-annual': {
+    id: 'pro-annual',
+    name: 'Pro (Annual)',
+    price: 290,
+    period: 'year',
+    description: 'Pro billed yearly — two months free',
+    limits: {
+      sessionsPerDay: 999,
+      tokensPerSessionPricey: 999999,
+      freeModelsUnlimited: true,
+      teamMembers: 1,
     },
-    dodo: {
-      productId: process.env.NEXT_PUBLIC_DODO_PRODUCT_PRO || 'dodo_pro_temp',
+    features: {
+      requiresApiKey: true,
+      platformProvidesKey: false,
+      models: ['Bring your own agents and keys'],
+      support: 'Priority changelog and early builds',
+      features: [
+        'Everything in Pro',
+        'Billed yearly (2 months free)',
+      ],
     },
   },
-  
+
+  team: {
+    id: 'team',
+    name: 'Team',
+    price: 99,
+    period: 'month',
+    description: 'For teams sharing an audited agent fleet across machines',
+    limits: {
+      sessionsPerDay: 999,
+      tokensPerSessionPricey: 999999,
+      freeModelsUnlimited: true,
+      teamMembers: 25,
+    },
+    features: {
+      requiresApiKey: true,
+      platformProvidesKey: false,
+      models: ['Bring your own agents and keys'],
+      support: 'Team-wide retention and audit',
+      features: [
+        'Everything in Pro',
+        'Shared workspaces + audit across machines',
+        'Shared approvals on agent merges',
+        'Cross-machine fleet mesh (zero-trust Envoy)',
+        'Per-seat management and team-wide retention',
+      ],
+    },
+  },
+
   enterprise: {
     id: 'enterprise',
     name: 'Enterprise',
@@ -305,10 +348,12 @@ export function getUpgradeUrl(planId: PlanId): string {
  */
 export function getNextPlan(currentPlan: PlanId): PlanId | null {
   const upgradePath: Record<PlanId, PlanId | null> = {
-    free: 'weekly',
-    weekly: 'monthly',
+    free: 'pro',
+    weekly: 'pro',
     monthly: 'pro',
-    pro: 'enterprise',
+    pro: 'team',
+    'pro-annual': 'team',
+    team: 'enterprise',
     enterprise: null,
   };
   
