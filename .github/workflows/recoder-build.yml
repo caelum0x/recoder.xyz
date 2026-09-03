@@ -23,6 +23,9 @@ jobs:
           NEXT_TELEMETRY_DISABLED: '1'
           SITE_ASSET_PREFIX: /__site
           NEXT_PUBLIC_APP_URL: https://recoder.xyz
+          NEXT_PUBLIC_DOWNLOAD_MACOS_URL: https://recoder.xyz/releases/Recoder-arm64.dmg
+          NEXT_PUBLIC_RELEASE_VISIBILITY: public
+          NEXT_PUBLIC_RELEASE_VERSION: v0.16.5
         run: pnpm build
       - name: package standalone
         run: |
