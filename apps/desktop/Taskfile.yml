@@ -129,7 +129,11 @@ tasks:
         desc: Package the application for the current platform.
         dir: app
         cmds:
-            - pnpm run build:prod && pnpm exec electron-builder -c electron-builder.config.cjs -p never {{.CLI_ARGS}}
+            # Re-stage the tsunami scaffold from its (never-wiped) source right before
+            # electron-builder: the `clean`/build:prod steps empty app/dist and can race
+            # ahead of the build:tsunamiscaffold dep, leaving the required extraResource
+            # `dist/tsunamiscaffold` missing at beforePack time.
+            - pnpm run build:prod && rm -rf dist/tsunamiscaffold && cp -r ../tsunami/frontend/scaffold dist/tsunamiscaffold && cp ../tsunami/templates/empty-gomod.tmpl dist/tsunamiscaffold/go.mod && pnpm exec electron-builder -c electron-builder.config.cjs -p never {{.CLI_ARGS}}
         deps:
             - clean
             - npm:install
