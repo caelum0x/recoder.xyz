@@ -19,7 +19,9 @@ const CANONICAL_ORIGIN = 'https://recoder.xyz';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const access = await ensureSessionAdminAccess(request);
-  if (!access.ok) return withPrivateHeaders(access.response);
+  // `=== false` (not `!access.ok`) — with strictNullChecks off, truthiness
+  // does not narrow the discriminated union to the branch carrying `response`.
+  if (access.ok === false) return withPrivateHeaders(access.response);
   try {
     const records = await readPilotOperations();
     return NextResponse.json({ success: true, ...records }, { headers: NO_STORE });
@@ -42,7 +44,11 @@ async function mutate(request: NextRequest, method: 'POST' | 'PATCH'): Promise<N
   if (originFailure) return originFailure;
 
   const access = await ensureSessionAdminAccess(request);
-  if (!access.ok || !access.admin.userId) return withPrivateHeaders(access.response, requestId);
+  if (access.ok === false) return withPrivateHeaders(access.response, requestId);
+  // Defensive: session admins always carry a userId, but the audit trail
+  // depends on it, so refuse the mutation rather than crash on `response`
+  // (which does not exist on the ok branch).
+  if (!access.admin.userId) return jsonError('Admin access required', 403, requestId);
 
   const idempotencyKey = boundedHeader(request.headers.get('idempotency-key'), 128);
   if (!idempotencyKey || idempotencyKey.length < 8) {
@@ -210,7 +216,7 @@ function enumValue<T extends string>(value: unknown, choices: readonly T[]): T |
   return typeof value === 'string' && choices.includes(value as T) ? value as T : null;
 }
 
-function failure(error: unknown, requestId = randomUUID()): NextResponse {
+function failure(error: unknown, requestId: string = randomUUID()): NextResponse {
   if (error instanceof PilotOperationError) {
     const status = error.code === 'NOT_FOUND' ? 404 : error.code === 'CONFLICT' ? 409 : error.code === 'RATE_LIMITED' ? 429 : 400;
     return jsonError(error.message, status, requestId);
