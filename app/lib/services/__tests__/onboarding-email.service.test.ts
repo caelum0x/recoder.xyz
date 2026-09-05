@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    newsletter_subscribers: {
+      findMany: vi.fn(),
+    },
   },
   sendEmail: vi.fn(),
 }));
@@ -52,6 +55,8 @@ describe('scheduleWinbackEmails', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.sendEmail.mockResolvedValue({ success: true, messageId: 'mock-id' });
+    // Default: nobody on the marketing suppression list.
+    mocks.prisma.newsletter_subscribers.findMany.mockResolvedValue([]);
   });
 
   it('schedules a winback record for each dormant user at 9:00 UTC', async () => {
@@ -77,6 +82,40 @@ describe('scheduleWinbackEmails', () => {
       expect(record.scheduledAt.getUTCHours()).toBe(9);
       expect(record.scheduledAt.getTime()).toBeGreaterThan(Date.now() - 24 * 60 * 60 * 1000);
     }
+  });
+
+  it('never schedules a send for emails on the marketing suppression list', async () => {
+    tableExists(true);
+    mocks.prisma.users.findMany.mockResolvedValue([
+      { id: 'u1', email: 'kept@example.com', name: 'Kept' },
+      { id: 'u2', email: 'OptedOut@example.com', name: 'Out' },
+    ]);
+    // u2 unsubscribed from marketing emails (stored lowercased).
+    mocks.prisma.newsletter_subscribers.findMany.mockResolvedValue([
+      { email: 'optedout@example.com' },
+    ]);
+    mocks.prisma.scheduled_emails.createMany.mockResolvedValue({ count: 2 });
+
+    const service = await freshService();
+    const result = await service.scheduleWinbackEmails();
+
+    // Only the non-suppressed user counts as scheduled.
+    expect(result.scheduled).toBe(1);
+
+    // Suppression lookup filters on status 'unsubscribed'.
+    const suppressionWhere = mocks.prisma.newsletter_subscribers.findMany.mock
+      .calls[0][0]?.where as Record<string, unknown>;
+    expect(suppressionWhere.status).toBe('unsubscribed');
+
+    const { data } = mocks.prisma.scheduled_emails.createMany.mock.calls[0][0] as {
+      data: Array<{ email: string; status: string }>;
+    };
+    const pending = data.filter((r) => r.status === 'pending');
+    const suppressed = data.filter((r) => r.status === 'suppressed');
+    expect(pending).toEqual([expect.objectContaining({ email: 'kept@example.com' })]);
+    // The opted-out user gets a marker record (dedupe + audit) but is never
+    // picked up by processScheduledEmails, which only sends status 'pending'.
+    expect(suppressed).toEqual([expect.objectContaining({ email: 'OptedOut@example.com' })]);
   });
 
   it('dedupes: query excludes users who already have any winback record', async () => {

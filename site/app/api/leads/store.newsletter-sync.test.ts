@@ -47,7 +47,7 @@ describe("saveLead newsletter sync", () => {
       throw new Error("app unreachable");
     }) as unknown as typeof fetch;
 
-    const lead = await saveLead({ kind: "sales", email: "b@example.com" });
+    const lead = await saveLead({ kind: "notify", email: "b@example.com" });
 
     const stored = await fs.readFile(path.join(dataDir, "leads.ndjson"), "utf8");
     assert.ok(stored.includes(lead.id));
@@ -59,9 +59,25 @@ describe("saveLead newsletter sync", () => {
       async () => new Response("nope", { status: 429 }),
     ) as unknown as typeof fetch;
 
-    const lead = await saveLead({ kind: "design-partner", email: "c@example.com" });
+    const lead = await saveLead({ kind: "notify", email: "c@example.com" });
 
     const stored = await fs.readFile(path.join(dataDir, "leads.ndjson"), "utf8");
     assert.ok(stored.includes(lead.id));
+  });
+
+  it("does NOT enroll sales or design-partner leads (no marketing consent)", async () => {
+    const fetchMock = mock.fn(async () => new Response("{}", { status: 200 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const sales = await saveLead({ kind: "sales", email: "d@example.com" });
+    const partner = await saveLead({ kind: "design-partner", email: "e@example.com" });
+
+    // Neither contact-request kind may hit the newsletter endpoint —
+    // /api/newsletter/subscribe re-activates previously unsubscribed emails.
+    assert.equal(fetchMock.mock.callCount(), 0);
+
+    const stored = await fs.readFile(path.join(dataDir, "leads.ndjson"), "utf8");
+    assert.ok(stored.includes(sales.id));
+    assert.ok(stored.includes(partner.id));
   });
 });

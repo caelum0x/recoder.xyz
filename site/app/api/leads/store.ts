@@ -152,8 +152,16 @@ async function forwardToWebhook(lead: Lead): Promise<void> {
  * file. The app route is public, zod-validated, rate-limited, and dedupes on
  * email. A sync failure NEVER fails the lead capture — the file written above
  * remains the source of truth.
+ *
+ * Consent gate (KVKK/GDPR/CAN-SPAM): only "notify" leads are synced — that
+ * form's copy explicitly asks to email the guide + release updates, i.e.
+ * grants marketing consent. Sales and design-partner submissions are contact
+ * requests, not marketing opt-ins, and /api/newsletter/subscribe also
+ * RE-ACTIVATES previously unsubscribed emails, so enrolling them would be
+ * marketing without consent.
  */
 async function syncToNewsletter(lead: Lead): Promise<void> {
+  if (lead.kind !== "notify") return;
   const base = process.env.APP_INTERNAL_URL || "https://recoder.xyz";
   try {
     const response = await fetch(`${base}/api/newsletter/subscribe`, {
