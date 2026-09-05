@@ -5,7 +5,22 @@
  * All templates include proper unsubscribe links and CAN-SPAM compliance
  */
 
+import { buildUnsubscribeUrl } from './unsubscribe-token';
+
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+
+/**
+ * Escape user-controlled text (display names) interpolated into email HTML.
+ * Names come from signup input, so treat them as untrusted markup.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // Common email styles for marketing emails
 const MARKETING_STYLES = `
@@ -125,9 +140,13 @@ interface MarketingEmailOptions {
  * Generate unsubscribe footer with CAN-SPAM compliance
  */
 function getUnsubscribeFooter(email: string, unsubscribeToken?: string): string {
+  // Prefer the stored per-subscriber token; otherwise use a signed one-click
+  // link (HMAC of the email) so recipients WITHOUT a newsletter_subscribers
+  // row (e.g. winback recipients) still get a working opt-out. The GET route
+  // renders a confirm page and only the confirm POST unsubscribes.
   const unsubscribeUrl = unsubscribeToken
     ? `${BASE_URL}/api/newsletter/unsubscribe?token=${unsubscribeToken}`
-    : `${BASE_URL}/api/newsletter/unsubscribe?email=${encodeURIComponent(email)}`;
+    : buildUnsubscribeUrl(BASE_URL, email);
 
   return `
     <div class="footer">
@@ -172,7 +191,8 @@ export function generateNewsletterEmail(options: {
   };
   unsubscribeToken?: string;
 }): { subject: string; html: string } {
-  const { to, name, edition, highlights, featuredProject, unsubscribeToken } = options;
+  const { to, name: rawName, edition, highlights, featuredProject, unsubscribeToken } = options;
+  const name = escapeHtml(rawName);
 
   const subject = `Recoder.xyz Newsletter - ${edition}`;
 
@@ -255,7 +275,8 @@ export function generateProductUpdateEmail(options: {
   ctaLink?: string;
   unsubscribeToken?: string;
 }): { subject: string; html: string } {
-  const { to, name, updateTitle, updateDescription, features, ctaText, ctaLink, unsubscribeToken } = options;
+  const { to, name: rawName, updateTitle, updateDescription, features, ctaText, ctaLink, unsubscribeToken } = options;
+  const name = escapeHtml(rawName);
 
   const subject = `New Update: ${updateTitle}`;
 
@@ -324,7 +345,8 @@ export function generateFeatureAnnouncementEmail(options: {
   docsUrl?: string;
   unsubscribeToken?: string;
 }): { subject: string; html: string } {
-  const { to, name, featureName, featureDescription, benefits, howToUse, videoUrl, docsUrl, unsubscribeToken } = options;
+  const { to, name: rawName, featureName, featureDescription, benefits, howToUse, videoUrl, docsUrl, unsubscribeToken } = options;
+  const name = escapeHtml(rawName);
 
   const subject = `Introducing: ${featureName}`;
 
@@ -415,7 +437,8 @@ export function generateFirstProjectEmail(options: {
   projectName: string;
   unsubscribeToken?: string;
 }): { subject: string; html: string } {
-  const { to, name, projectName, unsubscribeToken } = options;
+  const { to, name: rawName, projectName, unsubscribeToken } = options;
+  const name = escapeHtml(rawName);
 
   const subject = `Congrats on your first project! 🎉`;
 
@@ -482,7 +505,8 @@ export function generateFirstDeploymentEmail(options: {
   platform: string;
   unsubscribeToken?: string;
 }): { subject: string; html: string } {
-  const { to, name, projectName, deployUrl, platform, unsubscribeToken } = options;
+  const { to, name: rawName, projectName, deployUrl, platform, unsubscribeToken } = options;
+  const name = escapeHtml(rawName);
 
   const subject = `Your project is live! 🚀`;
 
@@ -545,7 +569,8 @@ export function generateMilestoneEmail(options: {
   milestoneType: 'projects' | 'deployments' | 'ai_requests';
   unsubscribeToken?: string;
 }): { subject: string; html: string } {
-  const { to, name, milestone, milestoneType, unsubscribeToken } = options;
+  const { to, name: rawName, milestone, milestoneType, unsubscribeToken } = options;
+  const name = escapeHtml(rawName);
 
   const milestoneLabels = {
     projects: 'projects created',
@@ -618,7 +643,8 @@ export function generateMilestoneEmail(options: {
  * shipped (the desktop terminal pivot) + download link + unsubscribe.
  */
 export function generateWinbackEmail(options: MarketingEmailOptions): { subject: string; html: string } {
-  const { to, name, unsubscribeToken } = options;
+  const { to, name: rawName, unsubscribeToken } = options;
+  const name = escapeHtml(rawName);
 
   const subject = 'Recoder is now a desktop terminal for parallel coding agents';
 
