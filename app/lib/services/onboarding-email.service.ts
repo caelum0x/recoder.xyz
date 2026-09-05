@@ -361,9 +361,24 @@ export async function scheduleWinbackEmails(): Promise<{ scheduled: number }> {
     // processScheduledEmails, which only sends status 'pending') so the
     // `none: { type: 'winback' }` dedupe stops re-fetching them every pass —
     // otherwise a suppressed cohort could starve the batch forever.
-    await prisma.scheduled_emails.createMany({
-      data: [
-        ...recipients.map((user) => ({
+    //
+    // Duplicate-send guard: scheduled_emails has no unique(userId, type)
+    // index, so two overlapping cron passes could both pass the dormant-user
+    // query and insert twice. Re-check existing winback rows INSIDE a
+    // transaction immediately before the insert to close that window.
+    const scheduledCount = await prisma.$transaction(async (tx) => {
+      const existing = await tx.scheduled_emails.findMany({
+        where: {
+          type: 'winback',
+          userId: { in: dormantUsers.map((user) => user.id) },
+        },
+        select: { userId: true },
+      });
+      const alreadyScheduled = new Set(existing.map((record) => record.userId));
+
+      const pendingRows = recipients
+        .filter((user) => !alreadyScheduled.has(user.id))
+        .map((user) => ({
           userId: user.id,
           email: user.email,
           name: user.name || '',
@@ -371,8 +386,10 @@ export async function scheduleWinbackEmails(): Promise<{ scheduled: number }> {
           scheduledAt,
           status: 'pending' as const,
           attempts: 0,
-        })),
-        ...suppressedUsers.map((user) => ({
+        }));
+      const suppressedRows = suppressedUsers
+        .filter((user) => !alreadyScheduled.has(user.id))
+        .map((user) => ({
           userId: user.id,
           email: user.email,
           name: user.name || '',
@@ -381,13 +398,20 @@ export async function scheduleWinbackEmails(): Promise<{ scheduled: number }> {
           status: 'suppressed' as const,
           attempts: 0,
           error: 'marketing unsubscribe on file (newsletter_subscribers)',
-        })),
-      ],
+        }));
+
+      if (pendingRows.length + suppressedRows.length > 0) {
+        await tx.scheduled_emails.createMany({
+          data: [...pendingRows, ...suppressedRows],
+        });
+      }
+
+      return pendingRows.length;
     });
 
-    summary.scheduled = recipients.length;
+    summary.scheduled = scheduledCount;
     logger.info('Winback emails scheduled', {
-      count: recipients.length,
+      count: scheduledCount,
       suppressed: dormantUsers.length - recipients.length,
       scheduledAt: scheduledAt.toISOString(),
     });
