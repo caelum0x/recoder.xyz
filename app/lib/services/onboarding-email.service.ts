@@ -295,8 +295,10 @@ export async function processScheduledEmails(): Promise<{
  *
  * Dormant = active + email-verified users whose last login (or signup, if they
  * never logged in) is older than WINBACK_INACTIVE_DAYS. Users who already have
- * a winback record — pending, sent, or failed — are skipped, so each user can
- * ever receive at most one.
+ * a winback record — pending, sent, failed, or suppressed — are skipped, so
+ * each user can ever receive at most one. Emails on the marketing suppression
+ * list (newsletter_subscribers status 'unsubscribed') are never sent; they get
+ * a 'suppressed' marker record instead (KVKK/CAN-SPAM).
  *
  * Called from the /api/cron/process-emails route; idempotent and never throws.
  */
@@ -331,6 +333,23 @@ export async function scheduleWinbackEmails(): Promise<{ scheduled: number }> {
       return summary;
     }
 
+    // Consent gate (KVKK/CAN-SPAM): the winback is a marketing email, so honor
+    // the marketing suppression list — anyone whose email is marked
+    // 'unsubscribed' in newsletter_subscribers (the list the email footer's
+    // unsubscribe link writes to) must never be scheduled.
+    const optedOut = await prisma.newsletter_subscribers.findMany({
+      where: {
+        email: {
+          in: [...new Set(dormantUsers.flatMap((u) => [u.email, u.email.toLowerCase()]))],
+        },
+        status: 'unsubscribed',
+      },
+      select: { email: true },
+    });
+    const suppressed = new Set(optedOut.map((s) => s.email.toLowerCase()));
+    const recipients = dormantUsers.filter((u) => !suppressed.has(u.email.toLowerCase()));
+    const suppressedUsers = dormantUsers.filter((u) => suppressed.has(u.email.toLowerCase()));
+
     // Send at the next 9:00 UTC (today if still ahead, otherwise tomorrow).
     const scheduledAt = new Date();
     if (scheduledAt.getUTCHours() >= 9) {
@@ -338,21 +357,38 @@ export async function scheduleWinbackEmails(): Promise<{ scheduled: number }> {
     }
     scheduledAt.setUTCHours(9, 0, 0, 0);
 
+    // Suppressed users get a 'suppressed' marker record (never picked up by
+    // processScheduledEmails, which only sends status 'pending') so the
+    // `none: { type: 'winback' }` dedupe stops re-fetching them every pass —
+    // otherwise a suppressed cohort could starve the batch forever.
     await prisma.scheduled_emails.createMany({
-      data: dormantUsers.map((user) => ({
-        userId: user.id,
-        email: user.email,
-        name: user.name || '',
-        type: 'winback',
-        scheduledAt,
-        status: 'pending' as const,
-        attempts: 0,
-      })),
+      data: [
+        ...recipients.map((user) => ({
+          userId: user.id,
+          email: user.email,
+          name: user.name || '',
+          type: 'winback',
+          scheduledAt,
+          status: 'pending' as const,
+          attempts: 0,
+        })),
+        ...suppressedUsers.map((user) => ({
+          userId: user.id,
+          email: user.email,
+          name: user.name || '',
+          type: 'winback',
+          scheduledAt,
+          status: 'suppressed' as const,
+          attempts: 0,
+          error: 'marketing unsubscribe on file (newsletter_subscribers)',
+        })),
+      ],
     });
 
-    summary.scheduled = dormantUsers.length;
+    summary.scheduled = recipients.length;
     logger.info('Winback emails scheduled', {
-      count: dormantUsers.length,
+      count: recipients.length,
+      suppressed: dormantUsers.length - recipients.length,
       scheduledAt: scheduledAt.toISOString(),
     });
   } catch (error) {
