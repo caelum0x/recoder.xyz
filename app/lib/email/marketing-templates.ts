@@ -611,6 +611,64 @@ export function generateMilestoneEmail(options: {
   return { subject, html };
 }
 
+/**
+ * Dormant-User Win-back Email
+ *
+ * Sent once to users with no login activity for ~2 weeks. Honest recap of what
+ * shipped (the desktop terminal pivot) + download link + unsubscribe.
+ */
+export function generateWinbackEmail(options: MarketingEmailOptions): { subject: string; html: string } {
+  const { to, name, unsubscribeToken } = options;
+
+  const subject = 'Recoder is now a desktop terminal for parallel coding agents';
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <style>${MARKETING_STYLES}</style>
+      </head>
+      <body style="background: #000000;">
+        <div class="container">
+          <div class="header">
+            <h1>Recoder went desktop</h1>
+          </div>
+          <div class="content">
+            <h2 style="color: #fff;">Hi ${name},</h2>
+            <p>It's been a while since you signed in, and Recoder has changed a lot since then — enough that we wanted to tell you directly.</p>
+
+            <div class="section">
+              <h3>The product is now a terminal</h3>
+              <p>Recoder is a desktop app: open it, pick your coding agent (Claude Code, Codex, Cursor, opencode), and run several attempts at the same task in parallel, each in an isolated git worktree.</p>
+            </div>
+
+            <div class="section">
+              <h3>Compare and merge the best result</h3>
+              <p>Review the diffs side by side, keep the attempt that actually worked, and merge it. No copy-pasting between chat windows.</p>
+            </div>
+
+            <div class="section">
+              <h3>Bring your own keys</h3>
+              <p>The free tier works with your own API keys — your account is still active and nothing was deleted.</p>
+            </div>
+
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${BASE_URL}/download" class="button">Download the desktop app</a>
+            </div>
+
+            <p style="text-align: center; color: #888; font-size: 14px;">
+              Questions or feedback? Just reply to this email — a human reads every message.
+            </p>
+          </div>
+          ${getUnsubscribeFooter(to, unsubscribeToken)}
+        </div>
+      </body>
+    </html>
+  `;
+
+  return { subject, html };
+}
+
 export default {
   generateNewsletterEmail,
   generateProductUpdateEmail,
@@ -618,4 +676,5 @@ export default {
   generateFirstProjectEmail,
   generateFirstDeploymentEmail,
   generateMilestoneEmail,
+  generateWinbackEmail,
 };

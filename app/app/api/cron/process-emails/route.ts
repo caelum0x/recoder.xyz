@@ -12,7 +12,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { processScheduledEmails } from '@/lib/services/onboarding-email.service';
+import {
+  processScheduledEmails,
+  scheduleWinbackEmails,
+} from '@/lib/services/onboarding-email.service';
 import { logger } from '@/lib/logger';
 
 const CRON_SECRET = process.env.CRON_SECRET || '';
@@ -47,11 +50,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const startTime = Date.now();
+    // Queue win-back emails for dormant users first (idempotent, never
+    // throws), then process everything that is due.
+    const winback = await scheduleWinbackEmails();
     const result = await processScheduledEmails();
     const duration = Date.now() - startTime;
 
     logger.info('Cron: process-emails completed', {
       ...result,
+      winbackScheduled: winback.scheduled,
       durationMs: duration,
     });
 
@@ -59,6 +66,7 @@ export async function GET(request: NextRequest) {
       success: true,
       timestamp: new Date().toISOString(),
       durationMs: duration,
+      winbackScheduled: winback.scheduled,
       ...result,
     });
   } catch (error) {
