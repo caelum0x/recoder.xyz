@@ -15,14 +15,20 @@
 
 import { prisma } from '@/lib/prisma';
 import {
+  sendEmail,
   sendWelcomeEmail,
   sendGettingStartedEmail,
   sendFeatureDeepDiveEmail,
   sendEngagementEmail,
 } from '@/lib/email';
+import { generateWinbackEmail } from '@/lib/email/marketing-templates';
 import { logger } from '@/lib/logger';
 
 const MAX_ATTEMPTS = 3;
+/** Users with no login for this many days are considered dormant. */
+const WINBACK_INACTIVE_DAYS = 14;
+/** Cap per pass — the cron runs every 15 min, so backlog drains quickly. */
+const WINBACK_BATCH_LIMIT = 200;
 let scheduledEmailsTableAvailable: boolean | null = null;
 
 async function hasScheduledEmailsTable(): Promise<boolean> {
@@ -43,11 +49,21 @@ async function hasScheduledEmailsTable(): Promise<boolean> {
   }
 }
 
+/** One-time win-back email for dormant users (see scheduleWinbackEmails). */
+async function sendWinbackEmail(
+  email: string,
+  name: string,
+): Promise<{ success: boolean; error?: unknown }> {
+  const { subject, html } = generateWinbackEmail({ to: email, name });
+  return sendEmail({ to: email, subject, html });
+}
+
 /** Email type to sender function mapping */
 const EMAIL_SENDERS: Record<string, (email: string, name: string) => Promise<{ success: boolean; error?: unknown }>> = {
   getting_started: sendGettingStartedEmail,
   feature_deep_dive: sendFeatureDeepDiveEmail,
   engagement: sendEngagementEmail,
+  winback: sendWinbackEmail,
 };
 
 /**
@@ -269,6 +285,81 @@ export async function processScheduledEmails(): Promise<{
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error('processScheduledEmails fatal error', { error: errorMsg });
     summary.errors.push(`Fatal: ${errorMsg}`);
+  }
+
+  return summary;
+}
+
+/**
+ * Schedule a ONE-TIME win-back email for every dormant user.
+ *
+ * Dormant = active + email-verified users whose last login (or signup, if they
+ * never logged in) is older than WINBACK_INACTIVE_DAYS. Users who already have
+ * a winback record — pending, sent, or failed — are skipped, so each user can
+ * ever receive at most one.
+ *
+ * Called from the /api/cron/process-emails route; idempotent and never throws.
+ */
+export async function scheduleWinbackEmails(): Promise<{ scheduled: number }> {
+  const summary = { scheduled: 0 };
+
+  try {
+    const canSchedule = await hasScheduledEmailsTable();
+    if (!canSchedule) {
+      logger.warn('scheduled_emails table unavailable; skipping winback scheduling');
+      return summary;
+    }
+
+    const cutoff = new Date(Date.now() - WINBACK_INACTIVE_DAYS * 24 * 60 * 60 * 1000);
+
+    const dormantUsers = await prisma.users.findMany({
+      where: {
+        isActive: true,
+        emailVerified: true,
+        // Dedupe: at most one winback ever, regardless of status.
+        scheduled_emails: { none: { type: 'winback' } },
+        OR: [
+          { lastLoginAt: { lt: cutoff } },
+          { lastLoginAt: null, createdAt: { lt: cutoff } },
+        ],
+      },
+      select: { id: true, email: true, name: true },
+      take: WINBACK_BATCH_LIMIT,
+    });
+
+    if (dormantUsers.length === 0) {
+      return summary;
+    }
+
+    // Send at the next 9:00 UTC (today if still ahead, otherwise tomorrow).
+    const scheduledAt = new Date();
+    if (scheduledAt.getUTCHours() >= 9) {
+      scheduledAt.setUTCDate(scheduledAt.getUTCDate() + 1);
+    }
+    scheduledAt.setUTCHours(9, 0, 0, 0);
+
+    await prisma.scheduled_emails.createMany({
+      data: dormantUsers.map((user) => ({
+        userId: user.id,
+        email: user.email,
+        name: user.name || '',
+        type: 'winback',
+        scheduledAt,
+        status: 'pending' as const,
+        attempts: 0,
+      })),
+    });
+
+    summary.scheduled = dormantUsers.length;
+    logger.info('Winback emails scheduled', {
+      count: dormantUsers.length,
+      scheduledAt: scheduledAt.toISOString(),
+    });
+  } catch (error) {
+    // Never let winback scheduling break the cron pass
+    logger.error('Failed to schedule winback emails', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   return summary;
