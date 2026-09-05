@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
 import { SiteHeader } from '@/components/SiteHeader';
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 import Link from 'next/link';
 import { 
   Terminal,
@@ -89,7 +90,12 @@ export default function SetupProfilePage() {
     try {
       // Save profile data to session/localStorage for now
       sessionStorage.setItem('onboarding_profile', JSON.stringify(formData));
-      
+
+      trackEvent(AnalyticsEvents.ONBOARDING_PROFILE_SAVED, {
+        step: 'setup-profile',
+        source: formData.role,
+      });
+
       // Navigate to next step
       router.push('/onboarding/choose-plan');
     } catch (error) {

@@ -1,5 +1,13 @@
 import Link from "next/link";
 import { Nav, Footer, DownloadButton } from "@/components/site";
+import {
+  readPublicProofSummary,
+  type PublicProofSummary,
+} from "./api/proof/summary";
+
+// ISR: the proof strip reads the live evidence store server-side; refresh the
+// prerendered page every 5 minutes instead of forcing every request dynamic.
+export const revalidate = 300;
 
 export default function Home() {
   return (
@@ -14,6 +22,7 @@ export default function Home() {
         <KeysNote />
         <PlanTeaser />
         <Faq />
+        <ProofStrip />
         <FinalCta />
       </main>
       <Footer />
@@ -620,6 +629,99 @@ function Faq() {
             </details>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * ProofStrip — honest social proof, straight from the evidence store.
+ * Real aggregate counts of design-partner intake responses (the same
+ * privacy-safe summary /proof renders). No logos, no testimonials, no
+ * invented numbers: when there is no evidence yet, we say exactly that
+ * and link to the live ledger instead of faking traction.
+ * ------------------------------------------------------------------ */
+
+const PAIN_LABELS: Record<string, string> = {
+  compare: "Comparing agent attempts",
+  merge: "Merging parallel work",
+  governance: "Governance & approvals",
+  privacy: "Privacy / local-first",
+  cost: "Cost control",
+  reliability: "Reliability",
+};
+
+async function ProofStrip() {
+  let proof: PublicProofSummary | null = null;
+  try {
+    proof = await readPublicProofSummary();
+  } catch {
+    // Evidence store unreadable — show nothing rather than fake numbers.
+    return null;
+  }
+
+  const intakes = proof.funnel.designPartnerIntakes;
+  const topPains = Object.entries(proof.intakeSignals.primaryPains)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .filter(([key]) => PAIN_LABELS[key]);
+
+  return (
+    <section className="border-t border-border">
+      <div className="mx-auto max-w-6xl px-6 py-16">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="max-w-xl">
+            <h2 className="text-balance text-2xl font-semibold tracking-tight md:text-3xl">
+              Evidence, not testimonials.
+            </h2>
+            <p className="mt-3 text-muted">
+              We publish our validation ledger live — every design-partner
+              request, pilot, and verified outcome, aggregated straight from
+              the intake records. No logos, no invented quotes.
+            </p>
+          </div>
+          <Link
+            href="/proof"
+            className="text-sm text-accent transition-opacity hover:opacity-80"
+          >
+            See the evidence →
+          </Link>
+        </div>
+        {intakes > 0 ? (
+          <div className="mt-8 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+            <div className="bg-bg p-5">
+              <div className="text-xl font-semibold tracking-tight">
+                {intakes}
+              </div>
+              <div className="mt-1 text-xs text-faint">
+                design-partner request{intakes === 1 ? "" : "s"} on record
+              </div>
+            </div>
+            <div className="bg-bg p-5">
+              <div className="text-xl font-semibold tracking-tight">
+                {proof.intakeSignals.readyNow}
+              </div>
+              <div className="mt-1 text-xs text-faint">
+                ready to pilot now
+              </div>
+            </div>
+            <div className="bg-bg p-5">
+              <div className="text-sm text-muted">
+                {topPains.length > 0
+                  ? topPains.map(([key]) => PAIN_LABELS[key]).join(" · ")
+                  : "Primary pains pending"}
+              </div>
+              <div className="mt-1 text-xs text-faint">
+                top pains teams report
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-6 text-sm text-faint">
+            The ledger is young — early design-partner intake is open and every
+            response lands there unedited.
+          </p>
+        )}
       </div>
     </section>
   );

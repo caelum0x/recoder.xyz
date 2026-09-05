@@ -20,6 +20,8 @@ export const AnalyticsEvents = {
 
   // ---- Onboarding ----
   ONBOARDING_STARTED: 'onboarding_started',
+  ONBOARDING_PROFILE_SAVED: 'onboarding_profile_saved',
+  ONBOARDING_PLAN_CHOSEN: 'onboarding_plan_chosen',
   ONBOARDING_COMPLETED: 'onboarding_completed',
   ONBOARDING_SKIPPED: 'onboarding_skipped',
 
@@ -45,6 +47,7 @@ export const AnalyticsEvents = {
   PLATFORM_PAGE_VIEWED: 'platform_page_viewed',
   BLOG_POST_VIEWED: 'blog_post_viewed',
   DOCS_PAGE_VIEWED: 'docs_page_viewed',
+  DOWNLOAD_CLICKED: 'download_clicked',
 } as const;
 
 export type AnalyticsEvent = (typeof AnalyticsEvents)[keyof typeof AnalyticsEvents];
@@ -127,6 +130,8 @@ export type EventPropertiesMap = {
 
   // Onboarding
   [AnalyticsEvents.ONBOARDING_STARTED]: OnboardingEventProperties;
+  [AnalyticsEvents.ONBOARDING_PROFILE_SAVED]: OnboardingEventProperties;
+  [AnalyticsEvents.ONBOARDING_PLAN_CHOSEN]: OnboardingEventProperties;
   [AnalyticsEvents.ONBOARDING_COMPLETED]: OnboardingEventProperties;
   [AnalyticsEvents.ONBOARDING_SKIPPED]: OnboardingEventProperties;
 
@@ -152,4 +157,5 @@ export type EventPropertiesMap = {
   [AnalyticsEvents.PLATFORM_PAGE_VIEWED]: PageViewEventProperties;
   [AnalyticsEvents.BLOG_POST_VIEWED]: PageViewEventProperties;
   [AnalyticsEvents.DOCS_PAGE_VIEWED]: PageViewEventProperties;
+  [AnalyticsEvents.DOWNLOAD_CLICKED]: PageViewEventProperties;
 };
