@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Nav, Footer } from "@/components/site";
 import { DownloadNotify, DownloadReleases } from "@/components/download-notify";
+import { LeadForm } from "@/components/lead-form";
 import {
   downloadHref,
   platformChecksum,
@@ -80,11 +81,28 @@ export default function Download() {
         )}
 
         {isLive ? (
-          <DownloadReleases
-            hrefs={hrefs}
-            checksums={checksums}
-            versionLabel={versionLabel}
-          />
+          <>
+            <DownloadReleases
+              hrefs={hrefs}
+              checksums={checksums}
+              versionLabel={versionLabel}
+            />
+            {/* Optional, non-blocking: the download works without an email.
+                This is the only capture moment on the primary CTA path. */}
+            <section className="mx-auto mt-10 max-w-md text-left">
+              <p className="text-center text-sm text-muted">
+                Email me the getting-started guide + release updates
+              </p>
+              <LeadForm
+                kind="notify"
+                source="post-download-macos"
+                platform="macos"
+                submitLabel="Send the guide"
+                successText="You're on the list — the getting-started guide and release updates will land in your inbox."
+                className="mt-3"
+              />
+            </section>
+          </>
         ) : (
           <DownloadNotify />
         )}

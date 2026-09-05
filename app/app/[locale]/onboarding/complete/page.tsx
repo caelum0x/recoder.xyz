@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
 import { SiteHeader } from '@/components/SiteHeader';
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 import Link from 'next/link';
 import {
   Check,
@@ -85,30 +86,27 @@ const APP_CATALOG: Record<string, AppRecommendation> = {
   },
 };
 
-/** Return [primaryKey, ...secondaryKeys] based on profile. */
+/**
+ * Return [primaryKey, ...secondaryKeys] based on profile.
+ *
+ * The desktop app IS the product ("the product is a terminal"), so it is
+ * always the primary recommendation. Role/use-case only orders the
+ * secondary surfaces.
+ */
 function getRecommendedOrder(
   useCase: string | undefined,
   role: string | undefined
 ): string[] {
-  // Role-based overrides take precedence when they're a strong signal
-  if (role === 'product') return ['pm', 'agents', 'agency', 'web'];
-  if (role === 'designer') return ['agency', 'agents', 'web', 'pm'];
+  if (role === 'product') return ['web', 'pm', 'agents', 'agency'];
+  if (role === 'designer') return ['web', 'agency', 'agents', 'pm'];
 
-  // Use-case-based routing
   switch (useCase) {
-    case 'web':
-    case 'mobile':
-    case 'api':
-    case 'blockchain':
-      return ['agents', 'web', 'agency', 'pm'];
     case 'automation':
     case 'ai':
     case 'data':
-      return ['agents', 'agency', 'web', 'pm'];
-    case 'other':
+      return ['web', 'agents', 'agency', 'pm'];
     default:
-      // Generic fallback — lead with agents as the broadest surface
-      return ['agents', 'web', 'agency', 'pm'];
+      return ['web', 'agents', 'agency', 'pm'];
   }
 }
 
@@ -173,6 +171,10 @@ export default function CompletePage() {
       });
 
       if (response.ok) {
+        trackEvent(AnalyticsEvents.ONBOARDING_COMPLETED, {
+          step: 'complete',
+          plan: selectedPlan || 'free',
+        });
         // Clear session storage
         sessionStorage.removeItem('onboarding_profile');
         sessionStorage.removeItem('onboarding_plan');
@@ -234,6 +236,15 @@ export default function CompletePage() {
   const secondaryApps = secondaryKeys.map((k) => APP_CATALOG[k]);
   const headline = getPersonalizedHeadline(profile.useCase, profile.role);
 
+  const trackAppClick = (link: string) => {
+    if (link === '/download') {
+      trackEvent(AnalyticsEvents.DOWNLOAD_CLICKED, {
+        pagePath: '/onboarding/complete',
+        source: 'onboarding',
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Progress Bar - Complete */}
@@ -267,16 +278,16 @@ export default function CompletePage() {
           {/* Quick Stats */}
           <div className="grid md:grid-cols-3 gap-6 mb-12">
             <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl text-center">
-              <div className="text-4xl font-bold text-white mb-2">50+</div>
-              <div className="text-gray-400">AI Models</div>
+              <div className="text-4xl font-bold text-white mb-2">1</div>
+              <div className="text-gray-400">Terminal</div>
             </div>
             <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl text-center">
-              <div className="text-4xl font-bold text-white mb-2">4</div>
-              <div className="text-gray-400">Platforms</div>
+              <div className="text-4xl font-bold text-white mb-2">4+</div>
+              <div className="text-gray-400">Coding Agents</div>
             </div>
             <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl text-center">
               <div className="text-4xl font-bold text-green-500 mb-2">&infin;</div>
-              <div className="text-gray-400">Possibilities</div>
+              <div className="text-gray-400">Parallel Attempts</div>
             </div>
           </div>
 
@@ -315,6 +326,7 @@ export default function CompletePage() {
                     href={primaryApp.link}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => trackAppClick(primaryApp.link)}
                     className="inline-flex items-center justify-center space-x-2 px-6 py-3 border border-white/10 hover:bg-white/5 rounded-xl font-medium transition-all"
                   >
                     <span>{primaryApp.action}</span>
@@ -345,6 +357,7 @@ export default function CompletePage() {
                       href={app.link}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => trackAppClick(app.link)}
                       className="inline-flex items-center space-x-1.5 text-sm text-neutral-300 hover:text-white font-medium"
                     >
                       <span>{app.action}</span>

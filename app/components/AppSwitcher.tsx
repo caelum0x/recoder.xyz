@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getSwitcherApps, RECODER_SETTINGS_URLS } from '@recoder/ecosystem-config';
 import { NotificationBell } from './platform/notification-bell';
 import { SubscriptionBadge } from './platform/subscription-badge';
+import { UsageMeter } from './platform/usage-meter';
 import { Key, Settings, Shield } from 'lucide-react';
 
 export function AppSwitcher() {
@@ -40,6 +41,7 @@ export function AppSwitcher() {
 
   return (
     <div className="relative flex items-center gap-2" ref={menuRef}>
+      <UsageMeter />
       <SubscriptionBadge />
       <NotificationBell />
       <button

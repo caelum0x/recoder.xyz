@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
 import { SiteHeader } from '@/components/SiteHeader';
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 import Link from 'next/link';
 import {
   Terminal,
@@ -132,6 +133,11 @@ export default function ChoosePlanPage() {
 
     // Save selected plan to session
     sessionStorage.setItem('onboarding_plan', selectedPlan);
+
+    trackEvent(AnalyticsEvents.ONBOARDING_PLAN_CHOSEN, {
+      step: 'choose-plan',
+      plan: selectedPlan,
+    });
 
     if (selectedPlan === 'free') {
       router.push('/onboarding/setup-api-key');

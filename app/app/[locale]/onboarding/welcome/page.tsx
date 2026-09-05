@@ -10,15 +10,15 @@ import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
 import Link from 'next/link';
 import { SiteHeader } from '@/components/SiteHeader';
-import { 
+import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
+import {
   Terminal,
   Sparkles,
   Check,
   ArrowRight,
   Zap,
   Shield,
-  Code2,
-  Globe
+  GitMerge
 } from 'lucide-react';
 
 export default function WelcomePage() {
@@ -46,6 +46,7 @@ export default function WelcomePage() {
 
     if (session && !isPending) {
       checkOnboarding();
+      trackEvent(AnalyticsEvents.ONBOARDING_STARTED, { step: 'welcome' });
     } else if (!session && !isPending) {
       router.push('/auth/signin');
     }
@@ -64,24 +65,24 @@ export default function WelcomePage() {
 
   const features = [
     {
-      icon: Zap,
-      title: 'Access 50+ AI Models',
-      description: 'Claude, GPT-4, Gemini, Llama, and more - all in one place',
+      icon: Terminal,
+      title: 'One Terminal, Every Agent',
+      description: 'Run Claude Code, Codex, Cursor, and opencode from a single desktop app',
     },
     {
-      icon: Code2,
-      title: 'Multiple Platforms',
-      description: 'Web, CLI, VS Code extension, and API access',
+      icon: Zap,
+      title: 'Parallel Attempts',
+      description: 'Fire the same task at several agents at once, each in an isolated git worktree',
+    },
+    {
+      icon: GitMerge,
+      title: 'Merge the Best Result',
+      description: 'Compare the diffs side by side and keep only the attempt that actually worked',
     },
     {
       icon: Shield,
-      title: 'Production Ready',
-      description: 'Real, working code - not mock implementations',
-    },
-    {
-      icon: Globe,
-      title: 'Enterprise Features',
-      description: 'Team collaboration, usage tracking, and analytics',
+      title: 'Your Keys, Your Code',
+      description: 'Bring your own API keys on the free tier - your code stays in your repos',
     },
   ];
 
@@ -145,7 +146,7 @@ export default function WelcomePage() {
                 </div>
                 <div>
                   <div className="font-medium">Choose your plan</div>
-                  <div className="text-sm text-gray-400">Free, Pro, or Enterprise - you can change anytime</div>
+                  <div className="text-sm text-gray-400">Free is BYOK - bring your own API keys; upgrade anytime</div>
                 </div>
               </div>
               <div className="flex items-start space-x-4">
@@ -153,8 +154,8 @@ export default function WelcomePage() {
                   <span className="text-sm font-bold">3</span>
                 </div>
                 <div>
-                  <div className="font-medium">Setup your API key (optional)</div>
-                  <div className="text-sm text-gray-400">Free users can use their own OpenRouter API key</div>
+                  <div className="font-medium">Download the desktop app</div>
+                  <div className="text-sm text-gray-400">The product is a terminal - grab it for your machine</div>
                 </div>
               </div>
               <div className="flex items-start space-x-4">
@@ -162,8 +163,8 @@ export default function WelcomePage() {
                   <Check className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="font-medium">Start building!</div>
-                  <div className="text-sm text-gray-400">Access all platforms and start creating</div>
+                  <div className="font-medium">Run your first parallel task</div>
+                  <div className="text-sm text-gray-400">Let several agents attempt it, then merge the best result</div>
                 </div>
               </div>
             </div>

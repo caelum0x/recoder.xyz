@@ -15,14 +15,20 @@
 
 import { prisma } from '@/lib/prisma';
 import {
+  sendEmail,
   sendWelcomeEmail,
   sendGettingStartedEmail,
   sendFeatureDeepDiveEmail,
   sendEngagementEmail,
 } from '@/lib/email';
+import { generateWinbackEmail } from '@/lib/email/marketing-templates';
 import { logger } from '@/lib/logger';
 
 const MAX_ATTEMPTS = 3;
+/** Users with no login for this many days are considered dormant. */
+const WINBACK_INACTIVE_DAYS = 14;
+/** Cap per pass — the cron runs every 15 min, so backlog drains quickly. */
+const WINBACK_BATCH_LIMIT = 200;
 let scheduledEmailsTableAvailable: boolean | null = null;
 
 async function hasScheduledEmailsTable(): Promise<boolean> {
@@ -43,11 +49,21 @@ async function hasScheduledEmailsTable(): Promise<boolean> {
   }
 }
 
+/** One-time win-back email for dormant users (see scheduleWinbackEmails). */
+async function sendWinbackEmail(
+  email: string,
+  name: string,
+): Promise<{ success: boolean; error?: unknown }> {
+  const { subject, html } = generateWinbackEmail({ to: email, name });
+  return sendEmail({ to: email, subject, html });
+}
+
 /** Email type to sender function mapping */
 const EMAIL_SENDERS: Record<string, (email: string, name: string) => Promise<{ success: boolean; error?: unknown }>> = {
   getting_started: sendGettingStartedEmail,
   feature_deep_dive: sendFeatureDeepDiveEmail,
   engagement: sendEngagementEmail,
+  winback: sendWinbackEmail,
 };
 
 /**
@@ -269,6 +285,141 @@ export async function processScheduledEmails(): Promise<{
     const errorMsg = error instanceof Error ? error.message : String(error);
     logger.error('processScheduledEmails fatal error', { error: errorMsg });
     summary.errors.push(`Fatal: ${errorMsg}`);
+  }
+
+  return summary;
+}
+
+/**
+ * Schedule a ONE-TIME win-back email for every dormant user.
+ *
+ * Dormant = active + email-verified users whose last login (or signup, if they
+ * never logged in) is older than WINBACK_INACTIVE_DAYS. Users who already have
+ * a winback record — pending, sent, failed, or suppressed — are skipped, so
+ * each user can ever receive at most one. Emails on the marketing suppression
+ * list (newsletter_subscribers status 'unsubscribed') are never sent; they get
+ * a 'suppressed' marker record instead (KVKK/CAN-SPAM).
+ *
+ * Called from the /api/cron/process-emails route; idempotent and never throws.
+ */
+export async function scheduleWinbackEmails(): Promise<{ scheduled: number }> {
+  const summary = { scheduled: 0 };
+
+  try {
+    const canSchedule = await hasScheduledEmailsTable();
+    if (!canSchedule) {
+      logger.warn('scheduled_emails table unavailable; skipping winback scheduling');
+      return summary;
+    }
+
+    const cutoff = new Date(Date.now() - WINBACK_INACTIVE_DAYS * 24 * 60 * 60 * 1000);
+
+    const dormantUsers = await prisma.users.findMany({
+      where: {
+        isActive: true,
+        emailVerified: true,
+        // Dedupe: at most one winback ever, regardless of status.
+        scheduled_emails: { none: { type: 'winback' } },
+        OR: [
+          { lastLoginAt: { lt: cutoff } },
+          { lastLoginAt: null, createdAt: { lt: cutoff } },
+        ],
+      },
+      select: { id: true, email: true, name: true },
+      take: WINBACK_BATCH_LIMIT,
+    });
+
+    if (dormantUsers.length === 0) {
+      return summary;
+    }
+
+    // Consent gate (KVKK/CAN-SPAM): the winback is a marketing email, so honor
+    // the marketing suppression list — anyone whose email is marked
+    // 'unsubscribed' in newsletter_subscribers (the list the email footer's
+    // unsubscribe link writes to) must never be scheduled.
+    const optedOut = await prisma.newsletter_subscribers.findMany({
+      where: {
+        email: {
+          in: [...new Set(dormantUsers.flatMap((u) => [u.email, u.email.toLowerCase()]))],
+        },
+        status: 'unsubscribed',
+      },
+      select: { email: true },
+    });
+    const suppressed = new Set(optedOut.map((s) => s.email.toLowerCase()));
+    const recipients = dormantUsers.filter((u) => !suppressed.has(u.email.toLowerCase()));
+    const suppressedUsers = dormantUsers.filter((u) => suppressed.has(u.email.toLowerCase()));
+
+    // Send at the next 9:00 UTC (today if still ahead, otherwise tomorrow).
+    const scheduledAt = new Date();
+    if (scheduledAt.getUTCHours() >= 9) {
+      scheduledAt.setUTCDate(scheduledAt.getUTCDate() + 1);
+    }
+    scheduledAt.setUTCHours(9, 0, 0, 0);
+
+    // Suppressed users get a 'suppressed' marker record (never picked up by
+    // processScheduledEmails, which only sends status 'pending') so the
+    // `none: { type: 'winback' }` dedupe stops re-fetching them every pass —
+    // otherwise a suppressed cohort could starve the batch forever.
+    //
+    // Duplicate-send guard: scheduled_emails has no unique(userId, type)
+    // index, so two overlapping cron passes could both pass the dormant-user
+    // query and insert twice. Re-check existing winback rows INSIDE a
+    // transaction immediately before the insert to close that window.
+    const scheduledCount = await prisma.$transaction(async (tx) => {
+      const existing = await tx.scheduled_emails.findMany({
+        where: {
+          type: 'winback',
+          userId: { in: dormantUsers.map((user) => user.id) },
+        },
+        select: { userId: true },
+      });
+      const alreadyScheduled = new Set(existing.map((record) => record.userId));
+
+      const pendingRows = recipients
+        .filter((user) => !alreadyScheduled.has(user.id))
+        .map((user) => ({
+          userId: user.id,
+          email: user.email,
+          name: user.name || '',
+          type: 'winback',
+          scheduledAt,
+          status: 'pending' as const,
+          attempts: 0,
+        }));
+      const suppressedRows = suppressedUsers
+        .filter((user) => !alreadyScheduled.has(user.id))
+        .map((user) => ({
+          userId: user.id,
+          email: user.email,
+          name: user.name || '',
+          type: 'winback',
+          scheduledAt,
+          status: 'suppressed' as const,
+          attempts: 0,
+          error: 'marketing unsubscribe on file (newsletter_subscribers)',
+        }));
+
+      if (pendingRows.length + suppressedRows.length > 0) {
+        await tx.scheduled_emails.createMany({
+          data: [...pendingRows, ...suppressedRows],
+        });
+      }
+
+      return pendingRows.length;
+    });
+
+    summary.scheduled = scheduledCount;
+    logger.info('Winback emails scheduled', {
+      count: scheduledCount,
+      suppressed: dormantUsers.length - recipients.length,
+      scheduledAt: scheduledAt.toISOString(),
+    });
+  } catch (error) {
+    // Never let winback scheduling break the cron pass
+    logger.error('Failed to schedule winback emails', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   return summary;

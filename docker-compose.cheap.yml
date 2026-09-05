@@ -241,6 +241,38 @@ services:
     mem_reservation: 256m
     stop_grace_period: 30s
 
+  # ── Email cron — drives the scheduled onboarding/winback email drip ────────
+  # The app schedules day-1/3/7 (and winback) emails into scheduled_emails at
+  # signup, but nothing on this box invoked /api/cron/process-emails (the
+  # vercel.json crons are dead config — this stack is not on Vercel). This tiny
+  # sidecar hits the already-auth-gated cron route every 15 minutes.
+  # Purely additive: no existing service is touched. Requires CRON_SECRET in the
+  # env file (min 8 chars — the route fails closed in production without it).
+  # Bring up with: docker compose --env-file .env.cheap -f docker-compose.cheap.yml up -d email-cron
+  email-cron:
+    image: curlimages/curl:8.10.1
+    <<: *restart
+    depends_on:
+      recoder-app:
+        condition: service_healthy
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          if [ -z "$${CRON_SECRET}" ]; then
+            echo "email-cron: CRON_SECRET is not set; skipping tick (emails will NOT send)"
+          else
+            curl -sf -m 120 -H "x-cron-secret: $${CRON_SECRET}" \
+              http://recoder-app:3000/api/cron/process-emails \
+              || echo "email-cron: process-emails tick failed ($$(date -u))"
+          fi
+          sleep 900
+        done
+    mem_limit: 32m
+    mem_reservation: 8m
+
   # ── Caddy — TLS reverse proxy with auto-HTTPS ──────────────────────────────
   caddy:
     image: caddy:2-alpine
