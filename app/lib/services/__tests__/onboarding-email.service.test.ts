@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prisma: {
     $queryRaw: vi.fn(),
+    $transaction: vi.fn(),
     users: {
       findMany: vi.fn(),
     },
@@ -57,6 +58,13 @@ describe('scheduleWinbackEmails', () => {
     mocks.sendEmail.mockResolvedValue({ success: true, messageId: 'mock-id' });
     // Default: nobody on the marketing suppression list.
     mocks.prisma.newsletter_subscribers.findMany.mockResolvedValue([]);
+    // Default: the in-transaction duplicate re-check finds no existing rows.
+    mocks.prisma.scheduled_emails.findMany.mockResolvedValue([]);
+    // The insert runs inside a transaction; hand the callback the same mock
+    // client so all scheduled_emails assertions keep working.
+    mocks.prisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof mocks.prisma) => Promise<unknown>) => fn(mocks.prisma),
+    );
   });
 
   it('schedules a winback record for each dormant user at 9:00 UTC', async () => {
@@ -133,6 +141,42 @@ describe('scheduleWinbackEmails', () => {
     expect(where.emailVerified).toBe(true);
     // Dormancy = stale lastLoginAt OR never-logged-in old signup
     expect(Array.isArray(where.OR)).toBe(true);
+  });
+
+  it('duplicate-send guard: in-transaction re-check skips users who already gained a winback row', async () => {
+    tableExists(true);
+    mocks.prisma.users.findMany.mockResolvedValue([
+      { id: 'u1', email: 'raced@example.com', name: 'Raced' },
+      { id: 'u2', email: 'fresh@example.com', name: 'Fresh' },
+    ]);
+    // Between the dormant-user query and the insert, a concurrent cron pass
+    // already created u1's winback record.
+    mocks.prisma.scheduled_emails.findMany.mockResolvedValue([{ userId: 'u1' }]);
+    mocks.prisma.scheduled_emails.createMany.mockResolvedValue({ count: 1 });
+
+    const service = await freshService();
+    const result = await service.scheduleWinbackEmails();
+
+    expect(result.scheduled).toBe(1);
+    expect(mocks.prisma.$transaction).toHaveBeenCalledTimes(1);
+    const { data } = mocks.prisma.scheduled_emails.createMany.mock.calls[0][0] as {
+      data: Array<{ userId: string }>;
+    };
+    expect(data).toEqual([expect.objectContaining({ userId: 'u2' })]);
+  });
+
+  it('duplicate-send guard: inserts nothing when every user already has a winback row', async () => {
+    tableExists(true);
+    mocks.prisma.users.findMany.mockResolvedValue([
+      { id: 'u1', email: 'raced@example.com', name: 'Raced' },
+    ]);
+    mocks.prisma.scheduled_emails.findMany.mockResolvedValue([{ userId: 'u1' }]);
+
+    const service = await freshService();
+    const result = await service.scheduleWinbackEmails();
+
+    expect(result.scheduled).toBe(0);
+    expect(mocks.prisma.scheduled_emails.createMany).not.toHaveBeenCalled();
   });
 
   it('returns 0 and never throws when the scheduled_emails table is missing', async () => {
