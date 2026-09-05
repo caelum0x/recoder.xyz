@@ -102,6 +102,7 @@ export async function saveLead(
   }
 
   await forwardToWebhook(lead);
+  await syncToNewsletter(lead);
   return lead;
 }
 
@@ -142,6 +143,32 @@ async function forwardToWebhook(lead: Lead): Promise<void> {
     });
   } catch {
     // Best-effort. The lead is already persisted to disk above.
+  }
+}
+
+/**
+ * Best-effort sync of the captured email into the app's DB-backed newsletter
+ * list, so leads are reachable by campaigns instead of stranded in the NDJSON
+ * file. The app route is public, zod-validated, rate-limited, and dedupes on
+ * email. A sync failure NEVER fails the lead capture — the file written above
+ * remains the source of truth.
+ */
+async function syncToNewsletter(lead: Lead): Promise<void> {
+  const base = process.env.APP_INTERNAL_URL || "https://recoder.xyz";
+  try {
+    const response = await fetch(`${base}/api/newsletter/subscribe`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: lead.email, source: `lead-${lead.kind}` }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) {
+      console.warn(
+        `Lead ${lead.id}: newsletter sync answered ${response.status} (lead still stored on disk)`,
+      );
+    }
+  } catch (error) {
+    console.warn(`Lead ${lead.id}: newsletter sync failed (lead still stored on disk)`, error);
   }
 }
 
