@@ -20,6 +20,7 @@ interface SubRow {
 
 const subscriptionsStore = new Map<string, SubRow>();
 const usersStore = new Map<string, Record<string, unknown>>();
+const webhookEventsStore = new Map<string, Record<string, any>>();
 
 const prismaMock = {
   subscriptions: {
@@ -53,6 +54,30 @@ const prismaMock = {
       if (!existing) throw new Error('Record not found');
       const next = { ...existing, ...data };
       usersStore.set(where.id, next);
+      return next;
+    }),
+  },
+  webhook_events: {
+    create: vi.fn(async ({ data }: any) => {
+      if (webhookEventsStore.has(data.externalId)) {
+        const err: any = new Error('Unique constraint failed');
+        err.code = 'P2002';
+        throw err;
+      }
+      const row = { retryCount: 0, ...data };
+      webhookEventsStore.set(data.externalId, row);
+      return row;
+    }),
+    findUnique: vi.fn(async ({ where }: any) => webhookEventsStore.get(where.externalId) ?? null),
+    update: vi.fn(async ({ where, data }: any) => {
+      const row = webhookEventsStore.get(where.externalId);
+      if (!row) throw new Error('Record not found');
+      const next = { ...row };
+      for (const [k, v] of Object.entries<any>(data)) {
+        if (v && typeof v === 'object' && 'increment' in v) next[k] = (next[k] ?? 0) + v.increment;
+        else next[k] = v;
+      }
+      webhookEventsStore.set(where.externalId, next);
       return next;
     }),
   },
@@ -110,6 +135,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   subscriptionsStore.clear();
   usersStore.clear();
+  webhookEventsStore.clear();
   usersStore.set('user_1', { id: 'user_1', subscriptionPlan: 'free', subscriptionStatus: 'active' });
   vi.stubEnv('CREEM_API_KEY', 'test_api_key');
   vi.stubEnv('CREEM_WEBHOOK_SECRET', SECRET);
@@ -235,7 +261,8 @@ describe('POST /api/webhooks/creem', () => {
   });
 
   it('acks event types we deliberately ignore without writing anything', async () => {
-    const body = JSON.stringify({ eventType: 'dispute.created', object: { id: 'dp_1' } });
+    // An unmapped/future event type (disputes & refunds are now handled as revokes).
+    const body = JSON.stringify({ eventType: 'invoice.created', object: { id: 'inv_1' } });
 
     const res = await POST(makeRequest(body, sign(body, SECRET)));
 
@@ -256,5 +283,50 @@ describe('POST /api/webhooks/creem', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.subscriptions.upsert).not.toHaveBeenCalled();
     expect(prismaMock.users.update).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent: a redelivered event (same id) is processed once, then skipped', async () => {
+    const body = JSON.stringify({
+      id: 'evt_dedupe_1',
+      eventType: 'subscription.active',
+      object: {
+        id: 'sub_1',
+        status: 'active',
+        metadata: { userId: 'user_1', planId: 'monthly' },
+      },
+    });
+    const sig = sign(body, SECRET);
+
+    const first = await POST(makeRequest(body, sig));
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({ success: true, processed: 'subscription.created' });
+    expect(prismaMock.subscriptions.upsert).toHaveBeenCalledTimes(1);
+
+    const second = await POST(makeRequest(body, sig));
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual({ success: true, processed: null, duplicate: true });
+    // No second write — the redelivery was deduped.
+    expect(prismaMock.subscriptions.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('revokes the subscription on a refund event (maps to cancel)', async () => {
+    subscriptionsStore.set('sub_1', {
+      id: 'sub_1',
+      userId: 'user_1',
+      status: 'active',
+      provider: 'creem',
+      providerId: 'sub_1',
+    });
+    const body = JSON.stringify({
+      id: 'evt_refund_1',
+      eventType: 'refund.succeeded',
+      object: { id: 'sub_1', subscription: 'sub_1', metadata: { userId: 'user_1' } },
+    });
+
+    const res = await POST(makeRequest(body, sign(body, SECRET)));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, processed: 'subscription.canceled' });
+    expect(prismaMock.subscriptions.update).toHaveBeenCalled();
   });
 });

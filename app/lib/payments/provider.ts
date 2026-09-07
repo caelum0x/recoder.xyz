@@ -17,6 +17,8 @@ export type NormalizedWebhookEventType =
 
 export interface NormalizedWebhookEvent {
   type: NormalizedWebhookEventType;
+  /** Provider-side event id, used for webhook idempotency (dedup on redelivery). */
+  eventId?: string;
   /** Provider-side subscription id (subscriptions.providerId). */
   subscriptionId: string;
   /** Our users.id, when the provider echoes back checkout metadata. */
