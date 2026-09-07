@@ -290,7 +290,8 @@ describe('CreemProvider.verifyWebhook', () => {
       reason: 'creem_invalid_payload',
     });
 
-    const unhandled = JSON.stringify({ eventType: 'dispute.created', object: { id: 'dp_1' } });
+    // An unmapped/future type (refunds & disputes are now handled as revokes).
+    const unhandled = JSON.stringify({ eventType: 'invoice.created', object: { id: 'inv_1' } });
     expect(provider().verifyWebhook(unhandled, sign(unhandled, SECRET))).toEqual({
       ok: false,
       reason: 'creem_unhandled_event',
@@ -354,8 +355,17 @@ describe('normalizeCreemEvent — fixture per assumed payload shape', () => {
     ).toBe('payment.failed');
   });
 
+  it('maps refunds/disputes to subscription.canceled (revoke access)', () => {
+    expect(
+      normalizeCreemEvent({ eventType: 'refund.created', object: { id: 'sub_1' } })?.type
+    ).toBe('subscription.canceled');
+    expect(
+      normalizeCreemEvent({ eventType: 'dispute.created', object: { id: 'sub_1' } })?.type
+    ).toBe('subscription.canceled');
+  });
+
   it('returns null for unknown types, missing ids, and non-object payloads', () => {
-    expect(normalizeCreemEvent({ eventType: 'refund.created', object: { id: 'r_1' } })).toBeNull();
+    expect(normalizeCreemEvent({ eventType: 'invoice.created', object: { id: 'inv_1' } })).toBeNull();
     expect(normalizeCreemEvent({ eventType: 'subscription.active', object: {} })).toBeNull();
     expect(normalizeCreemEvent('nope')).toBeNull();
     expect(normalizeCreemEvent(null)).toBeNull();
