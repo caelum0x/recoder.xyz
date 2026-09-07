@@ -200,6 +200,26 @@ describe('CreemProvider subscription operations', () => {
     expect(calls[0].method).toBe('POST');
   });
 
+  it('reactivateSubscription POSTs the reactivate path and returns the provider status', async () => {
+    const { http, calls } = fakeHttp({ ok: true, status: 200, json: { id: 'sub_1', status: 'active' } });
+    const provider = getCreemProvider(http);
+
+    await expect(provider.reactivateSubscription!('sub_1')).resolves.toEqual({
+      ok: true,
+      status: 'active',
+    });
+    expect(calls[0].path).toBe('/v1/subscriptions/sub_1/reactivate');
+    expect(calls[0].method).toBe('POST');
+  });
+
+  it('reactivateSubscription maps an HTTP failure to a truthful reason', async () => {
+    const provider = getCreemProvider(fakeHttp({ ok: false, status: 402, json: null }).http);
+    await expect(provider.reactivateSubscription!('sub_1')).resolves.toEqual({
+      ok: false,
+      reason: 'creem_reactivate_failed',
+    });
+  });
+
   it('changePlan POSTs the upgrade path with the mapped product id', async () => {
     const { http, calls } = fakeHttp({
       ok: true,

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Check, ArrowRight, Globe, Code2, Bot, Workflow, Sparkles, Database, Server, X } from 'lucide-react';
+import { Check, ArrowRight, Globe, Code2, Bot, Workflow, Sparkles, Database, Server, Loader2 } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -36,6 +36,7 @@ const plans = [
   },
   {
     name: 'Weekly',
+    planId: 'weekly',
     price: '$10',
     period: '/week',
     description: 'We provide API keys',
@@ -52,6 +53,7 @@ const plans = [
   },
   {
     name: 'Monthly',
+    planId: 'monthly',
     price: '$20',
     period: '/month',
     description: 'Best value for individuals',
@@ -68,6 +70,7 @@ const plans = [
   },
   {
     name: 'Pro',
+    planId: 'pro',
     price: '$100',
     period: '/month',
     description: 'For power users and teams',
@@ -84,9 +87,52 @@ const plans = [
   },
 ];
 
+// Creem is the Merchant of Record; the others remain configured fallbacks. This
+// mirrors the onboarding checkout flow (POST /api/billing/create-checkout).
+const CHECKOUT_PROVIDERS = ['creem', 'paddle', 'dodo'] as const;
+
 export default function PlanPage() {
-  const [showBetaModal, setShowBetaModal] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const publicServices = RECODER_SERVICES.filter(s => !s.internal);
+
+  const startCheckout = async (planId: string) => {
+    setCheckoutError(null);
+    setPendingPlan(planId);
+    try {
+      for (const paymentMethod of CHECKOUT_PROVIDERS) {
+        const response = await fetch('/api/billing/create-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: planId, paymentMethod }),
+        });
+
+        // Not signed in → send them to sign in, then back to plans.
+        if (response.status === 401) {
+          window.location.assign(`/auth/signin?next=${encodeURIComponent('/plan')}`);
+          return;
+        }
+
+        // Provider not configured/available → try the next fallback.
+        if (!response.ok) continue;
+
+        const data = (await response.json().catch(() => null)) as
+          | { success?: boolean; checkoutUrl?: string }
+          | null;
+        if (data?.success && data.checkoutUrl) {
+          window.location.assign(data.checkoutUrl);
+          return;
+        }
+      }
+      setCheckoutError(
+        'Checkout is not available right now. Please try again shortly or contact support.',
+      );
+    } catch {
+      setCheckoutError('Something went wrong starting checkout. Please try again.');
+    } finally {
+      setPendingPlan(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -183,19 +229,30 @@ export default function PlanPage() {
                   </Link>
                 ) : (
                   <button
-                    onClick={() => setShowBetaModal(true)}
-                    className={`w-full text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    onClick={() => plan.planId && startCheckout(plan.planId)}
+                    disabled={pendingPlan !== null}
+                    className={`w-full inline-flex items-center justify-center gap-2 text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-60 ${
                       plan.highlight
                         ? 'bg-white text-black hover:bg-neutral-200'
                         : 'bg-zinc-800 hover:bg-zinc-700'
                     }`}
                   >
-                    {plan.cta}
+                    {pendingPlan === plan.planId ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Starting checkout…
+                      </>
+                    ) : (
+                      plan.cta
+                    )}
                   </button>
                 )}
               </div>
             ))}
           </div>
+          {checkoutError ? (
+            <p className="mt-6 text-center text-sm text-amber-300">{checkoutError}</p>
+          ) : null}
         </div>
       </section>
 
@@ -214,54 +271,6 @@ export default function PlanPage() {
         </div>
       </section>
 
-      {/* Beta Modal */}
-      {showBetaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-gradient-to-br from-gray-900 to-black border border-neutral-700 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
-            <div className="p-6 border-b border-white/10">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center">
-                    <Sparkles className="w-6 h-6 text-white" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-white">Upgrade your plan</h2>
-                </div>
-                <button onClick={() => setShowBetaModal(false)} className="text-gray-400 hover:text-white transition-colors">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              <h3 className="text-lg font-semibold text-white">Free with your keys — upgrade for more</h3>
-              <p className="text-gray-300">
-                Free is yours forever with BYOK (Bring Your Own Key). Pro ($29/mo) and Team ($99/mo) add higher limits, longer retention, and team features — billed securely through Creem.
-              </p>
-              <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
-                <div className="flex items-start space-x-3">
-                  <Check className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-gray-300">
-                    You get full access to every service — Agents, the Desktop App, PM, and Agency — completely free during beta.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="p-6 border-t border-white/10 bg-white/5 flex flex-col sm:flex-row gap-3">
-              <Link
-                href="/pricing"
-                className="flex-1 text-center px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all"
-              >
-                See plans &amp; pricing
-              </Link>
-              <Link
-                href="/dashboard"
-                className="flex-1 text-center px-6 py-3 border border-white/20 hover:border-white/40 rounded-lg font-medium transition-all"
-              >
-                I'm Already Signed Up
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
       <SiteFooter />
     </div>
   );

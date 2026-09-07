@@ -54,6 +54,8 @@ export type SubscriptionResult =
 
 export type CancelResult = { ok: true; status: string } | ProviderFailure;
 
+export type ReactivateResult = { ok: true; status: string } | ProviderFailure;
+
 export type WebhookVerifyResult =
   | { ok: true; event: NormalizedWebhookEvent }
   | ProviderFailure;
@@ -85,6 +87,14 @@ export interface PaymentProvider {
   getSubscription(id: string): Promise<SubscriptionResult>;
 
   cancelSubscription(id: string): Promise<CancelResult>;
+
+  /**
+   * Resume a subscription that was set to cancel at period end. Optional: not
+   * every provider adapter implements it yet. Callers MUST treat a missing
+   * method as "cannot reactivate" and fail safe (never mark the DB reactivated
+   * without a real provider confirmation).
+   */
+  reactivateSubscription?(id: string): Promise<ReactivateResult>;
 
   changePlan(id: string, newPlanId: string): Promise<SubscriptionResult>;
 
