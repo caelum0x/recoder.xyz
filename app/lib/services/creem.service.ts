@@ -96,6 +96,14 @@ const EVENT_TYPE_MAP: Record<string, NormalizedWebhookEventType> = {
   'subscription.unpaid': 'payment.failed',
   'subscription.past_due': 'payment.failed',
   'payment.failed': 'payment.failed',
+  // Refunds / chargebacks / disputes revoke access — treat like a cancel so the
+  // entitlement is withdrawn (conservative, fail-safe). When the payload carries
+  // no resolvable subscription id the normalizer no-ops, same as before.
+  'refund.created': 'subscription.canceled',
+  'refund.succeeded': 'subscription.canceled',
+  'subscription.refunded': 'subscription.canceled',
+  'dispute.created': 'subscription.canceled',
+  'chargeback.created': 'subscription.canceled',
 };
 
 interface CreemWebhookObject {
@@ -117,7 +125,13 @@ function asString(value: unknown): string | undefined {
  */
 export function normalizeCreemEvent(payload: unknown): NormalizedWebhookEvent | null {
   if (typeof payload !== 'object' || payload === null) return null;
-  const envelope = payload as { eventType?: unknown; type?: unknown; object?: unknown; data?: unknown };
+  const envelope = payload as {
+    id?: unknown;
+    eventType?: unknown;
+    type?: unknown;
+    object?: unknown;
+    data?: unknown;
+  };
   const rawType = asString(envelope.eventType) ?? asString(envelope.type);
   if (!rawType) return null;
   const type = EVENT_TYPE_MAP[rawType];
@@ -142,6 +156,7 @@ export function normalizeCreemEvent(payload: unknown): NormalizedWebhookEvent | 
 
   return {
     type,
+    eventId: asString(envelope.id),
     subscriptionId,
     userId: asString(metadata.userId),
     planId: asString(metadata.planId) ?? planIdForCreemProduct(productId),
