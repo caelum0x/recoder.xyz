@@ -46,14 +46,22 @@ const JSON_LD = {
       "@type": "Organization",
       "@id": `${SITE_URL}/#organization`,
       name: "Recoder",
+      alternateName: "Recoder.xyz",
       url: SITE_URL,
+      logo: `${SITE_URL}/icon.png`,
       description: DESCRIPTION,
       slogan: "The control plane for coding agents.",
+      sameAs: [
+        "https://github.com/recoderxyz",
+        "https://www.npmjs.com/~recoder.xyz",
+        "https://marketplace.visualstudio.com/items?itemName=recoder.recoder-code-vscode-companion",
+      ],
     },
     {
       "@type": "WebSite",
       "@id": `${SITE_URL}/#website`,
       name: "Recoder",
+      alternateName: "Recoder.xyz",
       url: SITE_URL,
       description: DESCRIPTION,
       publisher: { "@id": `${SITE_URL}/#organization` },
@@ -71,7 +79,9 @@ export default function RootLayout({
       <body>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(JSON_LD).replace(/</g, "\\u003c"),
+          }}
         />
         {children}
         <Analytics />
