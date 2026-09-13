@@ -23,8 +23,7 @@ const README_URL = REPO ? `${REPO}/blob/main/deploy/README.md` : undefined;
 const COMPOSE_URL = REPO ? `${REPO}/blob/main/docker-compose.selfhost.yml` : undefined;
 const SCRIPT_URL = REPO ? `${REPO}/blob/main/scripts/selfhost-up.sh` : undefined;
 const PACKER_URL = REPO ? `${REPO}/blob/main/deploy/packer/recoder.pkr.hcl` : undefined;
-const ACCESS_HREF =
-  "mailto:founders@recoder.xyz?subject=Recoder%20self-host%20access";
+const ACCESS_HREF = "/contact";
 
 interface StackRow {
   service: string;

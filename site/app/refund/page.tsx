@@ -24,7 +24,7 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "Cancelling your subscription",
     body: [
-      "You can cancel at any time from your account billing settings, or by emailing founders@recoder.xyz. When you cancel, your plan stays active until the end of the current billing period and is not renewed afterward.",
+      "You can cancel at any time from your account billing settings, or by using our Contact page. When you cancel, your plan stays active until the end of the current billing period and is not renewed afterward.",
       "Cancelling stops future charges. It does not, on its own, generate a refund for the current period except as described below.",
     ],
   },
@@ -49,14 +49,14 @@ const SECTIONS: LegalSection[] = [
   {
     heading: "How to request a refund",
     body: [
-      "Email founders@recoder.xyz from the address associated with your account, including the charge date and amount. We aim to acknowledge refund requests within 2 business days.",
+      "Use our Contact page from the address associated with your account, including the charge date and amount. We aim to acknowledge refund requests within 2 business days.",
       "Approved refunds are issued to your original payment method by our merchant of record. Depending on your bank or card provider, it can take 5–10 business days for the refund to appear.",
     ],
   },
   {
     heading: "Contact",
     body: [
-      "Questions about billing, cancellations, or refunds: founders@recoder.xyz. See our Contact page for more ways to reach us.",
+      "For questions about billing, cancellations, or refunds, use our Contact page.",
     ],
   },
 ];
