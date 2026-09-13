@@ -609,9 +609,29 @@ const FAQ: QA[] = [
   },
 ];
 
+const FAQ_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "@id": "https://recoder.xyz/#faq",
+  mainEntity: FAQ.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.a,
+    },
+  })),
+};
+
 function Faq() {
   return (
     <section className="border-t border-border bg-bg-soft">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(FAQ_JSON_LD).replace(/</g, "\\u003c"),
+        }}
+      />
       <div className="mx-auto max-w-3xl px-6 py-20 md:py-24">
         <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-4xl">
           Frequently asked questions
