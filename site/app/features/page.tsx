@@ -4,7 +4,8 @@ import { Nav, Footer, DownloadButton, SecondaryButton } from "@/components/site"
 export const metadata: Metadata = {
   title: "Features — Recoder",
   description:
-    "Run your coding agents in parallel isolated git worktrees, then converge their work into one trusted merge. Isolation when they work, convergence when they finish — with review, merge-readiness, and governance built in.",
+    "Run coding agents in isolated git worktrees, compare their changes, and converge the best result into one reviewed, governed merge.",
+  alternates: { canonical: "https://recoder.xyz/features" },
 };
 
 interface Feature {

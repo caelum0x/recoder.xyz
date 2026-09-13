@@ -5,7 +5,8 @@ import { Nav, Footer } from "@/components/site";
 export const metadata: Metadata = {
   title: "Recoder pricing",
   description:
-    "Recoder is a desktop app, free for solo developers running agents locally. Pro ($29/mo) and Team ($99/mo) add limits, retention, seats, and shared approvals. Enterprise adds SSO, audit and replay, governance, and self-hosting. You always bring your own agents and keys — Recoder never resells tokens.",
+    "Compare Recoder's Free, Pro ($29/month), Team ($99/month), and Enterprise plans for local and shared AI coding-agent orchestration.",
+  alternates: { canonical: "https://recoder.xyz/pricing" },
 };
 
 /**

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Nav, Footer, DownloadButton } from "@/components/site";
 import {
@@ -8,6 +9,10 @@ import {
 // ISR: the proof strip reads the live evidence store server-side; refresh the
 // prerendered page every 5 minutes instead of forcing every request dynamic.
 export const revalidate = 300;
+
+export const metadata: Metadata = {
+  alternates: { canonical: "https://recoder.xyz/" },
+};
 
 export default function Home() {
   return (
