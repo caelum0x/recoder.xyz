@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ContactEmailAction } from "@/components/contact-email-action";
 import { LegalPage, type LegalSection } from "../legal/legal-page";
 
 const UPDATED = "2026-08-27";
@@ -11,22 +12,22 @@ export const metadata: Metadata = {
 };
 
 const INTRO =
-  "We are happy to help with support, billing, sales, and account questions. Email is the fastest way to reach us and we aim to respond within 2 business days.";
+  "We are happy to help with support, billing, sales, and account questions. Use the email action below and we aim to respond within 2 business days.";
 
 const SECTIONS: LegalSection[] = [
   {
     heading: "Support & general enquiries",
-    body: ["Email founders@recoder.xyz for product support, account help, or general questions."],
+    body: ["Use the email action below for product support, account help, or general questions."],
   },
   {
     heading: "Billing & refunds",
     body: [
-      "For billing questions, cancellations, or refund requests, email founders@recoder.xyz from the address associated with your account. See our Refund & Cancellation Policy for details and timelines.",
+      "For billing questions, cancellations, or refund requests, contact us from the address associated with your account. See our Refund & Cancellation Policy for details and timelines.",
     ],
   },
   {
     heading: "Sales & partnerships",
-    body: ["For enterprise, agency, or partnership enquiries, email founders@recoder.xyz and we will route you to the right person."],
+    body: ["For enterprise, agency, or partnership enquiries, use the email action below and we will route you to the right person."],
   },
   {
     heading: "Follow us",
@@ -35,5 +36,9 @@ const SECTIONS: LegalSection[] = [
 ];
 
 export default function ContactPage() {
-  return <LegalPage title="Contact" updated={UPDATED} intro={INTRO} sections={SECTIONS} />;
+  return (
+    <LegalPage title="Contact" updated={UPDATED} intro={INTRO} sections={SECTIONS}>
+      <ContactEmailAction subject="Recoder enquiry" />
+    </LegalPage>
+  );
 }

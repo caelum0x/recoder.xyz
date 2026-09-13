@@ -68,7 +68,7 @@ export default function Error({
         }}
       >
         We logged what happened. Try again — most transient errors clear on a
-        retry. If it keeps happening, reach us at founders@recoder.xyz.
+        retry. If it keeps happening, use the contact page.
       </p>
       {error?.digest ? (
         <p
