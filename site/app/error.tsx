@@ -32,8 +32,7 @@ export default function Error({
         justifyContent: "center",
         background: "#08080a",
         color: "#ededf0",
-        fontFamily:
-          "var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif",
+        fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
         padding: "1.5rem",
         textAlign: "center",
       }}
