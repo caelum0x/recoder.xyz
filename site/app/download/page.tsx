@@ -14,7 +14,8 @@ import {
 export const metadata: Metadata = {
   title: "Download Recoder",
   description:
-    "Get the Recoder desktop app for macOS (Apple Silicon). Windows and Linux are on the way. Runs your own Claude Code, Codex, and opencode, coordinated. Your agents, your keys.",
+    "Get Recoder for macOS (Apple Silicon) to coordinate your own Claude Code, Codex, and opencode agents. Windows and Linux are planned.",
+  alternates: { canonical: "https://recoder.xyz/download" },
 };
 
 const GETTING_STARTED: { title: string; body: string }[] = [

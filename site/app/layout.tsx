@@ -4,7 +4,7 @@ import "./globals.css";
 
 const TITLE = "Recoder — Run Claude Code, Codex & Cursor Agents in Parallel";
 const DESCRIPTION =
-  "Recoder runs your own Claude Code, Codex, Cursor & opencode agents in parallel — each in an isolated git-worktree workspace. Watch them work, review the diffs, and merge the best. Your keys, your code, local-first.";
+  "Run Claude Code, Codex, Cursor, and opencode in parallel, each in an isolated git worktree. Review the diffs and merge the best result with Recoder.";
 const SITE_URL = "https://recoder.xyz";
 
 export const metadata: Metadata = {
@@ -32,7 +32,6 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
   },
-  alternates: { canonical: SITE_URL },
 };
 
 // Structured data describes the organization + website without overstating
