@@ -66,7 +66,7 @@ export default function DesignPartnersPage() {
       }
       setStatus("done");
     } catch {
-      setError("Network error. Try again or email founders@recoder.xyz.");
+      setError("Network error. Try again or use the contact page.");
       setStatus("error");
     }
   }
@@ -105,7 +105,7 @@ export default function DesignPartnersPage() {
           <div className={styles.done} role="status">
             <strong>Request recorded.</strong>
             <p>This intake does not start a pilot. A selected team receives a separate pilot record with a baseline and target.</p>
-            <p>We will reply from founders@recoder.xyz with a fit decision or one focused follow-up.</p>
+            <p>We will reply by email with a fit decision or one focused follow-up.</p>
             <Link href="/how-it-works">Review the product loop</Link>
           </div>
         ) : (

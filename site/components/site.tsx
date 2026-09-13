@@ -125,7 +125,7 @@ export function Nav() {
 
 export function Footer() {
   const connectLinks = [
-    { href: "mailto:founders@recoder.xyz", label: "Contact" },
+    { href: "/contact", label: "Contact" },
     ...(PUBLIC_GITHUB_URL
       ? [{ href: PUBLIC_GITHUB_URL, label: "GitHub" }]
       : []),

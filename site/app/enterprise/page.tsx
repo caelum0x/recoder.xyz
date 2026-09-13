@@ -150,12 +150,9 @@ export default function Enterprise() {
               successText="Thanks — we got it. The founders will reply to your email shortly."
             />
             <p className="mt-3 text-center text-xs text-faint">
-              Prefer email? Reach us at{" "}
-              <a
-                href="mailto:founders@recoder.xyz?subject=Recoder%20for%20our%20team"
-                className="text-muted underline hover:text-fg"
-              >
-                founders@recoder.xyz
+              Prefer email? Use the{" "}
+              <a href="/contact" className="text-muted underline hover:text-fg">
+                contact page
               </a>
               .
             </p>

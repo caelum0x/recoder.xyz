@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Nav, Footer } from "@/components/site";
 
 export interface LegalSection {
@@ -14,6 +15,7 @@ interface LegalPageProps {
   updated: string;
   intro: string;
   sections: LegalSection[];
+  children?: ReactNode;
 }
 
 /**
@@ -21,7 +23,13 @@ interface LegalPageProps {
  * Keeps typography and structure consistent across legal pages so copy is the
  * only thing that changes per document.
  */
-export function LegalPage({ title, updated, intro, sections }: LegalPageProps) {
+export function LegalPage({
+  title,
+  updated,
+  intro,
+  sections,
+  children,
+}: LegalPageProps) {
   return (
     <>
       <Nav />
@@ -59,6 +67,7 @@ export function LegalPage({ title, updated, intro, sections }: LegalPageProps) {
             </section>
           ))}
         </div>
+        {children ? <div className="mt-10">{children}</div> : null}
       </main>
       <Footer />
     </>
