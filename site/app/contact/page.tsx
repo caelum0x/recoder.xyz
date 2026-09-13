@@ -30,6 +30,13 @@ const SECTIONS: LegalSection[] = [
     body: ["For enterprise, agency, or partnership enquiries, use the email action below and we will route you to the right person."],
   },
   {
+    heading: "What to include",
+    body: [
+      "For product support, include your operating system, Recoder version, the agents involved, and the exact step that failed. Do not send provider keys, repository secrets, or proprietary source code.",
+      "For billing, include the email used at checkout and the charge date or invoice reference. For security reports, describe the affected surface and a reproducible impact without including live credentials.",
+    ],
+  },
+  {
     heading: "Follow us",
     body: ["Product and founder updates: x.com/recoderxyz."],
   },

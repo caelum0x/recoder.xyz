@@ -7,7 +7,7 @@ import { DocsShell } from "./docs-shell";
 export const metadata: Metadata = {
   title: "Recoder docs — how to use it",
   description:
-    "How to use Recoder: install the desktop app, connect Claude Code / Codex / opencode, run agents in parallel, and converge them into one governed merge. Your agents, your keys.",
+    "Install Recoder, connect Claude Code, Codex, or opencode, run agents in parallel, and converge their work into one governed merge.",
   alternates: { canonical: "https://recoder.xyz/docs" },
 };
 
