@@ -11,7 +11,7 @@ export const SOCIAL_CONTENT_TYPE = "image/png";
 // the brand mark (not a placeholder). Read at build time.
 const LOGO_DATA_URI = (() => {
   try {
-    const buf = readFileSync(join(process.cwd(), "public/logo.png"));
+    const buf = readFileSync(join(process.cwd(), "public/logo-wave.png"));
     return `data:image/png;base64,${buf.toString("base64")}`;
   } catch {
     return "";
