@@ -1,0 +1,6 @@
+title: Studio
+type: object
+required: [engine]
+properties:
+  engine: { enum: [godot, unity6, unreal58] }
+  gpu: { enum: [none, t4, l4, 3080] }

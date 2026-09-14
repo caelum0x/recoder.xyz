@@ -1,0 +1,6 @@
+{
+  "name": "@recoder/cloud-cli",
+  "version": "0.0.1",
+  "private": true,
+  "bin": { "telos": "./src/index.ts" }
+}

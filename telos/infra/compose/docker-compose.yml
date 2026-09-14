@@ -1,0 +1,8 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: telos
+      POSTGRES_PASSWORD: telos
+      POSTGRES_DB: telos
+    ports: ["5432:5432"]

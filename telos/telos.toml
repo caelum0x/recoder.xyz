@@ -1,0 +1,39 @@
+[project]
+name = "recoder-platform"
+org = "recoderxyz"
+
+[staging]
+require_approval = false
+require_checks = ["typecheck"]
+regions = ["hel1"]
+
+[prod]
+require_approval = true
+require_checks = ["typecheck", "test"]
+regions = ["hel1"]
+max_replicas = 3
+
+[studio]
+default_engine = "bevy"
+mobile_engine = "godot-cs"
+max_gpu_minutes_per_day = 120
+require_playproof = true
+allow_html5 = false
+allow_editor_mcp = false
+
+[studio.bevy]
+enabled = true
+
+[studio.godot_cs]
+enabled = true
+version = "4.4"
+
+[studio.unity]
+enabled = false
+version = "6000.0"
+interface = "cli-batch"
+
+[studio.unreal]
+enabled = false
+version = "5.8"
+interface = "commandlet"

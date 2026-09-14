@@ -1,0 +1,17 @@
+export const tools = [
+  "studio.new",
+  "studio.open",
+  "studio.edit",
+  "studio.build",
+  "studio.tick",
+  "studio.frame",
+  "studio.snapshot",
+  "studio.reset",
+  "studio.cook",
+  "studio.logs",
+  "deploy.staging",
+  "deploy.prod",
+  "logs.fetch",
+  "secrets.needed",
+  "pr.comment",
+]
