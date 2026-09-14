@@ -76,12 +76,15 @@ export function SecondaryButton({
 export function Wordmark() {
   return (
     <Link href="/" className="flex items-center gap-2.5">
+      {/* unoptimized: /_next/image is routed to the co-hosted product app by
+          Caddy, which serves its own logo; raw src loads the site's asset. */}
       <Image
         src="/logo-wave.png"
         alt="Recoder"
         width={28}
         height={28}
         priority
+        unoptimized
         className="h-7 w-7"
       />
     </Link>
