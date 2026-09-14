@@ -77,7 +77,7 @@ export function Wordmark() {
   return (
     <Link href="/" className="flex items-center gap-2.5">
       <Image
-        src="/logo.png"
+        src="/logo-wave.png"
         alt="Recoder"
         width={28}
         height={28}
