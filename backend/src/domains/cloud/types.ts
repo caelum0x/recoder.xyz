@@ -16,11 +16,15 @@
 
 // --- Providers ---
 
-/** The three sandbox providers, in default degrade preference order. */
-export type ProviderId = 'daytona' | 'e2b' | 'local';
+/**
+ * The sandbox providers, in default degrade preference order. `resandbox` is the
+ * self-hosted Recoder Sandbox (our E2B fork) — E2B-compatible REST against our own
+ * host; preferred over the hosted `e2b` when its base URL is configured.
+ */
+export type ProviderId = 'daytona' | 'resandbox' | 'e2b' | 'local';
 
 /** All providers, for iteration (catalog/health/tests). */
-export const PROVIDER_IDS: readonly ProviderId[] = ['daytona', 'e2b', 'local'] as const;
+export const PROVIDER_IDS: readonly ProviderId[] = ['daytona', 'resandbox', 'e2b', 'local'] as const;
 
 // --- Tenancy (multi-tenant isolation + quota) ---
 

@@ -1,0 +1,5 @@
+duration: 12
+fps: 30
+actions:
+  - { t: 0.5, type: tap, x: 0.5, y: 0.7 }
+  - { t: 2.0, type: key, key: Space }

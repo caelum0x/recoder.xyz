@@ -55,6 +55,14 @@ export const cloudConfigSchema = z.object({
   ),
   daytona: providerCredentialSchema,
   e2b: providerCredentialSchema,
+  /** Self-hosted Recoder Sandbox (E2B fork). Configured via `baseUrl` (self-host endpoint). */
+  resandbox: providerCredentialSchema,
+  /** Recoder Cloud (Dokploy fork) deploy target. `baseUrl` = the recloud API; `apiKey` = its token. */
+  recloud: providerCredentialSchema,
+  /** recloud environment previews are created in (`null` ⇒ provisioning disabled, metadata-only). */
+  recloudEnvironmentId: z.string().nullable(),
+  /** recloud server previews deploy to (`null` ⇒ the recloud default/local server). */
+  recloudServerId: z.string().nullable(),
   /** Whether the local-container fallback provider is usable (self-host tier). */
   localEnabled: z.boolean(),
   /** ziti Go engine loopback endpoint (`null` ⇒ mesh adapter `down`). */
@@ -88,6 +96,10 @@ export interface CloudConfigOverrides {
   readonly tierQuotas?: Partial<Record<TenantTier, Partial<TenantQuota>>>;
   readonly daytona?: CloudProviderCredentialOverrides;
   readonly e2b?: CloudProviderCredentialOverrides;
+  readonly resandbox?: CloudProviderCredentialOverrides;
+  readonly recloud?: CloudProviderCredentialOverrides;
+  readonly recloudEnvironmentId?: string | null;
+  readonly recloudServerId?: string | null;
   readonly localEnabled?: boolean;
   readonly zitiEndpoint?: string | null;
   readonly xdsEndpoint?: string | null;
@@ -143,6 +155,10 @@ export function sliceCloudConfig(app: AppConfig, overrides: CloudConfigOverrides
     tierQuotas: mergeTierQuotas(overrides.tierQuotas),
     daytona: credential(overrides.daytona),
     e2b: credential(overrides.e2b),
+    resandbox: credential(overrides.resandbox),
+    recloud: credential(overrides.recloud),
+    recloudEnvironmentId: overrides.recloudEnvironmentId ?? null,
+    recloudServerId: overrides.recloudServerId ?? null,
     localEnabled: overrides.localEnabled ?? true,
     zitiEndpoint: overrides.zitiEndpoint ?? null,
     xdsEndpoint: overrides.xdsEndpoint ?? null,
@@ -156,12 +172,22 @@ export function tierQuota(config: CloudConfig, tier: TenantTier): TenantQuota {
   return config.tierQuotas[tier] ?? DEFAULT_TIER_QUOTAS[tier];
 }
 
-/** True when at least one off-box provider (daytona/e2b) has a usable key. */
+/** True when at least one off-box provider (daytona/e2b/resandbox) is usable. */
 export function hasCloudProvider(config: CloudConfig): boolean {
-  return config.daytona.present || config.e2b.present;
+  return (
+    config.daytona.present ||
+    config.e2b.present ||
+    config.resandbox.present ||
+    config.resandbox.baseUrl !== null
+  );
 }
 
 /** True when signed preview URLs can be minted (secret + base domain present). */
 export function isPreviewConfigured(config: CloudConfig): boolean {
   return config.previewSigningSecretPresent && config.previewBaseDomain !== null;
+}
+
+/** True when the recloud deploy target is configured (its API base URL is set). */
+export function isRecloudDeployConfigured(config: CloudConfig): boolean {
+  return config.recloud.baseUrl !== null;
 }

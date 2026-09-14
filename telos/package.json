@@ -1,0 +1,13 @@
+{
+  "name": "recoder-platform",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Recoder Cloud + Studio (Telos)",
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev:api": "pnpm --filter @recoder/api dev",
+    "dev:web": "pnpm --filter @recoder/web dev",
+    "dev:mcp": "pnpm --filter @recoder/mcp dev",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
