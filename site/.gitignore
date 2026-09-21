@@ -2,6 +2,8 @@ node_modules
 .next
 out
 .env*
+# Track the labelled template that documents the Download-page release vars.
+!.env.example
 *.tsbuildinfo
 next-env.d.ts
 .data
