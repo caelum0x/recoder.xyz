@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { DOC_PAGES } from "./docs/content";
 import { COMPARISONS } from "./compare/comparisons";
+import { USE_CASES } from "./use-cases/use-cases";
+import { ALTERNATIVES } from "./alternatives/alternatives";
 import { getChangelog } from "./changelog/entries";
 
 const BASE = "https://recoder.xyz";
@@ -42,6 +44,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.6,
       changeFrequency: "monthly" as const,
     })),
+    { path: "/use-cases", lastModified: BUILD_DATE, priority: 0.8, changeFrequency: "monthly" },
+    ...USE_CASES.map((u) => ({
+      path: `/use-cases/${u.slug}`,
+      lastModified: BUILD_DATE,
+      priority: 0.7,
+      changeFrequency: "monthly" as const,
+    })),
+    { path: "/alternatives", lastModified: BUILD_DATE, priority: 0.8, changeFrequency: "monthly" },
+    ...ALTERNATIVES.map((a) => ({
+      path: `/alternatives/${a.slug}`,
+      lastModified: BUILD_DATE,
+      priority: 0.7,
+      changeFrequency: "monthly" as const,
+    })),
+    { path: "/tools", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "monthly" },
+    { path: "/tools/agent-directory", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "weekly" },
     { path: "/enterprise", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "monthly" },
     { path: "/design-partners", lastModified: BUILD_DATE, priority: 0.6, changeFrequency: "monthly" },
     { path: "/proof", lastModified: BUILD_DATE, priority: 0.6, changeFrequency: "monthly" },

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Nav, Footer } from "@/components/site";
 import { DownloadNotify, DownloadReleases } from "@/components/download-notify";
 import { LeadForm } from "@/components/lead-form";
+import { JsonLd } from "@/components/json-ld";
+import { buildSoftwareApplicationJsonLd } from "@/lib/seo";
 import {
   downloadHref,
   platformChecksum,
@@ -58,6 +60,10 @@ export default function Download() {
 
   return (
     <>
+      {/* Scoped to /download, where the page itself describes the signed,
+          notarized macOS build — so the SoftwareApplication node is honest here
+          even though layout.tsx deliberately keeps it out of the sitewide @graph. */}
+      <JsonLd data={buildSoftwareApplicationJsonLd()} />
       <Nav />
       <main className="mx-auto max-w-3xl px-6 py-24 text-center">
         <h1 className="text-balance text-4xl font-semibold tracking-tight md:text-5xl">
