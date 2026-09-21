@@ -98,6 +98,21 @@ const CONDUCTOR: ToolRef = {
   kind: "Parallel Claude Code app (macOS)",
   license: "Proprietary (free)",
 };
+const GITPOD: ToolRef = {
+  name: "Gitpod",
+  kind: "Cloud dev environment (CDE)",
+  license: "Proprietary · OSS core (Gitpod/OpenVSCode)",
+};
+const CODESPACES: ToolRef = {
+  name: "GitHub Codespaces",
+  kind: "Cloud dev environment (CDE)",
+  license: "Proprietary (GitHub)",
+};
+const OPEN_INTERPRETER: ToolRef = {
+  name: "Open Interpreter",
+  kind: "Local code-execution agent (terminal)",
+  license: "Open source (AGPL-3.0)",
+};
 
 // Reusable closer for pages that pit two rivals against each other: the point
 // of Recoder is you don't have to bet on one.
@@ -848,7 +863,7 @@ export const COMPARISONS: Comparison[] = [
         a: "No. Recoder is bring-your-own-keys: your agents use your provider keys, and you pay providers directly for inference. Recoder orchestrates and governs — it never proxies or resells tokens.",
       },
     ],
-    related: ["recoder-vs-claude-code", "recoder-vs-conductor", "claude-code-vs-cursor"],
+    related: ["recoder-vs-claude-code", "recoder-vs-conductor", "claude-code-vs-cursor", "cursor-vs-codespaces"],
   },
 
   {
@@ -1133,7 +1148,364 @@ export const COMPARISONS: Comparison[] = [
         a: "Codex CLI is open source (Apache-2.0). Recoder is proprietary but self-hostable and BYOK — your code, agents, and keys stay on your machine.",
       },
     ],
-    related: ["recoder-vs-claude-code", "recoder-vs-conductor", "codex-vs-aider"],
+    related: ["recoder-vs-claude-code", "recoder-vs-conductor", "codex-vs-aider", "recoder-vs-open-interpreter"],
+  },
+
+  {
+    slug: "recoder-vs-gitpod",
+    a: RECODER,
+    b: GITPOD,
+    title: "Recoder vs Gitpod",
+    metaTitle: "Recoder vs Gitpod: agent orchestrator vs cloud dev env",
+    description:
+      "Recoder vs Gitpod: Gitpod provisions cloud dev environments; Recoder orchestrates coding agents in parallel worktrees. Different axes, and how they fit.",
+    tagline: "An agent orchestrator versus a cloud development environment.",
+    intro: [
+      "Recoder and Gitpod solve genuinely different problems, and it's worth being clear about that up front. Gitpod is a cloud development environment (CDE): it spins up automated, reproducible dev environments from a config file, with prebuilds, so a repo is ready to code in seconds from a browser or a desktop IDE. Recoder is a desktop control plane that runs multiple coding agents in parallel isolated git worktrees, then helps you compare, converge, and govern the merge.",
+      "Put simply: Gitpod is about where your code runs; Recoder is about which agents work on it and how their output gets reconciled. They sit on different axes, so this isn't a feature-for-feature contest — it's a question of which problem you're solving, and whether you might use both.",
+    ],
+    table: {
+      head: ["Dimension", "Recoder", "Gitpod"],
+      rows: [
+        ["Category", "Multi-agent orchestrator", "Cloud dev environment (CDE)"],
+        ["Core job", "Run + converge many coding agents", "Provision reproducible dev environments"],
+        ["Where it runs", "Local desktop app (127.0.0.1)", "Cloud, or self-hosted infrastructure"],
+        ["Coding agents", "Orchestrates Claude Code, Codex, Aider, …", "Not an agent runner (you add your own)"],
+        ["Environment config", "Uses your existing repo + machine", "Declarative config + prebuilds"],
+        ["Convergence / governance", "Pick/synthesize diffs, signed audit trail", "Not a focus"],
+        ["Keys / privacy", "BYOK, local-first, self-hostable", "Cloud or self-hosted workspaces"],
+      ],
+    },
+    prosA: [
+      "Runs several coding agents in parallel on one task, in isolated git worktrees.",
+      "Convergence: pick one agent's file or synthesize non-overlapping edits into one branch.",
+      "Governance gate, human approvals, and a tamper-evident audit trail with compliance export.",
+      "Local-first and BYOK — code, agents, and keys stay on your machine.",
+    ],
+    consA: [
+      "Not a dev-environment provisioner — it uses the machine and repo you already have.",
+      "macOS-first desktop app today; no browser workspaces.",
+      "Most valuable when you actually run multiple agents.",
+    ],
+    prosB: [
+      "Fast, reproducible dev environments from a declarative config.",
+      "Prebuilds make repos ready to code almost instantly.",
+      "Works from a browser or a desktop IDE; good for onboarding and ephemeral work.",
+      "Standardizes environments across a team.",
+    ],
+    consB: [
+      "It provisions environments, not agent orchestration — no parallel-agent compare/converge.",
+      "No governance gate, cross-agent convergence, or signed compliance evidence export.",
+      "Cloud-hosted workspaces may not suit every privacy or offline requirement.",
+    ],
+    whenA:
+      "Choose Recoder when your problem is running several coding agents on a task and reconciling their work into one governed, auditable merge.",
+    whenB:
+      "Choose Gitpod when your problem is standardized, reproducible dev environments that spin up on demand for a team.",
+    recoderFit: [
+      "These tools are on different axes and can compose rather than compete: Gitpod decides where a repo runs, while Recoder decides which agents work on it and how their diffs get merged. Recoder itself runs as a local desktop control plane, so it isn't a drop-in for a cloud environment.",
+      "If you already standardize on a CDE like Gitpod, Recoder adds the orchestration layer on top of whatever agents you run — comparing divergent diffs, converging the best parts into one branch, and landing a single governed merge with an audit trail you can export.",
+    ],
+    faq: [
+      {
+        q: "Is Recoder a Gitpod alternative?",
+        a: "Not really — they solve different problems. Gitpod provisions cloud development environments; Recoder orchestrates coding agents and converges their work. You could use a CDE for your environment and Recoder for multi-agent runs.",
+      },
+      {
+        q: "Does Recoder run in the cloud like Gitpod?",
+        a: "No. Recoder's control plane is a local desktop app bound to loopback (127.0.0.1) and is self-hostable. Gitpod is designed around cloud or self-hosted dev environments accessed from a browser or IDE.",
+      },
+      {
+        q: "Can I use both together?",
+        a: "Conceptually yes: they address separate concerns. A CDE handles the environment; Recoder handles running several agents on a task and converging their diffs into one governed merge.",
+      },
+    ],
+    related: ["recoder-vs-github-codespaces", "gitpod-vs-github-codespaces", "recoder-vs-cursor"],
+  },
+
+  {
+    slug: "recoder-vs-github-codespaces",
+    a: RECODER,
+    b: CODESPACES,
+    title: "Recoder vs GitHub Codespaces",
+    metaTitle: "Recoder vs GitHub Codespaces: agents vs cloud dev env",
+    description:
+      "Recoder vs GitHub Codespaces: Codespaces provisions cloud dev environments; Recoder orchestrates coding agents in parallel. Different axes, and how they fit.",
+    tagline: "An agent orchestrator versus GitHub's cloud dev environment.",
+    intro: [
+      "GitHub Codespaces and Recoder are easy to line up but they answer different questions. Codespaces is a cloud development environment: it launches a configurable dev container in the cloud, deeply integrated with GitHub, so you can open a repo in VS Code (browser or desktop) with your toolchain ready to go. Recoder is a desktop control plane that runs multiple coding agents in parallel isolated git worktrees and helps you compare, converge, and govern the merge.",
+      "Codespaces is about provisioning where your code runs; Recoder is about which agents work on it and how their output is reconciled. That makes them complementary far more than competitive — the honest comparison is about which need you have.",
+    ],
+    table: {
+      head: ["Dimension", "Recoder", "GitHub Codespaces"],
+      rows: [
+        ["Category", "Multi-agent orchestrator", "Cloud dev environment (CDE)"],
+        ["Core job", "Run + converge many coding agents", "Provision cloud dev containers"],
+        ["Where it runs", "Local desktop app (127.0.0.1)", "GitHub-hosted cloud VMs"],
+        ["Ecosystem", "Agent-agnostic, BYOK", "Tight GitHub / VS Code integration"],
+        ["Coding agents", "Orchestrates Claude Code, Codex, Aider, …", "Not an agent runner by itself"],
+        ["Convergence / governance", "Pick/synthesize diffs, signed audit trail", "Not a focus"],
+        ["Cost model", "Free tier + paid plans, self-hostable", "Free monthly quota, then usage-billed"],
+      ],
+    },
+    prosA: [
+      "Runs many coding agents in parallel on one task, in isolated git worktrees.",
+      "Convergence: combine the best of several agents' diffs into one branch.",
+      "Governance gate, approvals, and a tamper-evident audit trail with compliance export.",
+      "Local-first, self-hostable, BYOK across all agents.",
+    ],
+    consA: [
+      "Not a dev-environment provisioner — it uses your existing machine and repo.",
+      "macOS-first desktop app today; no browser workspaces.",
+      "No native GitHub-hosted cloud VMs.",
+    ],
+    prosB: [
+      "Cloud dev containers that launch on demand with your toolchain ready.",
+      "Deep GitHub integration — repos, PRs, Actions, and permissions.",
+      "Works from the browser or desktop VS Code; good for onboarding and ephemeral work.",
+      "Free monthly usage quota for personal accounts.",
+    ],
+    consB: [
+      "It provisions environments, not agent orchestration — no parallel-agent compare/converge.",
+      "No governance gate, cross-agent convergence, or signed compliance evidence export.",
+      "Cloud-hosted; usage billing applies beyond the free quota.",
+    ],
+    whenA:
+      "Choose Recoder when your problem is running several coding agents on a task and reconciling their work into one governed, auditable merge.",
+    whenB:
+      "Choose GitHub Codespaces when your problem is on-demand cloud dev environments tightly integrated with GitHub.",
+    recoderFit: [
+      "Codespaces and Recoder sit on different axes and can compose: Codespaces decides where a repo runs, while Recoder decides which agents work on it and how their diffs get merged. Recoder runs as a local desktop control plane, so it isn't a substitute for a cloud dev container.",
+      "If your team lives in Codespaces, Recoder adds the orchestration layer for the agents you run — comparing divergent diffs, converging the best parts into one branch, and landing a single governed merge with an exportable audit trail.",
+    ],
+    faq: [
+      {
+        q: "Is Recoder an alternative to GitHub Codespaces?",
+        a: "Not directly — they solve different problems. Codespaces provisions cloud dev environments; Recoder orchestrates coding agents and converges their work. Many workflows could use a CDE for the environment and Recoder for multi-agent runs.",
+      },
+      {
+        q: "Does Recoder need GitHub like Codespaces does?",
+        a: "No. Recoder is agent-agnostic and local-first; recoder.xyz is its auth source of truth, not GitHub. It can open a PR when you want, but it doesn't require GitHub-hosted environments.",
+      },
+      {
+        q: "Can I run Recoder inside a Codespace?",
+        a: "Recoder's control plane is a macOS-first desktop app today, so it isn't designed to run inside a cloud dev container. The two address separate concerns — environment provisioning versus agent orchestration.",
+      },
+    ],
+    related: ["recoder-vs-gitpod", "gitpod-vs-github-codespaces", "recoder-vs-claude-code"],
+  },
+
+  {
+    slug: "recoder-vs-open-interpreter",
+    a: RECODER,
+    b: OPEN_INTERPRETER,
+    title: "Recoder vs Open Interpreter",
+    metaTitle: "Recoder vs Open Interpreter: many agents vs one",
+    description:
+      "Recoder vs Open Interpreter: Open Interpreter is one local code-execution agent; Recoder orchestrates many coding agents and governs the merge. How each fits.",
+    tagline: "A multi-agent orchestrator versus a single local code-execution agent.",
+    intro: [
+      "Open Interpreter is a well-liked open-source tool: a natural-language interface that lets an LLM run code on your machine — Python, shell, and more — to complete tasks, and it's model-agnostic (including local models). Recoder is a different kind of tool. It doesn't execute code itself; it orchestrates multiple coding agents in parallel isolated git worktrees, then helps you compare, converge, and govern the merge.",
+      "Open Interpreter shines as a general, local code-execution agent for automation, data work, and quick scripting. Recoder is built for repo-scale software engineering with several agents at once and a principled way to reconcile and govern their output.",
+    ],
+    table: {
+      head: ["Dimension", "Recoder", "Open Interpreter"],
+      rows: [
+        ["Category", "Multi-agent orchestrator", "Single code-execution agent"],
+        ["Source", "Proprietary · self-hostable", "Open source (AGPL-3.0)"],
+        ["Focus", "Repo-scale multi-agent SWE", "General local code execution + automation"],
+        ["Models", "BYOK across agents/providers", "Model-agnostic (incl. local)"],
+        ["Parallel attempts", "Many, isolated worktrees", "One session"],
+        ["Convergence / governance", "Pick/synthesize diffs, signed audit trail", "Not a focus"],
+        ["Isolation", "Git worktree per agent", "Runs code directly on your machine"],
+      ],
+    },
+    prosA: [
+      "Runs many coding agents in parallel on one task, each in an isolated git worktree.",
+      "Convergence: combine the best of several agents' diffs into one branch.",
+      "Governance gate, approvals, and a tamper-evident audit trail with compliance export.",
+      "Local-first and self-hostable, BYOK across all agents.",
+    ],
+    consA: [
+      "Not a code-execution agent itself — it drives the agents you install.",
+      "macOS-first desktop app today.",
+      "Overkill for quick one-off scripting or data tasks.",
+    ],
+    prosB: [
+      "Open source and model-agnostic, including local models.",
+      "Great for general automation, data tasks, and quick natural-language scripting.",
+      "Simple, direct: describe a task and it runs code to do it.",
+      "Runs entirely on your own machine.",
+    ],
+    consB: [
+      "A single agent/session — no parallel-agent comparison or convergence.",
+      "General-purpose execution, not specialized for repo-scale multi-agent workflows.",
+      "No governance gate, isolated worktrees, or signed audit trail; it runs code directly.",
+      "AGPL-3.0 licensing has copyleft implications for some distributions.",
+    ],
+    whenA:
+      "Choose Recoder when you want several coding agents racing a task in isolated worktrees, a real diff comparison, convergence, and a governed, auditable merge.",
+    whenB:
+      "Choose Open Interpreter when you want a single, open-source local agent to run code from natural language for automation, data, or quick scripting.",
+    recoderFit: [
+      "These tools work at different levels. Open Interpreter is one local agent that executes code; Recoder is the layer that runs several coding agents at once and reconciles their output into one governed branch.",
+      "If a lightweight, single-agent, run-code-locally flow already covers you, Open Interpreter is hard to beat for its niche. Reach for Recoder when parallel attempts, isolated worktrees, convergence, and governance start to matter for real software changes.",
+    ],
+    faq: [
+      {
+        q: "Is Open Interpreter open source?",
+        a: "Yes. Open Interpreter is open source under the AGPL-3.0 license and is model-agnostic, so it can run OpenAI, Anthropic, or local models. Recoder is proprietary but self-hostable and BYOK.",
+      },
+      {
+        q: "Does Recoder execute code like Open Interpreter?",
+        a: "Not directly. Recoder orchestrates coding agents that make changes in isolated git worktrees; it focuses on comparison, convergence, and governance rather than being the agent that runs code itself.",
+      },
+      {
+        q: "Which is better for repo-scale software changes?",
+        a: "Recoder is built for repo-scale, multi-agent software engineering with isolated worktrees and governed merges. Open Interpreter is better suited to general local code execution and automation as a single agent.",
+      },
+    ],
+    related: ["recoder-vs-aider", "recoder-vs-codex", "recoder-vs-claude-code"],
+  },
+
+  {
+    slug: "cursor-vs-codespaces",
+    a: CURSOR,
+    b: CODESPACES,
+    title: "Cursor vs GitHub Codespaces",
+    metaTitle: "Cursor vs GitHub Codespaces: AI editor vs cloud dev env",
+    description:
+      "Cursor vs GitHub Codespaces: an AI-first editor versus a cloud dev environment. Different layers — how they work together and where each one fits.",
+    tagline: "An AI-first editor versus a cloud dev environment — different layers.",
+    intro: [
+      "Cursor and GitHub Codespaces are often mentioned together, but they occupy different layers of the stack. Cursor is an AI-first code editor (a VS Code fork) with best-in-class autocomplete, inline edits, and an agent mode — it's the editing surface. Codespaces is a cloud development environment: a dev container running in GitHub's cloud that you connect an editor to. One is where you edit with AI; the other is where the code runs.",
+      "That means they're not really rivals — you can edit code from a Codespace, and Cursor can connect to remote environments. The honest question is which layer you're choosing: the AI editing experience, or the environment your code runs in.",
+    ],
+    table: {
+      head: ["Dimension", "Cursor", "GitHub Codespaces"],
+      rows: [
+        ["Layer", "AI code editor", "Cloud dev environment (CDE)"],
+        ["Core job", "AI-assisted editing + autocomplete", "Provision cloud dev containers"],
+        ["Where code runs", "Local or remote you connect to", "GitHub-hosted cloud VMs"],
+        ["AI features", "Autocomplete, inline edits, agent mode", "Editor-dependent (none built in)"],
+        ["Ecosystem", "VS Code fork; multiple model providers", "Tight GitHub / VS Code integration"],
+        ["Cost", "Subscription (Pro / Business)", "Free monthly quota, then usage-billed"],
+      ],
+    },
+    prosA: [
+      "Best-in-class autocomplete and inline Cmd-K edits.",
+      "Full AI-first editor with the VS Code ecosystem.",
+      "Multiple model providers and background agents.",
+      "Works with local or remote development setups.",
+    ],
+    consA: [
+      "It's an editor, not an environment — you still provision where code runs.",
+      "Proprietary and subscription-based.",
+      "A specific editor choice if you're committed to another IDE.",
+    ],
+    prosB: [
+      "On-demand cloud dev containers with your toolchain ready.",
+      "Deep GitHub integration — repos, PRs, Actions, permissions.",
+      "Consistent, reproducible environments across a team.",
+      "Free monthly usage quota for personal accounts.",
+    ],
+    consB: [
+      "No built-in AI editing — you bring an editor like VS Code or Cursor.",
+      "Cloud-hosted; usage billing applies beyond the free quota.",
+      "Tied to the GitHub ecosystem.",
+    ],
+    whenA:
+      "Choose Cursor when you want a premium AI editing experience with the best autocomplete and inline AI, wherever your code runs.",
+    whenB:
+      "Choose GitHub Codespaces when you want reproducible, on-demand cloud dev environments integrated with GitHub — then connect the editor you prefer.",
+    recoderFit: [
+      "Cursor and Codespaces are different layers — an AI editor and a cloud environment — so many developers use them together. Recoder sits on yet another axis: it orchestrates coding agents (including Cursor's own CLI agent) in parallel isolated worktrees and converges their work.",
+      "Whichever editor and environment you standardize on, Recoder is where you run several agents on a task, compare divergent diffs, and land one governed merge with an exportable audit trail.",
+    ],
+    faq: [
+      {
+        q: "Are Cursor and Codespaces competitors?",
+        a: "Not really — they're different layers. Cursor is an AI editor; Codespaces is a cloud environment the editor connects to. You can use them together, editing a cloud environment's code with AI assistance.",
+      },
+      {
+        q: "Can Cursor connect to a GitHub Codespace?",
+        a: "Cursor is a VS Code fork, and remote-development workflows generally let editors connect to remote environments. The exact setup depends on current Codespaces and Cursor support, so check their docs for specifics.",
+      },
+      {
+        q: "Where does Recoder fit?",
+        a: "Recoder is neither an editor nor an environment — it orchestrates coding agents in parallel worktrees and converges their diffs into one governed merge, on top of whatever editor and environment you use.",
+      },
+    ],
+    related: ["claude-code-vs-cursor", "recoder-vs-github-codespaces", "gitpod-vs-github-codespaces"],
+  },
+
+  {
+    slug: "gitpod-vs-github-codespaces",
+    a: GITPOD,
+    b: CODESPACES,
+    title: "Gitpod vs GitHub Codespaces",
+    metaTitle: "Gitpod vs GitHub Codespaces: cloud dev environments (2026)",
+    description:
+      "Gitpod vs GitHub Codespaces compared: two cloud development environments. Ecosystem, configuration, hosting, and cost — plus how each fits your workflow.",
+    tagline: "Two cloud development environments, different ecosystems.",
+    intro: [
+      "Gitpod and GitHub Codespaces are the two best-known cloud development environments (CDEs): both give you an automated, reproducible dev environment in the cloud, ready to code from a browser or a desktop IDE, so you don't hand-configure a laptop for every repo. The differences are mostly ecosystem, configuration model, and hosting flexibility.",
+      "Codespaces is deeply integrated with GitHub and its dev-container config. Gitpod is more platform-agnostic across Git hosts, with its own configuration and prebuild model, and has offered self-hosted and newer flexible deployment options. Which fits depends on where your code and team already live.",
+    ],
+    table: {
+      head: ["Dimension", "Gitpod", "GitHub Codespaces"],
+      rows: [
+        ["Category", "Cloud dev environment (CDE)", "Cloud dev environment (CDE)"],
+        ["Ecosystem", "Multiple Git hosts", "GitHub-centric"],
+        ["Config model", "Gitpod config + prebuilds", "Dev containers (devcontainer.json)"],
+        ["Hosting", "Cloud + self-hosted / flexible options", "GitHub-hosted cloud VMs"],
+        ["IDE access", "Browser or desktop IDE", "Browser or desktop VS Code"],
+        ["Cost", "Usage-based plans", "Free monthly quota, then usage-billed"],
+      ],
+    },
+    prosA: [
+      "Works across multiple Git hosts, not just one.",
+      "Prebuilds make environments ready to code quickly.",
+      "Self-hosted and flexible deployment options for control and privacy.",
+      "Standardizes environments across a team.",
+    ],
+    consA: [
+      "Less turnkey than Codespaces if your world is entirely GitHub.",
+      "Configuration and deployment model is its own to learn.",
+    ],
+    prosB: [
+      "Deep GitHub integration — repos, PRs, Actions, permissions.",
+      "Dev-container standard is portable and widely supported.",
+      "Free monthly usage quota for personal accounts.",
+      "Turnkey for teams already on GitHub.",
+    ],
+    consB: [
+      "GitHub-centric; less natural outside that ecosystem.",
+      "Cloud-hosted; usage billing applies beyond the free quota.",
+    ],
+    whenA:
+      "Choose Gitpod when you work across multiple Git hosts or want self-hosted / flexible deployment of your dev environments.",
+    whenB:
+      "Choose GitHub Codespaces when your team lives on GitHub and you want the most turnkey, tightly integrated cloud dev environment.",
+    recoderFit: [
+      "Both Gitpod and Codespaces answer 'where does my code run?' — they're on a different axis from Recoder, which answers 'which agents work on it and how does their output get merged?' You can pair either CDE with Recoder's agent orchestration.",
+      "Recoder runs as a local desktop control plane: it launches several coding agents in parallel isolated worktrees, compares their diffs, and lands one governed merge with an exportable audit trail — independent of whichever dev environment hosts your repo.",
+    ],
+    faq: [
+      {
+        q: "What's the main difference between Gitpod and Codespaces?",
+        a: "Both are cloud development environments. Codespaces is tightly integrated with GitHub and dev containers; Gitpod is more platform-agnostic across Git hosts and has offered self-hosted and flexible deployment options.",
+      },
+      {
+        q: "Do either of them run AI coding agents?",
+        a: "They provision environments rather than orchestrate agents. You can run coding agents inside either environment, but comparing and converging multiple agents' work is a separate concern — that's what a tool like Recoder handles.",
+      },
+      {
+        q: "Can I self-host either one?",
+        a: "Gitpod has offered self-hosted and flexible deployment options; Codespaces is GitHub-hosted. Check each product's current documentation for the latest self-hosting and deployment details.",
+      },
+    ],
+    related: ["recoder-vs-gitpod", "recoder-vs-github-codespaces", "cursor-vs-codespaces"],
   },
 ];
 

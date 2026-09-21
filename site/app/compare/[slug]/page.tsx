@@ -3,9 +3,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Nav, Footer, DownloadButton, SecondaryButton } from "@/components/site";
 import { JsonLd } from "@/components/json-ld";
+import { RelatedLinks } from "@/components/related-links";
+import { EmbedComparison } from "@/components/embed-comparison";
+import {
+  SITE_URL,
+  createMetadata,
+  buildBreadcrumbJsonLd,
+  buildArticleJsonLd,
+  buildFaqJsonLd,
+} from "@/lib/seo";
 import { COMPARISONS, comparison, type ToolRef } from "../comparisons";
-
-const SITE_URL = "https://recoder.xyz";
 
 export function generateStaticParams() {
   return COMPARISONS.map((c) => ({ slug: c.slug }));
@@ -19,23 +26,12 @@ export async function generateMetadata({
   const { slug } = await params;
   const c = comparison(slug);
   if (!c) return { title: "Compare — Recoder" };
-  const url = `${SITE_URL}/compare/${c.slug}`;
-  return {
+  return createMetadata({
     title: c.metaTitle,
     description: c.description,
-    alternates: { canonical: url },
-    openGraph: {
-      title: c.metaTitle,
-      description: c.description,
-      url,
-      type: "article",
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: c.metaTitle,
-      description: c.description,
-    },
-  };
+    path: `/compare/${c.slug}`,
+    type: "article",
+  });
 }
 
 function ToolCard({ tool }: { tool: ToolRef }) {
@@ -102,37 +98,20 @@ export default async function ComparePageRoute({
     .map((s) => comparison(s))
     .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
-  const breadcrumbJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
-      { "@type": "ListItem", position: 2, name: "Compare", item: `${SITE_URL}/compare` },
-      { "@type": "ListItem", position: 3, name: c.title, item: url },
-    ],
-  };
+  const breadcrumbJsonLd = buildBreadcrumbJsonLd([
+    { name: "Home", item: SITE_URL },
+    { name: "Compare", item: `${SITE_URL}/compare` },
+    { name: c.title, item: url },
+  ]);
 
-  const articleJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Article",
+  const articleJsonLd = buildArticleJsonLd({
     headline: c.title,
     description: c.description,
-    mainEntityOfPage: { "@type": "WebPage", "@id": url },
     url,
-    author: { "@type": "Organization", name: "Recoder", url: SITE_URL },
-    publisher: { "@id": `${SITE_URL}/#organization` },
-    about: [c.a.name, c.b.name].map((name) => ({ "@type": "Thing", name })),
-  };
+    about: [c.a.name, c.b.name],
+  });
 
-  const faqJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: c.faq.map((item) => ({
-      "@type": "Question",
-      name: item.q,
-      acceptedAnswer: { "@type": "Answer", text: item.a },
-    })),
-  };
+  const faqJsonLd = buildFaqJsonLd(c.faq);
 
   return (
     <>
@@ -264,6 +243,13 @@ export default async function ComparePageRoute({
             ))}
           </div>
 
+          <h2 className="mt-14 text-lg font-medium tracking-tight text-fg">
+            Embed this comparison
+          </h2>
+          <div className="mt-4">
+            <EmbedComparison slug={c.slug} label={`${c.a.name} vs ${c.b.name}`} />
+          </div>
+
           {related.length > 0 ? (
             <>
               <h2 className="mt-14 text-lg font-medium tracking-tight text-fg">
@@ -283,6 +269,32 @@ export default async function ComparePageRoute({
               </div>
             </>
           ) : null}
+
+          <RelatedLinks
+            heading="Keep exploring"
+            links={[
+              {
+                href: "/alternatives",
+                title: "Tool alternatives",
+                summary: "Alternatives to Cursor, Aider, Codespaces, and more.",
+              },
+              {
+                href: "/use-cases",
+                title: "Use cases",
+                summary: "Run agents in parallel, converge diffs, and govern merges.",
+              },
+              {
+                href: "/features",
+                title: "What Recoder does",
+                summary: "Isolation while agents work, convergence when they finish.",
+              },
+              {
+                href: "/how-it-works",
+                title: "How it works",
+                summary: "From one task to N agents to a single governed merge.",
+              },
+            ]}
+          />
 
           <div className="mt-10 text-sm">
             <Link href="/compare" className="text-muted hover:text-fg">
