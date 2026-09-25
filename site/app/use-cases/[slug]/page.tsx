@@ -12,8 +12,6 @@ import {
   buildFaqJsonLd,
 } from "@/lib/seo";
 import { USE_CASES, useCase } from "../use-cases";
-import { comparison } from "../../compare/comparisons";
-import { alternative } from "../../alternatives/alternatives";
 
 export const revalidate = 86400;
 
@@ -62,24 +60,6 @@ export default async function UseCasePageRoute({
   });
 
   const faqJsonLd = buildFaqJsonLd(u.faq);
-
-  const compareLinks: RelatedLink[] = u.relatedCompare
-    .map((s) => comparison(s))
-    .filter((x): x is NonNullable<typeof x> => Boolean(x))
-    .map((c) => ({
-      href: `/compare/${c.slug}`,
-      title: c.title,
-      summary: c.tagline,
-    }));
-
-  const altLinks: RelatedLink[] = u.relatedAlternatives
-    .map((s) => alternative(s))
-    .filter((x): x is NonNullable<typeof x> => Boolean(x))
-    .map((a) => ({
-      href: `/alternatives/${a.slug}`,
-      title: a.title,
-      summary: a.tagline,
-    }));
 
   const useCaseLinks: RelatedLink[] = u.related
     .map((s) => useCase(s))
@@ -192,8 +172,6 @@ export default async function UseCasePageRoute({
             ))}
           </div>
 
-          <RelatedLinks heading="Related comparisons" links={compareLinks} />
-          <RelatedLinks heading="Tool alternatives" links={altLinks} />
           <RelatedLinks heading="More use cases" links={useCaseLinks} />
 
           <div className="mt-10 text-sm">

@@ -17,9 +17,7 @@ const AI_CRAWLERS = [
   "CCBot",
 ];
 
-// Private/POST-only surfaces that don't belong in a crawl. The badge image
-// endpoint (/api/badge/*) is intentionally left crawlable so embedded badges
-// resolve and can be discovered.
+// Private/POST-only surfaces that don't belong in a crawl.
 const DISALLOW = ["/api/admin", "/api/leads", "/api/pilots", "/api/proof"];
 
 export default function robots(): MetadataRoute.Robots {
@@ -28,7 +26,7 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: "*", allow: "/", disallow: DISALLOW },
       ...AI_CRAWLERS.map((userAgent) => ({
         userAgent,
-        allow: ["/", "/api/badge/"],
+        allow: "/",
         disallow: DISALLOW,
       })),
     ],

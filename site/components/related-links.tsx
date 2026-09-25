@@ -1,10 +1,9 @@
 import Link from "next/link";
 
 /**
- * Shared internal-linking mesh. Every programmatic page (compare, alternatives,
- * use-cases) ends with one or more RelatedLinks groups so the site forms a dense,
- * consistent internal link graph — compare ↔ alternatives ↔ use-cases ↔
- * features/docs, both directions. Consistent markup here means every new data
+ * Shared internal-linking mesh. Every programmatic use-case page ends with a
+ * RelatedLinks group so the site forms a dense, consistent internal link graph
+ * (use-cases ↔ features/docs, both directions). Consistent markup here means every new data
  * entry ships its cross-links the same way, which is the single biggest reason
  * this content mesh ranks.
  */

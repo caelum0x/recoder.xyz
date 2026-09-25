@@ -91,18 +91,58 @@ export function Wordmark() {
   );
 }
 
-// Self-host is a footnote, not the pitch (positioning: terminal IDE for AI
-// agents). It stays reachable from the footer for the teams that need it, but
-// it does not lead the primary nav.
+// Five destinations max (owner design rule): four core links plus "More".
+// Self-host stays a footnote, reachable from the footer.
 const NAV_LINKS = [
   { href: "/features", label: "Features" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/docs", label: "Docs" },
+  { href: "/pricing", label: "Pricing" },
+];
+
+const MORE_LINKS = [
   { href: "/enterprise", label: "Enterprise" },
   { href: "/proof", label: "Proof" },
-  { href: "/pricing", label: "Pricing" },
   { href: "/changelog", label: "Changelog" },
+  { href: "/contact", label: "Contact" },
 ];
+
+/**
+ * Icon-only "More" disclosure. Native <details> keeps it a server component,
+ * keyboard-accessible, and working without JavaScript. On small screens it
+ * also carries the core links, so mobile gets a real menu.
+ */
+function MoreMenu() {
+  return (
+    <details className="group relative">
+      <summary
+        aria-label="More pages"
+        title="More"
+        className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-lg border border-border text-muted transition-colors hover:bg-bg-soft hover:text-fg [&::-webkit-details-marker]:hidden"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </svg>
+      </summary>
+      <div className="glass-panel absolute right-0 mt-2 w-48 overflow-hidden rounded-xl p-1.5">
+        {[...NAV_LINKS.map((l) => ({ ...l, mobileOnly: true })), ...MORE_LINKS.map((l) => ({ ...l, mobileOnly: false }))].map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            className={
+              "block rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:bg-bg-soft hover:text-fg" +
+              (l.mobileOnly ? " md:hidden" : "")
+            }
+          >
+            {l.label}
+          </Link>
+        ))}
+      </div>
+    </details>
+  );
+}
 
 export function Nav() {
   return (
@@ -120,7 +160,10 @@ export function Nav() {
             </Link>
           ))}
         </div>
-        <DownloadButton />
+        <div className="flex items-center gap-3">
+          <MoreMenu />
+          <DownloadButton />
+        </div>
       </nav>
     </header>
   );

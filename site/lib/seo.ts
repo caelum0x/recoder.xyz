@@ -1,14 +1,14 @@
 // Centralized SEO helpers for the marketing site.
 //
 // Before this module, every page inlined its own metadata block and hand-rolled
-// its JSON-LD (see the old /compare/[slug] and layout.tsx). That drifted: some
+// its JSON-LD (see layout.tsx). That drifted: some
 // pages set a canonical, some didn't; OG/twitter fields were copy-pasted with
 // small differences. This module is the single source of truth so every page —
-// especially the programmatic /compare, /alternatives, and /use-cases routes —
+// especially the programmatic /use-cases routes —
 // emits an identical, correct <title>/description/canonical/OG/twitter and valid
 // schema.org structured data.
 //
-// Editorial rule (shared with app/compare/comparisons.ts): every claim rendered
+// Editorial rule: every claim rendered
 // through these builders must be verifiable about the real tool. These helpers
 // only shape data; they never invent it.
 
@@ -55,7 +55,7 @@ export interface CreateMetadataInput {
   title: string;
   /** The meta description. Clamped to ~160 chars. */
   description: string;
-  /** Site-relative path, e.g. "/alternatives/cursor-alternatives". */
+  /** Site-relative path, e.g. "/use-cases/parallel-ai-coding-agents". */
   path: string;
   keywords?: readonly string[];
   /** Optional OG/twitter image. Omit to inherit the route's opengraph-image. */
