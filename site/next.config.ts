@@ -17,6 +17,20 @@ const nextConfig: NextConfig = {
   // ESLint config in site/ is not set up for next-lint; skip during build.
   eslint: { ignoreDuringBuilds: true },
   assetPrefix,
+  // Retired comparison / alternatives / directory pages (no competitor pages,
+  // owner rule 2026-09-25). `permanent: true` emits a 308 so link equity lands
+  // on the product.
+  async redirects() {
+    return [
+      "/compare",
+      "/compare/:slug*",
+      "/alternatives",
+      "/alternatives/:slug*",
+      "/tools",
+      "/tools/:path*",
+      "/api/badge/:slug*",
+    ].map((source) => ({ source, destination: "/", permanent: true }));
+  },
   async headers() {
     return [
       {

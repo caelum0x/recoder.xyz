@@ -102,7 +102,6 @@ export default function UseCasesIndex() {
             </p>
             <div className="mt-8 flex items-center justify-center gap-4">
               <DownloadButton />
-              <SecondaryButton href="/alternatives" label="Compare alternatives" />
             </div>
           </div>
         </section>

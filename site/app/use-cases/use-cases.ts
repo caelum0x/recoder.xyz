@@ -1,8 +1,6 @@
-// Use-case pages, authored as typed data (same convention as
-// compare/comparisons.ts and alternatives/alternatives.ts — no markdown
-// dependency). Each UseCase is its own route at /use-cases/[slug].
+// Use-case pages, authored as typed data (no markdown dependency). Each UseCase is its own route at /use-cases/[slug].
 //
-// Editorial rules (shared with comparisons.ts): every claim about Recoder must
+// Editorial rules: every claim about Recoder must
 // be verifiable from the product (see features/page.tsx and docs/content.ts).
 // Maturing capabilities (team sync, cross-machine sync) are framed as such, not
 // as shipped. No invented metrics.
@@ -36,9 +34,7 @@ export interface UseCase {
   /** How Recoder does it, as ordered steps. */
   steps: string[];
   faq: UseCaseFaq[];
-  /** Cross-links into the mesh. */
-  relatedCompare: string[];
-  relatedAlternatives: string[];
+  /** Cross-links to other use cases. */
   related: string[];
 }
 
@@ -107,8 +103,6 @@ export const USE_CASES: UseCase[] = [
         a: "No. Recoder is BYOK: you pay your model providers directly for inference. You pay Recoder for orchestration, review, and governance — never for tokens.",
       },
     ],
-    relatedCompare: ["recoder-vs-claude-code", "recoder-vs-conductor", "claude-code-vs-codex"],
-    relatedAlternatives: ["cursor-alternatives", "aider-alternatives"],
     related: ["compare-and-merge-agent-diffs", "byok-ai-coding"],
   },
   {
@@ -176,8 +170,6 @@ export const USE_CASES: UseCase[] = [
         a: "Recoder folds a trial-merge preflight, uncommitted-work check, CI checks, PR state, and preview verification into one verdict. It never fakes a green: if a signal isn't passing, it shows that honestly.",
       },
     ],
-    relatedCompare: ["recoder-vs-cursor", "recoder-vs-claude-code", "recoder-vs-aider"],
-    relatedAlternatives: ["cursor-alternatives", "aider-alternatives"],
     related: ["parallel-ai-coding-agents", "governed-ai-code-merges"],
   },
   {
@@ -250,8 +242,6 @@ export const USE_CASES: UseCase[] = [
         a: "Yes. The control plane is local-first and self-hostable with fail-closed auth and a durable local credential store, so agent work and its audit trail stay inside your boundary.",
       },
     ],
-    relatedCompare: ["recoder-vs-conductor", "recoder-vs-cursor"],
-    relatedAlternatives: ["github-codespaces-alternatives", "gitpod-alternatives"],
     related: ["self-hosted-ai-agent-orchestration", "compare-and-merge-agent-diffs"],
   },
   {
@@ -319,8 +309,6 @@ export const USE_CASES: UseCase[] = [
         a: "The control plane fails closed: missing keys or dependencies deny access with explicit errors rather than silently degrading or faking a healthy state.",
       },
     ],
-    relatedCompare: ["recoder-vs-claude-code", "recoder-vs-conductor"],
-    relatedAlternatives: ["github-codespaces-alternatives", "gitpod-alternatives"],
     related: ["governed-ai-code-merges", "byok-ai-coding"],
   },
   {
@@ -387,8 +375,6 @@ export const USE_CASES: UseCase[] = [
         a: "Yes. Because the keys are yours, each agent can use whichever provider account you point it at — and you can run agents from different providers in parallel on the same task.",
       },
     ],
-    relatedCompare: ["claude-code-vs-codex", "claude-code-vs-gemini-cli", "recoder-vs-claude-code"],
-    relatedAlternatives: ["aider-alternatives", "cursor-alternatives"],
     related: ["parallel-ai-coding-agents", "self-hosted-ai-agent-orchestration"],
   },
 ];

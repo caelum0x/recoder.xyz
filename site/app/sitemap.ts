@@ -1,8 +1,6 @@
 import type { MetadataRoute } from "next";
 import { DOC_PAGES } from "./docs/content";
-import { COMPARISONS } from "./compare/comparisons";
 import { USE_CASES } from "./use-cases/use-cases";
-import { ALTERNATIVES } from "./alternatives/alternatives";
 import { getChangelog } from "./changelog/entries";
 
 const BASE = "https://recoder.xyz";
@@ -30,13 +28,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/download", lastModified: BUILD_DATE, priority: 0.8, changeFrequency: "weekly" },
     { path: "/features", lastModified: BUILD_DATE, priority: 0.8, changeFrequency: "monthly" },
     { path: "/how-it-works", lastModified: BUILD_DATE, priority: 0.8, changeFrequency: "monthly" },
-    { path: "/compare", lastModified: BUILD_DATE, priority: 0.8, changeFrequency: "weekly" },
-    ...COMPARISONS.map((c) => ({
-      path: `/compare/${c.slug}`,
-      lastModified: BUILD_DATE,
-      priority: 0.7,
-      changeFrequency: "monthly" as const,
-    })),
     { path: "/docs", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "weekly" },
     ...DOC_PAGES.map((p) => ({
       path: `/docs/${p.slug}`,
@@ -51,15 +42,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
       changeFrequency: "monthly" as const,
     })),
-    { path: "/alternatives", lastModified: BUILD_DATE, priority: 0.8, changeFrequency: "monthly" },
-    ...ALTERNATIVES.map((a) => ({
-      path: `/alternatives/${a.slug}`,
-      lastModified: BUILD_DATE,
-      priority: 0.7,
-      changeFrequency: "monthly" as const,
-    })),
-    { path: "/tools", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "monthly" },
-    { path: "/tools/agent-directory", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "weekly" },
     { path: "/enterprise", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "monthly" },
     { path: "/design-partners", lastModified: BUILD_DATE, priority: 0.6, changeFrequency: "monthly" },
     { path: "/proof", lastModified: BUILD_DATE, priority: 0.6, changeFrequency: "monthly" },
