@@ -736,3 +736,6 @@ apps/desktop/engines/**/.env.*
 /recoder-*.jpeg
 /.playwright-mcp/
 /.artifacts/
+
+# Wrangler local dev state (miniflare R2/D1/KV blobs; can be hundreds of MB)
+**/.wrangler/
