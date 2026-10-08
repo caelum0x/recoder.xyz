@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Analytics } from "@/components/analytics";
 import "./globals.css";
 
-const TITLE = "Recoder — Run Claude Code, Codex & Cursor Agents in Parallel";
+const TITLE = "Recoder — Run AI Coding Agents in Parallel · Free Download";
 const DESCRIPTION =
-  "Run Claude Code, Codex, Cursor, and opencode in parallel, each in an isolated git worktree. Review the diffs and merge the best result with Recoder.";
+  "Run Claude Code, Codex, Cursor, and opencode simultaneously — each in its own isolated git worktree. Compare diffs side by side, merge the best result. Free download for Mac.";
 const SITE_URL = "https://recoder.xyz";
 
 export const metadata: Metadata = {
