@@ -1,114 +1,71 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+/**
+ * OAuth landing. Better Auth owns the real OAuth exchange (its handler at
+ * /api/auth/[...all] runs the provider callback and sets the session cookie),
+ * so this page NEVER mints a session itself — it only reads the real Better Auth
+ * session and routes accordingly. If a session exists, go to the dashboard;
+ * otherwise the sign-in didn't complete, so send the user back to sign in.
+ *
+ * (Historically this page fabricated a mock user from the `state` param and
+ * stored a client token in localStorage — that was an auth bypass and is gone.)
+ */
+
+import { Suspense, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useSession } from '@/lib/auth-client';
 
 function OAuthSuccessContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [message, setMessage] = useState('Processing authentication...');
+  const { data, isPending } = useSession();
+  const authed = !!data?.user;
 
   useEffect(() => {
-    const handleOAuth = async () => {
-      try {
-        const code = searchParams?.get('code');
-        const error = searchParams?.get('error');
-        const provider = searchParams?.get('state'); // We'll use state parameter to pass provider info
+    if (isPending || !authed) return;
+    const t = setTimeout(() => router.push('/dashboard'), 1200);
+    return () => clearTimeout(t);
+  }, [isPending, authed, router]);
 
-        if (error) {
-          setStatus('error');
-          setMessage('Authentication cancelled or failed');
-          return;
-        }
-
-        if (!code) {
-          setStatus('error');
-          setMessage('No authorization code received');
-          return;
-        }
-
-        // For now, create a mock successful login
-        // In production, you'd exchange the code for tokens here
-        const mockUser = {
-          id: `${provider}-${Date.now()}`,
-          name: `${provider} User`,
-          email: `user@${provider === 'github' ? 'github.com' : 'gmail.com'}`,
-          provider: provider || 'github'
-        };
-
-        // Post to our working login endpoint
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            oauth: true,
-            provider: provider || 'github',
-            user: mockUser
-          }),
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          localStorage.setItem('authToken', data.user.token);
-          setStatus('success');
-          setMessage('Authentication successful! Redirecting...');
-          
-          setTimeout(() => {
-            router.push('/dashboard');
-          }, 2000);
-        } else {
-          setStatus('error');
-          setMessage('Authentication failed. Please try again.');
-        }
-      } catch (error) {
-        console.error('OAuth handling error:', error);
-        setStatus('error');
-        setMessage('Authentication failed. Please try again.');
-      }
-    };
-
-    handleOAuth();
-  }, [searchParams, router]);
+  const status: 'loading' | 'success' | 'error' = isPending
+    ? 'loading'
+    : authed
+      ? 'success'
+      : 'error';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
-      <Card className="w-full max-w-md mx-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">
-            {status === 'loading' && 'Processing...'}
-            {status === 'success' && 'Success!'}
-            {status === 'error' && 'Authentication Failed'}
+            {status === 'loading' && 'Signing you in'}
+            {status === 'success' && 'Signed in'}
+            {status === 'error' && "Sign-in didn't complete"}
           </CardTitle>
           <CardDescription>
-            {message}
+            {status === 'loading' && 'Confirming your session…'}
+            {status === 'success' && 'Taking you to your dashboard…'}
+            {status === 'error' &&
+              'We couldn’t confirm your session. Please try signing in again.'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col items-center gap-4">
           {status === 'loading' && (
-            <div className="flex justify-center">
-              <div className="w-8 h-8 animate-spin border-4 border-blue-600 border-t-transparent rounded-full"></div>
-            </div>
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
           )}
-          {status === 'success' && (
-            <div className="text-center text-green-600">
-              ✓ Redirecting to dashboard...
-            </div>
-          )}
+          {status === 'success' && <CheckCircle2 className="h-8 w-8 text-emerald-500" aria-hidden />}
           {status === 'error' && (
-            <div className="text-center">
-              <p className="text-red-600 mb-4">❌ {message}</p>
-              <button 
+            <>
+              <XCircle className="h-8 w-8 text-destructive" aria-hidden />
+              <button
+                type="button"
                 onClick={() => router.push('/auth/signin')}
-                className="text-blue-600 hover:underline"
+                className="text-sm text-primary underline-offset-4 hover:underline"
               >
-                ← Back to Sign In
+                Back to sign in
               </button>
-            </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -118,21 +75,21 @@ function OAuthSuccessContent() {
 
 export default function OAuthSuccessPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
-        <Card className="w-full max-w-md mx-4">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Processing...</CardTitle>
-            <CardDescription>Please wait while we process your authentication.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex justify-center">
-              <div className="w-8 h-8 animate-spin border-4 border-blue-600 border-t-transparent rounded-full"></div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl">Signing you in</CardTitle>
+              <CardDescription>Confirming your session…</CardDescription>
+            </CardHeader>
+            <CardContent className="flex justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
       <OAuthSuccessContent />
     </Suspense>
   );

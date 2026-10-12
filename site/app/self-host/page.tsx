@@ -10,7 +10,8 @@ import {
 export const metadata: Metadata = {
   title: "Self-host Recoder",
   description:
-    "Run the entire Recoder control plane inside your own infrastructure. A scripted docker-compose stack and a Packer-baked machine image stand up a Postgres state-of-record behind an edge proxy — so your code and your audit trail never leave your network.",
+    "Run Recoder in your own infrastructure with Docker Compose, Postgres, an edge proxy, and a Packer-built machine image.",
+  alternates: { canonical: "https://recoder.xyz/self-host" },
 };
 
 /**

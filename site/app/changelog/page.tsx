@@ -4,7 +4,8 @@ import { getChangelog } from "./entries";
 
 export const metadata: Metadata = {
   title: "Recoder changelog",
-  description: "What's new in Recoder, the control plane for coding agents.",
+  description:
+    "Follow Recoder releases and public product changes across coding-agent coordination, review, governance, and desktop availability.",
   alternates: {
     canonical: "https://recoder.xyz/changelog",
     types: { "application/rss+xml": "https://recoder.xyz/feed.xml" },
@@ -30,6 +31,28 @@ export default function Changelog() {
             RSS
           </a>
         </p>
+        <section className="mt-8 rounded-xl border border-border bg-bg-soft p-6">
+          <h2 className="text-lg font-medium">How to read this changelog</h2>
+          <p className="mt-3 text-sm leading-relaxed text-muted">
+            Entries describe public product changes, not internal experiments or
+            roadmap promises. Each item names what became usable and when. Desktop
+            availability is tracked separately on the download page so an entry
+            never implies that an installer exists before it is actually public.
+          </p>
+          <p className="mt-3 text-sm leading-relaxed text-muted">
+            For installation status, supported platforms, and release checksums,
+            use the{" "}
+            <a href="/download" className="text-accent underline-offset-4 hover:underline">
+              download page
+            </a>
+            . For setup and behavior, use the{" "}
+            <a href="/docs" className="text-accent underline-offset-4 hover:underline">
+              documentation
+            </a>
+            . The RSS feed mirrors this page for readers who prefer release updates
+            without an account.
+          </p>
+        </section>
         <div className="mt-12 space-y-12">
           {ENTRIES.map((e) => (
             <article

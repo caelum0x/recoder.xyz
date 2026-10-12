@@ -1,0 +1,4 @@
+duration: 8
+fps: 30
+actions:
+  - { t: 0.3, type: tap, x: 0.5, y: 0.8 }

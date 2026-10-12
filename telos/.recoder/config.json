@@ -1,0 +1,6 @@
+{
+  "name": "recoder-platform",
+  "product": "telos",
+  "surfaces": ["cloud", "studio"],
+  "home": "https://recoder.xyz"
+}

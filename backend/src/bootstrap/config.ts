@@ -136,6 +136,14 @@ const envSchema = z.object({
   // --- Cloud (off-box substrate) slice ---
   DAYTONA_API_KEY: z.string().optional(),
   E2B_API_KEY: z.string().optional(),
+  // Self-hosted Recoder Sandbox (E2B fork): base URL is the self-host endpoint; key optional.
+  RESANDBOX_BASE_URL: z.string().optional(),
+  RESANDBOX_API_KEY: z.string().optional(),
+  // Recoder Cloud (Dokploy fork) deploy target: API base URL + token + where previews provision.
+  RECLOUD_BASE_URL: z.string().optional(),
+  RECLOUD_API_KEY: z.string().optional(),
+  RECLOUD_ENVIRONMENT_ID: z.string().optional(),
+  RECLOUD_SERVER_ID: z.string().optional(),
   PREVIEW_SIGNING_SECRET: z.string().optional(),
   PREVIEW_BASE_DOMAIN: z.string().optional(),
   ZITI_ENDPOINT: z.string().optional(),
@@ -367,6 +375,16 @@ function buildCloudOverrides(env: ParsedEnv): CloudConfigOverrides {
   return {
     daytona: { apiKey: opt(env.DAYTONA_API_KEY) ?? null },
     e2b: { apiKey: opt(env.E2B_API_KEY) ?? null },
+    resandbox: {
+      apiKey: opt(env.RESANDBOX_API_KEY) ?? null,
+      baseUrl: opt(env.RESANDBOX_BASE_URL) ?? null,
+    },
+    recloud: {
+      apiKey: opt(env.RECLOUD_API_KEY) ?? null,
+      baseUrl: opt(env.RECLOUD_BASE_URL) ?? null,
+    },
+    recloudEnvironmentId: opt(env.RECLOUD_ENVIRONMENT_ID) ?? null,
+    recloudServerId: opt(env.RECLOUD_SERVER_ID) ?? null,
     previewSigningSecret: opt(env.PREVIEW_SIGNING_SECRET) ?? null,
     previewBaseDomain: opt(env.PREVIEW_BASE_DOMAIN) ?? null,
     zitiEndpoint: opt(env.ZITI_ENDPOINT) ?? null,

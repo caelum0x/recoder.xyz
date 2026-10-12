@@ -36,7 +36,6 @@ export default function MCPSettingsPage() {
   const [installedServers, setInstalledServers] = useState<InstalledServer[]>([]);
   const [serverHealth, setServerHealth] = useState<Record<string, ServerHealth>>({});
   const [loading, setLoading] = useState(true);
-  const [showQuickInstall, setShowQuickInstall] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -132,9 +131,6 @@ export default function MCPSettingsPage() {
             Manage Model Context Protocol servers to extend AI capabilities
           </p>
         </div>
-        <Button onClick={() => setShowQuickInstall(true)}>
-          Quick Setup
-        </Button>
       </div>
 
       <div className="grid gap-6">

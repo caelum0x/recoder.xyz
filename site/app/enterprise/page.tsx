@@ -6,7 +6,8 @@ import { LeadForm } from "@/components/lead-form";
 export const metadata: Metadata = {
   title: "Recoder for teams & enterprise",
   description:
-    "Let your coding agents move fast while your org stays in control: approval gates on risky actions, deny-biased policy, a tamper-evident audit trail you can verify, security enforced at the edge instead of in a prompt, work-locks for coordination, SSO and seats, and full self-hosting.",
+    "Govern AI coding agents with approval gates, deny-biased policy, tamper-evident audits, SSO, seats, work locks, and self-hosting.",
+  alternates: { canonical: "https://recoder.xyz/enterprise" },
 };
 
 interface Capability {

@@ -1,9 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { readPublicProofSummary, type PublicProofSummary } from "../api/proof/summary";
 import styles from "./proof.module.css";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Product evidence — Recoder",
+  description:
+    "Review Recoder's live, aggregate design-partner intake and pilot evidence, including verified outcomes and current product signals.",
+  alternates: { canonical: "https://recoder.xyz/proof" },
+};
 
 export default async function ProofPage() {
   let proof: PublicProofSummary;

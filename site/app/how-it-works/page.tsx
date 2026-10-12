@@ -4,7 +4,8 @@ import { Nav, Footer, DownloadButton, SecondaryButton } from "@/components/site"
 export const metadata: Metadata = {
   title: "How Recoder works",
   description:
-    "Give one task to several AI coding agents at once, watch them diverge in isolated git worktrees, then converge the best result into one governed merge — all from one terminal.",
+    "Give one task to multiple AI coding agents, compare their isolated git-worktree results, and converge the best changes into one governed merge.",
+  alternates: { canonical: "https://recoder.xyz/how-it-works" },
 };
 
 interface Step {

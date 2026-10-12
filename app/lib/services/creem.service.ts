@@ -8,13 +8,16 @@
  *   metadata } -> { id, checkout_url }.
  * - Subscriptions: GET /v1/subscriptions/{id};
  *   POST /v1/subscriptions/{id}/cancel -> { id, status };
+ *   resume a scheduled cancellation: POST /v1/subscriptions/{id}/reactivate
+ *   -> { id, status };
  *   plan change: POST /v1/subscriptions/{id}/upgrade { product_id }.
  * - Webhooks: header `creem-signature` = hex HMAC-SHA256 of the raw body
  *   keyed with CREEM_WEBHOOK_SECRET; payload { id, eventType, object }.
  *
  * Env: CREEM_API_KEY (required), CREEM_WEBHOOK_SECRET (required for webhook
- * verify), CREEM_PRODUCT_<PLANID> per purchasable plan, optional
- * CREEM_API_URL override. Missing keys degrade — never throw at import.
+ * verify), CREEM_PRODUCT_<PLANID> per purchasable plan, optional base-URL
+ * override CREEM_API_BASE_URL (canonical; CREEM_API_URL still honored for
+ * back-compat). Missing keys degrade — never throw at import.
  */
 
 import crypto from 'crypto';
@@ -29,6 +32,7 @@ import {
   type NormalizedWebhookEventType,
   type PaymentProvider,
   type ProviderSubscription,
+  type ReactivateResult,
   type SubscriptionResult,
   type WebhookVerifyResult,
 } from '@/lib/payments/provider';
@@ -54,7 +58,10 @@ export interface CreemHttp {
 }
 
 function fetchCreemHttp(apiKey: string): CreemHttp {
-  const baseUrl = process.env.CREEM_API_URL || 'https://api.creem.io';
+  // CREEM_API_BASE_URL is canonical (matches the create-checkout route); the
+  // older CREEM_API_URL is still honored so existing deployments keep working.
+  const baseUrl =
+    process.env.CREEM_API_BASE_URL || process.env.CREEM_API_URL || 'https://api.creem.io';
   return {
     async request(path, init) {
       const response = await fetch(`${baseUrl}${path}`, {
@@ -96,6 +103,14 @@ const EVENT_TYPE_MAP: Record<string, NormalizedWebhookEventType> = {
   'subscription.unpaid': 'payment.failed',
   'subscription.past_due': 'payment.failed',
   'payment.failed': 'payment.failed',
+  // Refunds / chargebacks / disputes revoke access — treat like a cancel so the
+  // entitlement is withdrawn (conservative, fail-safe). When the payload carries
+  // no resolvable subscription id the normalizer no-ops, same as before.
+  'refund.created': 'subscription.canceled',
+  'refund.succeeded': 'subscription.canceled',
+  'subscription.refunded': 'subscription.canceled',
+  'dispute.created': 'subscription.canceled',
+  'chargeback.created': 'subscription.canceled',
 };
 
 interface CreemWebhookObject {
@@ -117,7 +132,13 @@ function asString(value: unknown): string | undefined {
  */
 export function normalizeCreemEvent(payload: unknown): NormalizedWebhookEvent | null {
   if (typeof payload !== 'object' || payload === null) return null;
-  const envelope = payload as { eventType?: unknown; type?: unknown; object?: unknown; data?: unknown };
+  const envelope = payload as {
+    id?: unknown;
+    eventType?: unknown;
+    type?: unknown;
+    object?: unknown;
+    data?: unknown;
+  };
   const rawType = asString(envelope.eventType) ?? asString(envelope.type);
   if (!rawType) return null;
   const type = EVENT_TYPE_MAP[rawType];
@@ -142,6 +163,7 @@ export function normalizeCreemEvent(payload: unknown): NormalizedWebhookEvent | 
 
   return {
     type,
+    eventId: asString(envelope.id),
     subscriptionId,
     userId: asString(metadata.userId),
     planId: asString(metadata.planId) ?? planIdForCreemProduct(productId),
@@ -228,6 +250,19 @@ export class CreemProvider implements PaymentProvider {
     }
     const body = response.json as { status?: unknown } | null;
     return { ok: true, status: asString(body?.status) ?? 'canceled' };
+  }
+
+  async reactivateSubscription(id: string): Promise<ReactivateResult> {
+    const response = await this.http.request(
+      `/v1/subscriptions/${encodeURIComponent(id)}/reactivate`,
+      { method: 'POST' }
+    );
+    if (!response.ok) {
+      logger.error('Creem reactivate failed', { status: response.status });
+      return { ok: false, reason: 'creem_reactivate_failed' };
+    }
+    const body = response.json as { status?: unknown } | null;
+    return { ok: true, status: asString(body?.status) ?? 'active' };
   }
 
   async changePlan(id: string, newPlanId: string): Promise<SubscriptionResult> {

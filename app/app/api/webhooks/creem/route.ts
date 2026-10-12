@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import {
   CREEM_NOT_CONFIGURED,
@@ -19,6 +20,52 @@ import {
   updateSubscriptionFromEvent,
   upsertSubscriptionFromEvent,
 } from '@/lib/payments/subscription-upsert';
+
+/**
+ * Idempotency claim on the provider event id (webhook_events.externalId is
+ * unique). Returns:
+ *  - 'new'       — first time we've seen this event; proceed.
+ *  - 'retry'     — a prior attempt recorded it but never finished; proceed again.
+ *  - 'duplicate' — already processed to completion; skip (no-op ack).
+ * When Creem sends no event id we cannot dedup, so we always 'new' (process).
+ */
+async function claimWebhookEvent(
+  externalId: string | undefined,
+  eventType: string,
+  raw: unknown
+): Promise<'new' | 'retry' | 'duplicate'> {
+  if (!externalId) return 'new';
+  try {
+    await prisma.webhook_events.create({
+      data: {
+        id: externalId,
+        externalId,
+        provider: 'creem',
+        eventType,
+        data: (raw ?? {}) as object,
+        processed: false,
+      },
+    });
+    return 'new';
+  } catch {
+    // Unique violation (or a create race): the event already exists.
+    const existing = await prisma.webhook_events
+      .findUnique({ where: { externalId } })
+      .catch(() => null);
+    if (existing?.processed) return 'duplicate';
+    await prisma.webhook_events
+      .update({ where: { externalId }, data: { retryCount: { increment: 1 } } })
+      .catch(() => {});
+    return 'retry';
+  }
+}
+
+async function markWebhookEventProcessed(externalId: string | undefined): Promise<void> {
+  if (!externalId) return;
+  await prisma.webhook_events
+    .update({ where: { externalId }, data: { processed: true, processedAt: new Date() } })
+    .catch(() => {});
+}
 
 const webhookRateLimiter = rateLimit(rateLimitConfigs.webhook);
 
@@ -70,6 +117,20 @@ export async function POST(request: NextRequest) {
     }
 
     const event = verified.event;
+
+    // Idempotency: never process the same provider event twice (Creem retries
+    // deliveries). A completed event is acked and skipped; an unfinished prior
+    // attempt is retried.
+    const claim = await claimWebhookEvent(event.eventId, event.type, event.raw);
+    if (claim === 'duplicate') {
+      logger.info('Skipping duplicate Creem webhook', {
+        route: 'api/webhooks/creem',
+        type: event.type,
+        eventId: event.eventId,
+      });
+      return NextResponse.json({ success: true, processed: null, duplicate: true });
+    }
+
     logger.info('Processing Creem webhook', { route: 'api/webhooks/creem', type: event.type });
 
     switch (event.type) {
@@ -89,6 +150,8 @@ export async function POST(request: NextRequest) {
         await recordPaymentOutcomeFromEvent(event, 'failed', CTX);
         break;
     }
+
+    await markWebhookEventProcessed(event.eventId);
 
     return NextResponse.json({ success: true, processed: event.type });
   } catch (error) {

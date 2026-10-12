@@ -91,6 +91,8 @@ export default function DesignPartnersPage() {
           <li><b>02</b><span>Recoder runs competing agents in isolated worktrees.</span></li>
           <li><b>03</b><span>Your reviewer compares, approves, and exports signed evidence.</span></li>
           <li><b>04</b><span>We measure review time, rejected changes, and time to merge.</span></li>
+          <li><b>05</b><span>We establish the current workflow as a baseline before judging the pilot.</span></li>
+          <li><b>06</b><span>You receive a recorded outcome; a submitted intake alone is never presented as a successful pilot.</span></li>
         </ol>
       </section>
 
