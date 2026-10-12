@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { Analytics } from "@/components/analytics";
 import "./globals.css";
 
-const TITLE = "Recoder — Run Claude Code, Codex & Cursor Agents in Parallel";
+const TITLE = "Recoder — Run AI Coding Agents in Parallel · Free Download";
 const DESCRIPTION =
-  "Recoder runs your own Claude Code, Codex, Cursor & opencode agents in parallel — each in an isolated git-worktree workspace. Watch them work, review the diffs, and merge the best. Your keys, your code, local-first.";
+  "Run Claude Code, Codex, Cursor, and opencode simultaneously — each in its own isolated git worktree. Compare diffs side by side, merge the best result. Free download for Mac.";
 const SITE_URL = "https://recoder.xyz";
 
 export const metadata: Metadata = {
@@ -47,14 +47,22 @@ const JSON_LD = {
       "@type": "Organization",
       "@id": `${SITE_URL}/#organization`,
       name: "Recoder",
+      alternateName: "Recoder.xyz",
       url: SITE_URL,
+      logo: `${SITE_URL}/icon.png`,
       description: DESCRIPTION,
       slogan: "The control plane for coding agents.",
+      sameAs: [
+        "https://github.com/recoderxyz",
+        "https://www.npmjs.com/~recoder.xyz",
+        "https://marketplace.visualstudio.com/items?itemName=recoder.recoder-code-vscode-companion",
+      ],
     },
     {
       "@type": "WebSite",
       "@id": `${SITE_URL}/#website`,
       name: "Recoder",
+      alternateName: "Recoder.xyz",
       url: SITE_URL,
       description: DESCRIPTION,
       publisher: { "@id": `${SITE_URL}/#organization` },
@@ -72,7 +80,9 @@ export default function RootLayout({
       <body>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(JSON_LD).replace(/</g, "\\u003c"),
+          }}
         />
         {children}
         <Analytics />

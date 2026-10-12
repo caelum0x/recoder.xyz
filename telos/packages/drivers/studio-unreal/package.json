@@ -1,0 +1,8 @@
+{
+  "name": "@recoder/studio-unreal",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "description": "Unreal 5.8 Studio driver (later)"
+}

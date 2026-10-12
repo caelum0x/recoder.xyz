@@ -95,7 +95,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const creemBaseUrl = process.env.CREEM_API_BASE_URL?.trim() || 'https://api.creem.io';
+      // CREEM_API_BASE_URL is canonical; CREEM_API_URL kept for back-compat so a
+      // single override works for both this route and the Creem service.
+      const creemBaseUrl =
+        process.env.CREEM_API_BASE_URL?.trim() ||
+        process.env.CREEM_API_URL?.trim() ||
+        'https://api.creem.io';
       const creemResponse = await fetch(`${creemBaseUrl}/v1/checkouts`, {
         method: 'POST',
         headers: {

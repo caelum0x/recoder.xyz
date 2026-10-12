@@ -1,0 +1,10 @@
+{
+  "name": "@recoder/sandbox-docker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": { "resandbox-orchestrator": "server.mjs" },
+  "scripts": { "start": "node server.mjs" },
+  "description": "Self-hosted resandbox orchestrator: E2B-compatible REST over local Docker"
+}

@@ -1,0 +1,12 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+title: Playproof
+type: object
+required: [duration, fps, actions]
+properties:
+  duration: { type: number, minimum: 1 }
+  fps: { type: integer, minimum: 1 }
+  actions:
+    type: array
+    items:
+      type: object
+      required: [t, type]

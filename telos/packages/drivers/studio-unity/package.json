@@ -1,0 +1,8 @@
+{
+  "name": "@recoder/studio-unity",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "description": "Unity 6 Studio driver (gold image, later)"
+}

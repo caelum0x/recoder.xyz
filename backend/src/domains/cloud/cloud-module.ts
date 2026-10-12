@@ -3,7 +3,7 @@
  *  - builds the {@link CloudRepositories} over the Phase-1 persistence executor,
  *  - builds the WORKING {@link TenancyService} (the gate fronting every write),
  *    tightened by the optional Phase-9 billing quota port,
- *  - builds the three sandbox adapters (daytona / e2b / local-container) + the
+ *  - builds the sandbox adapters (daytona / e2b / resandbox / local-container) + the
  *    {@link SandboxProvisionerService} (quota → select → persist → launch →
  *    RunEvent, with a TTL reaper + reconcile),
  *  - builds the preview signer + target + {@link PreviewDeployService} (real
@@ -24,6 +24,7 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { CloudConfig } from './config.js';
+import { isRecloudDeployConfigured } from './config.js';
 import type { CloudGovernanceGatePort } from './ports/governance-gate.port.js';
 import type { CloudRepositories } from './ports/cloud-repository.port.js';
 import type { SandboxProvider } from './ports/sandbox-provider.port.js';
@@ -35,12 +36,14 @@ import {
 } from './services/tenancy.service.js';
 import { createDaytonaAdapter } from './adapters/daytona.adapter.js';
 import { createE2bAdapter } from './adapters/e2b.adapter.js';
+import { createResandboxAdapter } from './adapters/resandbox.adapter.js';
 import {
   createLocalContainerAdapter,
   type LocalContainerRuntime,
 } from './adapters/local-container.adapter.js';
 import { createPreviewUrlSigner } from './services/preview-url-signer.js';
 import { createPreviewTarget } from './adapters/preview-target.adapter.js';
+import { createRecloudDeployTarget } from './adapters/recloud-deploy.adapter.js';
 import {
   createPreviewDeployService,
   type PreviewDeployService,
@@ -136,6 +139,7 @@ export class CloudComposer implements CloudModule {
         logger: this.log,
       }),
       e2b: createE2bAdapter({ credential: cfg.e2b, logger: this.log }),
+      resandbox: createResandboxAdapter({ credential: cfg.resandbox, logger: this.log }),
       local: createLocalContainerAdapter({
         enabled: cfg.localEnabled,
         logger: this.log,
@@ -190,7 +194,11 @@ export class CloudComposer implements CloudModule {
     // successful deploy it FUSES the preview edge onto the mesh (mesh upsert + xds
     // snapshot bump so Envoy fronts it) and can resolve preview-over-overlay.
     const signer = createPreviewUrlSigner(cfg);
-    const target = createPreviewTarget({ config: cfg, logger: this.log });
+    // recloud (Recoder Cloud) is the real deploy backend when configured; otherwise
+    // the default target just allocates a preview URL under the base domain.
+    const target = isRecloudDeployConfigured(cfg)
+      ? createRecloudDeployTarget({ config: cfg, logger: this.log })
+      : createPreviewTarget({ config: cfg, logger: this.log });
     this.previewService = createPreviewDeployService({
       repo: this.repos.deployments,
       tokens: this.repos.previewTokens,

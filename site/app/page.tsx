@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Nav, Footer, DownloadButton } from "@/components/site";
 import {
@@ -8,6 +9,10 @@ import {
 // ISR: the proof strip reads the live evidence store server-side; refresh the
 // prerendered page every 5 minutes instead of forcing every request dynamic.
 export const revalidate = 300;
+
+export const metadata: Metadata = {
+  alternates: { canonical: "https://recoder.xyz/" },
+};
 
 export default function Home() {
   return (
@@ -604,9 +609,29 @@ const FAQ: QA[] = [
   },
 ];
 
+const FAQ_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "@id": "https://recoder.xyz/#faq",
+  mainEntity: FAQ.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.a,
+    },
+  })),
+};
+
 function Faq() {
   return (
     <section className="border-t border-border bg-bg-soft">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(FAQ_JSON_LD).replace(/</g, "\\u003c"),
+        }}
+      />
       <div className="mx-auto max-w-3xl px-6 py-20 md:py-24">
         <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-4xl">
           Frequently asked questions

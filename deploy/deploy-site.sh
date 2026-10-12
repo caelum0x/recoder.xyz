@@ -5,8 +5,9 @@
 # and 404. This script always builds with the prefix.
 set -euo pipefail
 SALT_PREFIX="/__site"
-SERVER="${RECODER_SERVER:-root@77.42.23.19}"
-KEY="${RECODER_SSH_KEY:-$HOME/.ssh/id_ed25519_hetzner}"
+# 77.42.23.19 was the Hetzner box deleted 2026-09-02; that IP now belongs to someone else.
+SERVER="${RECODER_SERVER:?set RECODER_SERVER to the recoder Oracle box, e.g. ubuntu@92.5.156.133}"
+KEY="${RECODER_SSH_KEY:?set RECODER_SSH_KEY to the recoder box key}"
 cd "$(dirname "$0")/../site"
 # site/ is a STANDALONE package (its own pnpm-lock, next@15/webpack). Without
 # --ignore-workspace, npx would resolve the monorepo's next@16 (Turbopack) and the
