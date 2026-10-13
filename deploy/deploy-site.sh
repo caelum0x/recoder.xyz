@@ -20,8 +20,18 @@ SITE_ASSET_PREFIX="$SALT_PREFIX" npx next build
 if grep -rqE '"/_next/static' .next/server/app/*.html 2>/dev/null; then
   echo "ERROR: built HTML has bare /_next refs — assetPrefix not applied. Aborting."; exit 1
 fi
-echo "rsync -> $SERVER:/root/recoder-site ..."
-rsync -az --exclude '.git' -e "ssh -o BatchMode=yes -i $KEY" ./ "$SERVER:/root/recoder-site/"
-ssh -o BatchMode=yes -i "$KEY" "$SERVER" \
-  'cd /root/recoder-site && pm2 delete recoder-site >/dev/null 2>&1 || true; SITE_ASSET_PREFIX=/__site pm2 start npm --name recoder-site -- start && pm2 save'
-echo "deployed. (purge Cloudflare cache separately.)"
+# Prod runs the Next standalone bundle from /opt/recoder/run-site under pm2 "recoder".
+STAGE="$(mktemp -d)"
+cp -R .next/standalone/. "$STAGE/"
+mkdir -p "$STAGE/.next" && cp -R .next/static "$STAGE/.next/static" && cp -R public "$STAGE/public"
+echo "rsync -> $SERVER:/opt/recoder/run-site-next ..."
+rsync -az --delete -e "ssh -o BatchMode=yes -i $KEY" "$STAGE/" "$SERVER:/opt/recoder/run-site-next/"
+rm -rf "$STAGE"
+ssh -o BatchMode=yes -i "$KEY" "$SERVER" 'set -e
+  TS=$(date +%Y%m%d-%H%M%S)
+  mv /opt/recoder/run-site /opt/recoder/run-site.bak-$TS
+  mv /opt/recoder/run-site-next /opt/recoder/run-site
+  echo "rollback: mv /opt/recoder/run-site.bak-$TS back to /opt/recoder/run-site; pm2 restart recoder"
+  pm2 restart recoder --update-env >/dev/null && pm2 save >/dev/null
+  sleep 3; curl -fsS -o /dev/null -w "local /download %{http_code}\n" http://127.0.0.1:3000/download'
+echo "deployed. Release vars come from site/.env.production.local (gitignored)."
