@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Nav, Footer, DownloadButton } from "@/components/site";
+import { CliCommand } from "@/components/cli-command";
 import {
   readPublicProofSummary,
   type PublicProofSummary,
@@ -20,6 +21,7 @@ export default function Home() {
       <Nav />
       <main>
         <Hero />
+        <TryCliFirst />
         <DesktopConsole />
         <RunsWith />
         <HowItWorks />
@@ -64,6 +66,42 @@ function Hero() {
             Desktop app · macOS (Apple Silicon) · Windows &amp; Linux planned
           </p>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * "Try the CLI first" — a real, verified-on-npm command a visitor can run
+ * right now, no download, no waitlist, no signup. `recoder-code` is the
+ * published, working multi-model coding-agent CLI (verified: `npx
+ * recoder-code@latest --version` prints a real version; `--help` lists real
+ * subcommands including `parallel`, which runs the same git-worktree parallel
+ * pattern the desktop app visualizes above). This is the lowest-friction path
+ * into the product, so it comes before the desktop download pitch.
+ */
+function TryCliFirst() {
+  return (
+    <section className="border-y border-border bg-bg-soft/40">
+      <div className="mx-auto max-w-3xl px-6 py-14 text-center">
+        <h2 className="text-balance text-xl font-medium md:text-2xl">
+          Try the CLI first — no install, no waitlist
+        </h2>
+        <p className="text-balance mx-auto mt-3 max-w-xl text-sm text-muted">
+          <code className="text-fg">recoder-code</code> is the real, published
+          CLI behind Recoder: a BYOK multi-model coding agent with the same
+          git-worktree parallel pattern shown above. Run it straight from your
+          terminal — the desktop cockpit is for when you want several agents
+          running side by side in one console.
+        </p>
+        <div className="mx-auto mt-6 max-w-md space-y-3 text-left">
+          <CliCommand command="npx recoder-code@latest" />
+          <CliCommand command={'npx recoder-code@latest parallel "describe the task"'} />
+        </div>
+        <p className="mt-4 text-xs text-faint">
+          Bring your own provider key — Claude, GPT, Gemini, DeepSeek, Qwen, or
+          a local/OpenRouter model. No Recoder account required to start.
+        </p>
       </div>
     </section>
   );
