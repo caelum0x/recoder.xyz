@@ -218,6 +218,53 @@ describe('CommandGate — needs_approval path', () => {
   });
 });
 
+describe('CommandGate — per-request executor override', () => {
+  it('routes execution through a per-request executor instead of the instance default', async () => {
+    const governance = await Governance.create();
+    const auditLog = FileAuditLog.open(auditPath);
+    const instanceExecutor = fakeExecutor({ stdout: 'wrong-path\n', stderr: '', exitCode: 0 });
+    const perRequestExecutor = fakeExecutor({ stdout: 'delivered-to-loom\n', stderr: '', exitCode: 0 });
+    // This is the shape `backend/src/domains/governance/adapters/command-gate.adapter.ts`
+    // relies on: one CommandGate instance, many call sites, each free to route
+    // execution somewhere other than a host shell (e.g. a Loom pane socket call)
+    // without constructing a new CommandGate per call.
+    const gate = new CommandGate({ governance, auditLog, executor: instanceExecutor });
+
+    const result = await gate.gate({
+      actor: shellAgent(),
+      command: 'echo hi',
+      executor: perRequestExecutor,
+    });
+
+    assert.equal(result.status, 'executed');
+    assert.equal(result.execution?.stdout, 'delivered-to-loom\n');
+    assert.equal((perRequestExecutor as unknown as { calls: unknown[] }).calls.length, 1);
+    assert.equal(
+      (instanceExecutor as unknown as { calls: unknown[] }).calls.length,
+      0,
+      'the instance default executor must never fire when a per-request executor is supplied',
+    );
+  });
+
+  it('still denies before any executor (instance or per-request) ever runs', async () => {
+    const governance = await Governance.create();
+    const auditLog = FileAuditLog.open(auditPath);
+    const instanceExecutor = fakeExecutor({ stdout: '', stderr: '', exitCode: 0 });
+    const perRequestExecutor = fakeExecutor({ stdout: '', stderr: '', exitCode: 0 });
+    const gate = new CommandGate({ governance, auditLog, executor: instanceExecutor });
+
+    const result = await gate.gate({
+      actor: readOnlyAgent(),
+      command: 'git commit -m "oops"',
+      executor: perRequestExecutor,
+    });
+
+    assert.equal(result.status, 'denied');
+    assert.equal((perRequestExecutor as unknown as { calls: unknown[] }).calls.length, 0);
+    assert.equal((instanceExecutor as unknown as { calls: unknown[] }).calls.length, 0);
+  });
+});
+
 describe('CommandGate — audit log integrity', () => {
   it('the on-disk audit log survives a full gate lifecycle and verifies end to end', async () => {
     const governance = await Governance.create();

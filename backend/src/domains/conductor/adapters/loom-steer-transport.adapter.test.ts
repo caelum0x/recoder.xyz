@@ -9,6 +9,10 @@ import type {
   SteerKeysInput,
   SteerTransportPort,
 } from '../ports/steer-transport.port.js';
+import type {
+  CommandGatePort,
+  CommandGateRequest,
+} from '../ports/command-gate.port.js';
 
 class FakeLoomClient {
   readonly calls: Array<{ method: LoomSteerMethod; params: unknown }> = [];
@@ -71,6 +75,93 @@ describe('Loom steer transport', () => {
     await expect(
       transport.sendKeys({ ...LOOM_INPUT, substrate: 'tmux_worktree' })
     ).rejects.toThrow(/cannot deliver to substrate tmux_worktree/);
+  });
+});
+
+describe('Loom steer transport — command gate', () => {
+  function fakeGate(
+    outcome: Awaited<ReturnType<CommandGatePort['gate']>>,
+    requests: CommandGateRequest[] = [],
+  ): CommandGatePort {
+    return {
+      async gate(request) {
+        requests.push(request);
+        // Mirror the real adapter: deliver() only runs once the gate allows.
+        if (outcome.allowed) await request.deliver();
+        return outcome;
+      },
+    };
+  }
+
+  it('gates a submitted command and delivers only on allow', async () => {
+    const client = new FakeLoomClient();
+    const requests: CommandGateRequest[] = [];
+    const gate = fakeGate({ allowed: true, reason: 'ok' }, requests);
+    const transport = createLoomSteerTransport({ client, commandGate: gate });
+
+    await transport.sendKeys(LOOM_INPUT);
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].command).toBe('try the smaller change');
+    expect(client.calls).toEqual([
+      {
+        method: 'agent.prompt',
+        params: { target: 'w1:p1', text: 'try the smaller change' },
+      },
+    ]);
+  });
+
+  it('throws and never delivers when the command gate denies', async () => {
+    const client = new FakeLoomClient();
+    const gate = fakeGate({ allowed: false, reason: 'destructive command needs approval' });
+    const transport = createLoomSteerTransport({ client, commandGate: gate });
+
+    await expect(transport.sendKeys(LOOM_INPUT)).rejects.toThrow(
+      /destructive command needs approval/
+    );
+    expect(client.calls).toEqual([]);
+  });
+
+  it('never gates partial (non-submit) keystrokes', async () => {
+    const client = new FakeLoomClient();
+    client.result = { type: 'ok' };
+    const requests: CommandGateRequest[] = [];
+    const gate = fakeGate({ allowed: true, reason: 'ok' }, requests);
+    const transport = createLoomSteerTransport({ client, commandGate: gate });
+
+    await transport.sendKeys({ ...LOOM_INPUT, keys: 'partial', submit: false });
+
+    expect(requests).toHaveLength(0);
+    expect(client.calls).toEqual([
+      { method: 'pane.send_text', params: { pane_id: 'w1:p1', text: 'partial' } },
+    ]);
+  });
+
+  it('delivers through the gate\'s injected deliver() callback, not a bypass path', async () => {
+    const client = new FakeLoomClient();
+    let delivered = false;
+    const gate: CommandGatePort = {
+      async gate(request) {
+        await request.deliver();
+        delivered = true;
+        return { allowed: true, reason: 'ok' };
+      },
+    };
+    const transport = createLoomSteerTransport({ client, commandGate: gate });
+
+    await transport.sendKeys(LOOM_INPUT);
+
+    expect(delivered).toBe(true);
+    expect(client.calls).toHaveLength(1);
+  });
+
+  it('is fully backward-compatible: no commandGate ⇒ ungated delivery (unchanged behavior)', async () => {
+    const client = new FakeLoomClient();
+    const transport = createLoomSteerTransport({ client });
+
+    await transport.sendKeys(LOOM_INPUT);
+
+    expect(client.calls).toHaveLength(1);
   });
 });
 
