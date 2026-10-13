@@ -23,6 +23,7 @@ export * from './routing';
 export * from './approval';
 export * from './enforcement';
 export * from './audit';
+export * from './commands';
 
 // IPC transport to the owned Rust governance daemon (UDS, length-prefixed JSON).
 export * from './ipc';
