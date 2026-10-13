@@ -54,7 +54,7 @@ import { Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.t3tools.t3code";
+const DESKTOP_APP_ID = "xyz.recoder.remote";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -948,7 +948,7 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   "!**/node_modules/@cursor/sdk-*/**/*",
   "!apps/desktop/prod-resources/cursor-sdk",
   "!apps/desktop/prod-resources/cursor-sdk/**/*",
-  // T3 Code always passes the user's installed Claude executable to the SDK,
+  // Recoder always passes the user's installed Claude executable to the SDK,
   // so the SDK's optional platform packages (each a ~200MB bundled executable)
   // are dead weight. The trailing dash keeps the SDK's own JS package.
   "!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**/*",
@@ -2645,8 +2645,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "T3 Code (Nightly)"
-    : (desktopPackageJson.productName ?? "T3 Code");
+    ? "Recoder (Nightly)"
+    : (desktopPackageJson.productName ?? "Recoder");
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2722,11 +2722,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "public.app-category.developer-tools",
       extendInfo: {
         NSScreenCaptureUsageDescription:
-          "T3 Code captures the active window when you use the window capture shortcut.",
+          "Recoder captures the active window when you use the window capture shortcut.",
       },
       protocols: [
         {
-          name: "T3 Code",
+          name: "Recoder",
           schemes: ["t3code", "t3code-dev"],
         },
       ],
@@ -2780,13 +2780,13 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
       // Required by the .deb control file.
-      maintainer: "T3 Tools <hello@t3.codes>",
+      maintainer: "T3 Tools <hello@recoder.xyz>",
       // electron-builder turns these into MimeType=x-scheme-handler/<scheme>;
       // in the .desktop entry (Exec already gets %U), so browsers can hand
       // t3code:// OAuth callbacks to the app.
       protocols: [
         {
-          name: "T3 Code",
+          name: "Recoder",
           schemes: ["t3code", "t3code-dev"],
         },
       ],
@@ -2800,7 +2800,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // FPM runs outside the staged app directory, so source paths must be absolute.
       // AppStream consumers associate this metadata with our t3code.desktop entry.
       fpm: [
-        `${path.join(repoRoot, "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml")}=/usr/share/metainfo/com.t3tools.t3code.metainfo.xml`,
+        `${path.join(repoRoot, "apps/desktop/resources/linux/xyz.recoder.remote.metainfo.xml")}=/usr/share/metainfo/xyz.recoder.remote.metainfo.xml`,
         `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/t3code/copyright`,
       ],
       // Electron's runtime libraries. Debian 13 and Ubuntu 24.04 renamed some
@@ -3712,10 +3712,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     private: true,
     packageManager: rootPackageJson.packageManager,
     description:
-      "T3 Code is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.",
+      "Recoder is an open-source desktop app for coding agents. Work with your existing agent subscriptions, review code changes, and run commands in your projects. Connect from desktop, web, or mobile to continue working remotely.",
     license: "MIT",
     // Required by the .deb control file.
-    homepage: "https://t3.codes",
+    homepage: "https://recoder.xyz",
     author: "T3 Tools",
     main: "apps/desktop/dist-electron/boot.cjs",
     build: yield* createBuildConfig(
@@ -4001,7 +4001,7 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
     Flag.optional,
   ),
 }).pipe(
-  Command.withDescription("Build a desktop artifact for T3 Code."),
+  Command.withDescription("Build a desktop artifact for Recoder."),
   Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildDesktopArtifact)),
 );
 

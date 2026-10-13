@@ -656,7 +656,7 @@ export class RelayEnvironmentPrincipal extends Context.Service<
 const RelayClientBearerAuthorization = HttpApiSecurity.http({ scheme: "bearer" }).pipe(
   HttpApiSecurity.annotate(
     OpenApi.Description,
-    "Clerk session or OAuth bearer token for the signed-in T3 Connect user.",
+    "Clerk session or OAuth bearer token for the signed-in Recoder Connect user.",
   ),
 );
 
@@ -826,7 +826,7 @@ export type RelayEnvironmentStatusValue = typeof RelayEnvironmentStatusValue.Typ
 /**
  * Why an environment is offline, when the relay knows more than "the host
  * did not answer". `tunnel_released`: the relay deleted the environment's
- * idle tunnel, and the host needs a current T3 Code build to get a new one.
+ * idle tunnel, and the host needs a current Recoder build to get a new one.
  */
 const RelayEnvironmentOfflineReason = Schema.Literals(["tunnel_released"]);
 type RelayEnvironmentOfflineReason = typeof RelayEnvironmentOfflineReason.Type;
@@ -1264,7 +1264,7 @@ export const RelayApi = HttpApi.make("RelayApi")
     RelayServerGroup,
     RelayHooksGroup,
   )
-  .annotate(OpenApi.Title, "T3 Code Relay API")
+  .annotate(OpenApi.Title, "Recoder Relay API")
   .annotate(OpenApi.Version, "1.0.0")
   .annotate(
     OpenApi.Description,
