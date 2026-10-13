@@ -15,7 +15,8 @@
  */
 import type http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import { resolve as resolvePath } from 'node:path';
+import { resolve as resolvePath, join as joinPath } from 'node:path';
+import { homedir } from 'node:os';
 import express, { type Router } from 'express';
 
 import type { AppConfig } from '../shared/app-config.js';
@@ -76,6 +77,8 @@ import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/op
 import { createAcpSubstrate } from '../domains/conductor/adapters/acp-substrate.adapter.js';
 import { createLoomSubstrate } from '../domains/conductor/adapters/loom-substrate.adapter.js';
 import { createLoomSteerTransport } from '../domains/conductor/adapters/loom-steer-transport.adapter.js';
+import { createCommandGateAdapter } from '../domains/governance/adapters/command-gate.adapter.js';
+import { Governance as StandaloneGovernance, FileAuditLog } from '@recoder/governance';
 import { createSteerTransportRouter } from '../domains/conductor/adapters/steer-transport-router.adapter.js';
 import { createSwarmUnblockDeps } from '../domains/conductor/adapters/swarm-unblock-wiring.js';
 import { createRemoteAttachDeps } from '../domains/conductor/adapters/remote-attach-wiring.js';
@@ -1060,6 +1063,29 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   const loomSteerSocketClient = new LoomSocketClient({
     socketPath: loomDaemon.socketPath,
   });
+  // Per-command content gate over the raw-PTY steer path (next-task #5,
+  // lane 3, 2026-10-15): `packages/governance`'s `CommandGate` had no caller
+  // anywhere in this repo until now. A DEDICATED `Governance` + durable audit
+  // log (NOT the coarse `governance` module above, which only ever sees
+  // `{workspace, workspaceId}` metadata for `workspace.steer`, never the
+  // literal steered text) classifies every submitted command's risk tier
+  // before it reaches Loom; genuinely dangerous patterns open a durable,
+  // UI-visible approval via the SAME `governance.approvals()` the ACP
+  // permission gate already uses. Fail-closed throughout: a construction
+  // fault here must never silently downgrade to an ungated transport, so a
+  // failure here is loud (thrown), not swallowed.
+  const commandGateGovernance = await StandaloneGovernance.create();
+  const commandGateAuditLog = FileAuditLog.open(
+    joinPath(homedir(), '.recoder', 'audit', 'command-gate.jsonl'),
+  );
+  const conductorCommandGate = createCommandGateAdapter({
+    governance: commandGateGovernance,
+    auditLog: commandGateAuditLog,
+    approvals: {
+      request: p => governance.approvals().request(p),
+    },
+    logger: childLogger('conductor-command-gate'),
+  });
   const conductorLoomSteer = createLoomSteerTransport({
     client: {
       call(method, params) {
@@ -1069,6 +1095,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       },
     },
     logger: childLogger('conductor-loom-steer'),
+    commandGate: conductorCommandGate,
   });
   const conductorSteer = createSteerTransportRouter({
     transports: {

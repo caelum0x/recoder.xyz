@@ -61,6 +61,15 @@ export type CommandGateRequest = {
   readonly context?: GovernanceContext;
   /** Identity recorded against the approval request/resolution, e.g. a user id. */
   readonly requestedBy?: string;
+  /**
+   * Per-call executor override (default: the instance's own executor, which
+   * defaults to real `/bin/sh -c`). A call site that is gating delivery into
+   * something OTHER than a host shell — e.g. a Loom pane's `agent.prompt` /
+   * `pane.send_text` socket call — supplies one so `gate()` still owns the
+   * single decide → approve → execute → audit pipeline without ever actually
+   * shelling out the command text on the host.
+   */
+  readonly executor?: CommandExecutor;
 };
 
 export type CommandGateStatus = 'executed' | 'denied' | 'execution_failed';
@@ -271,8 +280,9 @@ export class CommandGate {
     approvalDecision?: 'approved' | 'rejected',
     approvalTimedOut?: boolean,
   ): Promise<CommandGateResult> {
+    const executor = request.executor ?? this.executor;
     try {
-      const execution = await this.executor(request.command, request.cwd);
+      const execution = await executor(request.command, request.cwd);
       this.auditLog.append({
         timestamp: new Date().toISOString(),
         actor: request.actor.agentId,
