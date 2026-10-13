@@ -1525,6 +1525,22 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     getWorkspace: id => conductor.getWorkspace(id),
     principal: ACP_GATE_PRINCIPAL,
     logger: childLogger('conductor-acp-gate'),
+    // Opens the SAME durable `ApprovalService.request` the REST
+    // `/api/agent-os/approvals` edge and the desktop inline-approval card read
+    // from, so a fresh `needs_approval` tool call (shell execute, network
+    // fetch, file write) gets a real, taskId-correlated record a human can
+    // actually clear — not just a denial with nothing to act on.
+    approval: {
+      request: p =>
+        governance.approvals().request({
+          action: p.action,
+          riskTier: p.riskTier,
+          requestedBy: p.requestedBy,
+          target: p.target,
+          ...(p.taskId != null ? { taskId: p.taskId } : {}),
+          ...(p.reason != null ? { reason: p.reason } : {}),
+        }),
+    },
     // Surface a REFUSED permission truthfully into the workspace's run stream +
     // durable audit (the "approval waits" frontend surface): a `needs_approval`
     // verdict → `approval_requested`, a hard `deny` → `needs_input`. Allowed tool
