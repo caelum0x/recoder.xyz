@@ -71,6 +71,38 @@ export const DOC_PAGES: DocPage[] = [
     ],
   },
   {
+    slug: "cli",
+    title: "recoder-code CLI",
+    description:
+      "No desktop install, no waitlist: recoder-code is a BYOK coding-agent CLI published on npm today, including a parallel git-worktree mode. Verified commands only.",
+    blocks: [
+      { kind: "p", text: "recoder-code is a separate, already-shipping product: a terminal-native, BYOK AI coding agent published on npm. It's the fastest way to try Recoder's parallel-agent idea with zero install and no waitlist — run it with npx, point it at your own provider key or OpenRouter, and go." },
+      { kind: "h", text: "Run it" },
+      { kind: "code", code: "npx recoder-code@latest" },
+      { kind: "p", text: "That launches the interactive CLI. Every command below was run against the published npm package and its real --help output; nothing here is aspirational." },
+      { kind: "h", text: "Parallel mode (git worktrees)" },
+      { kind: "p", text: "The same core idea as the desktop app's parallel runs, from the terminal: recoder-code parallel spins up an isolated git worktree per task and runs there, so parallel attempts never step on each other or your working tree." },
+      { kind: "code", code: "npx recoder-code@latest parallel \"implement user auth\"          # start parallel task on a new branch\nnpx recoder-code@latest parallel -b recoder/user-auth-123 \"continue work\"  # resume an existing branch\nnpx recoder-code@latest parallel --list                              # list active parallel worktrees\nnpx recoder-code@latest parallel --cleanup                           # clean up stale worktrees\nnpx recoder-code@latest parallel-finish                              # finish parallel mode and commit changes" },
+      { kind: "h", text: "Everyday commands" },
+      { kind: "table", head: ["Command", "What it does"], rows: [
+        ["recoder-code", "Launch the interactive CLI (default)"],
+        ["recoder-code -p \"<prompt>\"", "Non-interactive: run one prompt and exit"],
+        ["recoder-code init", "Initialize a .recoder folder in the current directory (-g for a global ~/.recoder config)"],
+        ["recoder-code configure", "Interactive configuration wizard"],
+        ["recoder-code providers", "Manage AI providers (Ollama, OpenRouter, etc.)"],
+        ["recoder-code models", "Manage AI models; --list-models / --list-models-all to see what's available"],
+        ["recoder-code agents", "Manage built-in and custom AI agents"],
+        ["recoder-code plan", "Project planning — technical architecture and implementation plans"],
+        ["recoder-code auth login / status / whoami", "Authenticate with Recoder.xyz and check status"],
+        ["recoder-code mcp", "Manage MCP servers"],
+      ] },
+      { kind: "h", text: "Bring your own key" },
+      { kind: "p", text: "recoder-code is BYOK, same as the desktop app: configure a provider via recoder-code configure or recoder-code providers, or pass --openai-api-key / --openai-base-url directly. --setup runs a one-time wizard. --sandbox runs the agent sandboxed; --yolo / --approval-mode control how much it auto-approves — default prompts for approval on risky actions." },
+      { kind: "code", code: "npx recoder-code@latest --setup\nnpx recoder-code@latest -m <model> -p \"explain this repo's structure\"" },
+      { kind: "note", text: "recoder-code is published independently on npm (currently 2.5.5) from the desktop app's release train. Verify what you get with npx recoder-code@latest --version and --help — the flags above are the exact, current output of that command, not a fixed list that can drift out of date." },
+    ],
+  },
+  {
     slug: "quickstart",
     title: "Quickstart: your first parallel run",
     description:

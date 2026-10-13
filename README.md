@@ -40,6 +40,24 @@ Once it's open:
 
 Local agents run offline without an account; sign in (optional, Google/GitHub) to sync memory and PRs.
 
+### Try it now: the `recoder-code` CLI
+
+Don't want to wait for the desktop app? **[`recoder-code`](https://www.npmjs.com/package/recoder-code)** is the same BYOK coding-agent idea, published and working on npm today — no desktop install, no waitlist:
+
+```bash
+npx recoder-code@latest
+```
+
+It includes a parallel mode that mirrors the desktop app's git-worktree-per-agent pattern, from the terminal:
+
+```bash
+npx recoder-code@latest parallel "implement user auth"   # start a parallel task on a new branch
+npx recoder-code@latest parallel --list                  # list active parallel worktrees
+npx recoder-code@latest parallel-finish                  # finish parallel mode and commit changes
+```
+
+Every command above is verified against the live, published package (`npx recoder-code@latest --help`); see **[recoder.xyz/docs/cli](https://recoder.xyz/docs/cli)** for the full, current command reference.
+
 ## Plans
 
 | Plan | Price | For |
