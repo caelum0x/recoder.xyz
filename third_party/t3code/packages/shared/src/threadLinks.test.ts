@@ -20,7 +20,7 @@ describe("thread links", () => {
   });
 
   it("rejects other links and malformed ones", () => {
-    expect(parseThreadLinkHref("https://t3.codes")).toBeNull();
+    expect(parseThreadLinkHref("https://recoder.xyz")).toBeNull();
     expect(parseThreadLinkHref("t3-thread://v1/only-one")).toBeNull();
     expect(parseThreadLinkHref("t3-thread://v1/env/%E0%A4%A")).toBeNull();
     expect(parseThreadLinkHref("t3-thread://v1/%20/thread")).toBeNull();
