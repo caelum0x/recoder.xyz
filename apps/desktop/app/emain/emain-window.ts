@@ -454,23 +454,23 @@ export class WaveBrowserWindow extends BaseWindow {
         if (!isDev) {
             return promise;
         }
-        let timeoutHandle: ReturnType<typeof setTimeout> = null;
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            timeoutHandle = setTimeout(() => {
-                console.log(
-                    `[dev] ${name} timed out after ${DevInitTimeoutMs}ms for tab ${tabId}, showing window for devtools`
-                );
-                if (!this.isDestroyed() && !this.isVisible()) {
-                    this.show();
-                }
-                if (this.activeTabView?.webContents && !this.activeTabView.webContents.isDevToolsOpened()) {
-                    this.activeTabView.webContents.openDevTools();
-                }
-                reject(new Error(`[dev] ${name} timed out after ${DevInitTimeoutMs}ms`));
-            }, DevInitTimeoutMs);
-        });
+        // A cold dev boot (embedded backend still building) can take longer than
+        // DevInitTimeoutMs. Surface the window and devtools at the deadline so a
+        // real hang is visible, but keep waiting: rejecting here left the tab
+        // uninitialized and the window empty even after the backend came up.
+        const timeoutHandle = setTimeout(() => {
+            console.log(
+                `[dev] ${name} still pending after ${DevInitTimeoutMs}ms for tab ${tabId}, showing window for devtools`
+            );
+            if (!this.isDestroyed() && !this.isVisible()) {
+                this.show();
+            }
+            if (this.activeTabView?.webContents && !this.activeTabView.webContents.isDevToolsOpened()) {
+                this.activeTabView.webContents.openDevTools();
+            }
+        }, DevInitTimeoutMs);
         try {
-            return await Promise.race([promise, timeoutPromise]);
+            return await promise;
         } finally {
             clearTimeout(timeoutHandle);
         }
