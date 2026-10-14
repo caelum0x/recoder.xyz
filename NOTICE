@@ -80,3 +80,28 @@ Loom/HERDR remains the agent-aware terminal and worktree-process substrate, and
 Recoder remains the convergence, governance, memory, and evidence layer. Crystal
 capabilities may be ported into those owned layers with attribution preserved.
 ================================================================================
+t3code — https://github.com/pingdotgg/t3code
+Copyright (c) 2026 T3 Tools Inc. Licensed under the MIT License.
+
+t3code @ commit d720210996a514368ba99f4860063110033d93fa (2026-10-07, v0.0.45)
+is vendored under third_party/t3code via `git subtree add --squash`, per
+docs/T3CODE-FORK.md. Its LICENSE is retained verbatim at
+third_party/t3code/LICENSE. `apps/desktop` (t3's own Electron shell) and
+`apps/marketing` (its Astro site) were removed from the vendored tree on
+import — Recoder ships one desktop shell only (the Wave fork) and keeps
+recoder.xyz as its own marketing site; only patterns from those two apps are
+mined, not their code.
+
+t3code is a source donor, not yet a live build target: `packages/t3-bridge`
+(docs/T3CODE-FORK.md section 3) is the only place allowed to import
+`@t3tools/*` internals into Recoder's own runtime. Internal package names,
+Effect service names, and wire field names inside third_party/t3code stay
+upstream-shaped (same policy as Wave's `wsh`/`WAVETERM_*` and herdr/Loom's
+pre-rebrand internals) so `git subtree pull` stays a clean sync, not a
+re-rename pass. Only user-facing strings are rebranded, via the scripted,
+re-appliable patch at scripts/rebrand-t3code.sh (never hand-edited into the
+vendored tree permanently).
+
+MIT is compatible with the Apache-2.0 code already vendored here (Wave,
+herdr/Loom, cloudflared).
+================================================================================

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Nav, Footer } from "@/components/site";
 import { DownloadNotify, DownloadReleases } from "@/components/download-notify";
 import { LeadForm } from "@/components/lead-form";
+import { CliCommand } from "@/components/cli-command";
 import { JsonLd } from "@/components/json-ld";
 import { buildSoftwareApplicationJsonLd } from "@/lib/seo";
 import {
@@ -86,6 +87,21 @@ export default function Download() {
             we&apos;ll email you the moment it ships.
           </p>
         )}
+
+        <section className="mx-auto mt-10 max-w-md rounded-xl border border-border bg-bg-soft p-6 text-left">
+          <p className="text-sm font-medium text-fg">
+            Don&apos;t want to wait? Try the CLI right now
+          </p>
+          <p className="mt-1.5 text-xs text-muted">
+            <code className="text-fg">recoder-code</code> is the same
+            BYOK coding agent, published and working on npm today — no
+            desktop install, no waitlist.
+          </p>
+          <div className="mt-4 space-y-3">
+            <CliCommand command="npx recoder-code@latest" />
+            <CliCommand command={'npx recoder-code@latest parallel "describe the task"'} />
+          </div>
+        </section>
 
         {isLive ? (
           <>

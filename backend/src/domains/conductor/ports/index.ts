@@ -70,6 +70,13 @@ export type {
   SteerKeysInput,
 } from './steer-transport.port.js';
 
+// --- Per-command content gate (the raw-PTY surface the ACP tool-call gate misses) ---
+export type {
+  CommandGatePort,
+  CommandGateRequest,
+  CommandGateOutcome,
+} from './command-gate.port.js';
+
 // --- Per-worktree `.mcp.json` injection (Recoder toolbelt into launched agents) ---
 export type {
   McpInjectPort,
