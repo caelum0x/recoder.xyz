@@ -15,7 +15,7 @@
  * Pure + total: every `AgentStatus` maps to exactly one `AttentionState`, and an
  * unrecognised value maps to `'unknown'` (never a fabricated/guessed state).
  */
-import type { AgentStatus } from '@recoder/agent-runtimes/loom';
+import type { AgentStatus } from '@recoder/agent-runtimes/loom-client';
 import type { AttentionState } from '../types.js';
 
 /**

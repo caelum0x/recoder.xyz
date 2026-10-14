@@ -86,8 +86,8 @@ import { createRemoteAttachSessionStore } from '../domains/conductor/adapters/re
 import { createSkillTrustStore } from '../domains/conductor/adapters/skill-trust-store.adapter.js';
 import { createSkillInvocationEvidenceStore } from '../domains/conductor/adapters/skill-invocation-store.adapter.js';
 import { createConvergenceFeedbackStore } from '../domains/conductor/adapters/convergence-feedback.adapter.js';
-import { LoomSocketClient } from '@recoder/agent-runtimes/loom';
-import type { LoomResult } from '@recoder/agent-runtimes/loom';
+import { LoomSocketClient } from '@recoder/agent-runtimes/loom-client';
+import type { LoomResult } from '@recoder/agent-runtimes/loom-client';
 import {
   createNeedsYouLoomStreamSource,
   NEEDS_YOU_SUBSCRIPTION,

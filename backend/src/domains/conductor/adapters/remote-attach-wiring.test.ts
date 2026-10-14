@@ -21,7 +21,7 @@ import type { Workspace } from '@recoder/agent-os';
 import type { PolicyDecision } from '@recoder/agent-os';
 import type { PolicyInput } from '@recoder/agent-policy';
 import { evaluatePolicy } from '@recoder/agent-policy';
-import type { LoomResult } from '@recoder/agent-runtimes/loom';
+import type { LoomResult } from '@recoder/agent-runtimes/loom-client';
 import { ErrorCode } from '../../../shared/errors.js';
 import type { Principal } from '../../identity/types.js';
 import type { ApprovalRecord } from '../../governance/types.js';

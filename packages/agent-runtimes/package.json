@@ -12,13 +12,15 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
-    "./loom": {
+    "./loom-client": {
       "types": "./dist/loom.d.ts",
       "import": "./dist/loom.mjs",
       "require": "./dist/loom.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "check-types": "tsc --noEmit",

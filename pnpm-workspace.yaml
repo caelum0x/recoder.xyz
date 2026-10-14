@@ -19,8 +19,33 @@ packages:
   - apps/desktop/engines/openclaw
   # dmux operator-console engine (Wave G1 full adaptation — backend imports its modules)
   - apps/desktop/engines/dmux
+  # t3code subtree (docs/T3CODE-FORK.md) — ONLY the two pure-schema packages
+  # packages/t3-bridge needs (@t3tools/contracts wire types, @t3tools/shared
+  # helpers). Deliberately NOT apps/server, apps/web, apps/mobile, ssh,
+  # tailscale, effect-acp, effect-codex-app-server, client-runtime — those
+  # pull t3code's own huge Effect/Expo/Electron dependency tree and are not a
+  # live build target yet (T3CODE-FORK.md section 9). third_party/t3code's
+  # OWN pnpm-workspace.yaml stays untouched for upstream-sync purposes; these
+  # two paths become ALSO root-workspace members (root's glob patterns
+  # control membership during a root install, so this does not create a
+  # nested-workspace conflict) only so `@t3tools/contracts`/`@t3tools/shared`
+  # resolve via `workspace:*` for `packages/t3-bridge`.
+  - third_party/t3code/packages/contracts
+  - third_party/t3code/packages/shared
 
 catalog:
+  # t3code subtree deps (packages/contracts + packages/shared only — pinned
+  # to the exact versions third_party/t3code/pnpm-workspace.yaml's own
+  # catalog uses at d7202109, so a future `git subtree pull` sync can diff
+  # cleanly against this block).
+  '@effect/platform-node': 4.0.1
+  '@effect/vitest': 4.0.1
+  '@noble/curves': 1.9.1
+  '@noble/hashes': 1.8.0
+  effect: 4.0.1
+  jose: 6.2.2
+  vite-plus: 1.0.0
+  yaml: ^2.9.0
   '@ai-sdk/anthropic': ^0.0.39
   '@ai-sdk/fal': ^1.0.0
   '@ai-sdk/gateway': ^2.0.0
