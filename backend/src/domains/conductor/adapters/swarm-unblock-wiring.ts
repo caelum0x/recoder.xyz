@@ -51,7 +51,7 @@ import {
   type AgentInfo,
   type BlockedKind,
   type LoomResult,
-} from '@recoder/agent-runtimes/loom';
+} from '@recoder/agent-runtimes/loom-client';
 import type {
   SwarmUnblockDeps,
   UnblockCandidate,

@@ -57,7 +57,12 @@ function readStr(metadata: Readonly<Record<string, unknown>> | undefined, key: s
 /** Build the recloud deploy target. Synchronous — pure config + transport. */
 export function createRecloudDeployTarget(deps: RecloudDeployDeps): DeployTarget {
   const { config, logger } = deps;
-  const fetchLike = deps.fetchLike !== undefined ? deps.fetchLike : globalFetch();
+  // `?? ` (not `!== undefined`) so an explicit `fetchLike: null` falls back to
+  // `globalFetch()` the same as an omitted property — `deps.fetchLike`'s type
+  // allows `null`, and the old `!== undefined` check let a literal `null`
+  // through unchanged, which `probe`/`provisionPreview` below reject (they
+  // require a non-null `FetchLike`).
+  const fetchLike = deps.fetchLike ?? globalFetch();
   const now = deps.now ?? (() => new Date());
   const baseUrl = config.recloud.baseUrl ? config.recloud.baseUrl.replace(/\/+$/, '') : null;
   const apiKey = config.recloud.apiKey;
@@ -101,6 +106,13 @@ export function createRecloudDeployTarget(deps: RecloudDeployDeps): DeployTarget
     const repo = input.source ?? readStr(input.metadata, 'repo');
     if (!repo) {
       return err(createError(ErrorCode.SERVICE_UNAVAILABLE, 'recloud provisioning needs a repo (DeployInput.source).'));
+    }
+    if (!fetchLike) {
+      // `globalFetch()` can itself return `null` (no global `fetch` in this
+      // runtime) — `provisionPreview` requires a non-null `FetchLike`
+      // (unlike `probe` above, which tolerates `null` itself), so this is a
+      // real unavailable-dependency error, not a silent `null` pass-through.
+      return err(createError(ErrorCode.SERVICE_UNAVAILABLE, 'recloud provisioning needs a global fetch implementation.'));
     }
     const branch = readStr(input.metadata, 'branch') ?? 'main';
     const name = `preview-${(input.runId ?? input.tenantId).slice(0, 24)}`;

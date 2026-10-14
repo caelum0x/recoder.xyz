@@ -27,7 +27,7 @@
  *    BOUNDED re-subscribe (injected {@link NeedsYouScheduler}); it never spins a second
  *    daemon and tears down cleanly.
  */
-import type { AgentStatus } from '@recoder/agent-runtimes/loom';
+import type { AgentStatus } from '@recoder/agent-runtimes/loom-client';
 import type { WorkspaceState } from '@recoder/agent-os';
 import type { LoggerPort } from '@recoder/substrate';
 import type { AttentionState } from '../types.js';

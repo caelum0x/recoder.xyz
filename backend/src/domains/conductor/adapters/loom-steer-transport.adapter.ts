@@ -15,7 +15,7 @@
  * discrete command yet, only in-progress typed characters.
  */
 import type { LoggerPort } from '@recoder/substrate';
-import type { LoomResult } from '@recoder/agent-runtimes/loom';
+import type { LoomResult } from '@recoder/agent-runtimes/loom-client';
 import type {
   SteerKeysInput,
   SteerTransportPort,

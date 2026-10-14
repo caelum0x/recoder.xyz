@@ -35,7 +35,7 @@
  *    AND it carries real evidence -- an unevidenced answer is not deliverable.
  */
 import type { LoggerPort } from '@recoder/substrate';
-import type { BlockedKind } from '@recoder/agent-runtimes/loom';
+import type { BlockedKind } from '@recoder/agent-runtimes/loom-client';
 import type { Principal } from '../../identity/types.js';
 
 /**
