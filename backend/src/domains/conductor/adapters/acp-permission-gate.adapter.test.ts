@@ -125,6 +125,73 @@ describe('createAcpPermissionGate', () => {
     });
   });
 
+  it('a fresh needs_approval opens a durable approval record via the injected port', async () => {
+    const g = fakeGate('needs_approval', { tier: 'high' });
+    const events: AcpPermissionVerdictEvent[] = [];
+    const requestCalls: unknown[] = [];
+    const approval = {
+      request: vi.fn(async (p: unknown) => {
+        requestCalls.push(p);
+        return { id: 'durable-appr-1' };
+      }),
+    };
+    const resolve = createAcpPermissionGate({
+      gate: g.gate,
+      getWorkspace: async () => ws,
+      principal: PRINCIPAL,
+      approval,
+      onVerdict: e => events.push(e),
+    });
+    expect(await resolve(ctx('execute'))).toBe('deny');
+    expect(requestCalls[0]).toMatchObject({
+      action: 'command.run',
+      riskTier: 'high',
+      requestedBy: 'conductor-acp',
+      taskId: 't-1',
+      target: 'run the tests',
+    });
+    // the opened record's real id wins over the kernel's bare (non-clearing) id.
+    expect(events[0]).toMatchObject({
+      decision: 'deny',
+      effect: 'needs_approval',
+      approvalId: 'durable-appr-1',
+    });
+  });
+
+  it('an allow verdict never opens a durable approval (nothing to clear)', async () => {
+    const g = fakeGate('allow');
+    const approval = { request: vi.fn() };
+    const resolve = createAcpPermissionGate({
+      gate: g.gate,
+      getWorkspace: async () => ws,
+      principal: PRINCIPAL,
+      approval,
+    });
+    expect(await resolve(ctx('execute'))).toBe('allow');
+    expect(approval.request).not.toHaveBeenCalled();
+  });
+
+  it('a failed approval-open still DENIES (fail-closed), never a fabricated allow', async () => {
+    const g = fakeGate('needs_approval');
+    const events: AcpPermissionVerdictEvent[] = [];
+    const approval = {
+      request: vi.fn(async () => {
+        throw new Error('approvals store down');
+      }),
+    };
+    const resolve = createAcpPermissionGate({
+      gate: g.gate,
+      getWorkspace: async () => ws,
+      principal: PRINCIPAL,
+      approval,
+      onVerdict: e => events.push(e),
+    });
+    expect(await resolve(ctx('execute'))).toBe('deny');
+    // no durable record opened, and no pre-existing kernel approvalId either —
+    // the event surfaces without one (never fabricated).
+    expect(events[0]?.approvalId).toBeUndefined();
+  });
+
   it('a deny verdict refuses', async () => {
     const g = fakeGate('deny');
     const resolve = createAcpPermissionGate({

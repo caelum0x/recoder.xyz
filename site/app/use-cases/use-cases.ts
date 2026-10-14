@@ -242,7 +242,83 @@ export const USE_CASES: UseCase[] = [
         a: "Yes. The control plane is local-first and self-hostable with fail-closed auth and a durable local credential store, so agent work and its audit trail stay inside your boundary.",
       },
     ],
-    related: ["self-hosted-ai-agent-orchestration", "compare-and-merge-agent-diffs"],
+    related: ["self-hosted-ai-agent-orchestration", "compare-and-merge-agent-diffs", "team-governance"],
+  },
+  {
+    slug: "team-governance",
+    title: "AI coding agent governance and audit trail for teams",
+    metaTitle: "Team governance for AI coding agents — Recoder",
+    description:
+      "One command policy for every developer's coding agent. A deny-biased gate in front of risky commands, an inline approval prompt, and an append-only audit log of every decision — set once by the team, enforced the same way for everyone.",
+    keywords: [
+      "AI coding agent governance for teams",
+      "audit trail for AI agents",
+      "team policy for Claude Code",
+      "command approval for coding agents",
+      "AI agent command audit log",
+    ],
+    tagline: "One policy. Every teammate's agent. Nothing happens off the record.",
+    intro: [
+      "Give five developers an AI coding agent each and you've given five agents shell access, each one deciding on its own whether `rm -rf`, `git push --force`, or a `curl | bash` is fine to run. Without a shared policy, that judgment call is made differently — or not at all — by every agent, on every machine, with no record a lead or security reviewer can check afterward.",
+      "Team governance means a founder or tech lead sets the policy once — what's allowed, what needs a human to say yes, what's denied outright — and it applies the same way to every developer's agent, with a durable log of what was decided and why.",
+    ],
+    sections: [
+      {
+        h: "A policy gate in front of every command, not just every merge",
+        body: [
+          "This is narrower than reviewing a finished diff: it runs before a command executes, not after. Each command an agent wants to run is classified by risk and checked against policy before it touches a shell — reversible, read-only commands pass straight through; destructive patterns (recursive force-deletes, force-pushes, piping a remote script into a shell) are denied outright or held for a human decision. The gate is deny-biased: an ambiguous or unrecognized action is never silently allowed.",
+        ],
+      },
+      {
+        h: "An inline approval, not a buried setting",
+        body: [
+          "When a command needs a human decision, it surfaces right where the command would have run — the exact command, why it was flagged, and a single approve/deny — instead of a notification you discover after the fact. Reject it and nothing executes. Approve it and the agent proceeds immediately.",
+        ],
+      },
+      {
+        h: "One policy, every teammate's agent",
+        body: [
+          "A lead sets the policy once — which paths are forbidden (auth, billing, security config), which commands always need sign-off, which are denied outright — and every developer's agent on the team enforces it identically. Nobody's agent gets to make its own exception.",
+        ],
+        bullets: [
+          "Forbidden paths: agents cannot write to auth, billing, or security config regardless of what an agent argues for.",
+          "Risk-tiered approvals: destructive or ambiguous commands pause for a human; routine reads and edits don't.",
+          "Fail-closed by default: no approval channel configured means the command is denied, never silently allowed.",
+        ],
+      },
+      {
+        h: "An append-only record of every decision",
+        body: [
+          "Every verdict — allowed, denied, or sent for approval — along with the eventual human decision and the command's outcome, is sealed into a hash-chained, append-only log. Each entry links to the one before it, so edited or deleted history is detectable, not just discouraged. That's the trail a lead reviews after the fact or hands to a security review — not a best-effort chat log.",
+        ],
+      },
+    ],
+    steps: [
+      "A lead defines the command policy once: forbidden paths, commands that always need approval, commands denied outright.",
+      "Every developer's agent checks each command against that policy before it runs — not after.",
+      "An allowed command executes immediately; a denied one never runs; a borderline one pauses for an inline approval.",
+      "The verdict, the human decision (if any), and the execution outcome are appended to a tamper-evident audit log.",
+      "Review the log for what actually happened across the team's agent runs, not just what the policy says should happen.",
+    ],
+    faq: [
+      {
+        q: "Does this replace reviewing the agent's code changes?",
+        a: "No — it's upstream of that. Pair it with governed, audited merges (see governed AI code merges) for the diff-review and compliance-mapping side; command governance is about what the agent is allowed to run in the first place.",
+      },
+      {
+        q: "What happens if no one is available to approve a flagged command?",
+        a: "It fails closed. A needs-approval command with no approval channel configured — or one that times out — is denied, never silently allowed through.",
+      },
+      {
+        q: "Is the policy enforced centrally across every teammate's machine today?",
+        a: "The command policy gate, the inline approval, and the append-only audit log run per machine today and are real, not mocked. Centrally aggregating that audit trail across a whole team's machines is a Team-tier capability still in development — see the Team plan on pricing.",
+      },
+      {
+        q: "Can the log be edited after the fact?",
+        a: "Each entry is sealed with a hash that chains to the one before it, so an edited or deleted entry breaks the chain and is detectable on verification — it is not a plain text log a script could quietly rewrite.",
+      },
+    ],
+    related: ["governed-ai-code-merges", "self-hosted-ai-agent-orchestration"],
   },
   {
     slug: "self-hosted-ai-agent-orchestration",
