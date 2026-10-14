@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { LoomResult } from '@recoder/agent-runtimes/loom';
+import type { LoomResult } from '@recoder/agent-runtimes/loom-client';
 import {
   createLoomSteerTransport,
   type LoomSteerMethod,

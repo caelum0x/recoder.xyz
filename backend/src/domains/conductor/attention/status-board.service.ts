@@ -30,7 +30,7 @@
  *    done/unknown), NOT a boolean: the caller distinguishes a native-signalled pane from a
  *    no-signal one by the string, and `'unknown'` means Loom had no native signal.
  */
-import type { AgentStatus } from '@recoder/agent-runtimes/loom';
+import type { AgentStatus } from '@recoder/agent-runtimes/loom-client';
 import type { Workspace, WorkspaceState } from '@recoder/agent-os';
 import type { LoggerPort } from '@recoder/substrate';
 import type { AttentionState } from '../types.js';

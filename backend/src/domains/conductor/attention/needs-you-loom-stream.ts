@@ -19,7 +19,7 @@ import type {
   AgentStatus,
   LoomEventStream,
   LoomSubscriptionEvent,
-} from '@recoder/agent-runtimes/loom';
+} from '@recoder/agent-runtimes/loom-client';
 import type { LoggerPort } from '@recoder/substrate';
 import type {
   NeedsYouEvent,

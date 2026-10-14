@@ -43,6 +43,7 @@
     "@recoder/agent-runtimes": "workspace:*",
     "@recoder/agent-schemas": "workspace:*",
     "@recoder/agent-workflows": "workspace:*",
+    "@recoder/auth": "workspace:*",
     "@recoder/beads-adapter": "workspace:*",
     "@recoder/brain": "workspace:*",
     "@recoder/browser-tools": "workspace:*",

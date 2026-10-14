@@ -29,7 +29,7 @@ import { promisify } from 'node:util';
 import {
   LoomSocketClient,
   type LoomResult,
-} from '@recoder/agent-runtimes/loom';
+} from '@recoder/agent-runtimes/loom-client';
 
 const run = promisify(execFile);
 
