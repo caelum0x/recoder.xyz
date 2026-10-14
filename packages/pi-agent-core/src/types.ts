@@ -139,6 +139,14 @@ export interface PrepareNextTurnContext extends ShouldStopAfterTurnContext {}
 
 export interface AgentLoopConfig extends SimpleStreamOptions {
 	model: Model<any>;
+	// `reasoning` is inherited from `SimpleStreamOptions` (pi-ai's
+	// `ThinkingLevel`, which deliberately excludes "off" — see
+	// `@recoder/pi-ai`'s `ModelThinkingLevel`). `agent.ts`'s
+	// `createLoopConfig()` ternary narrows this package's own `ThinkingLevel`
+	// (which DOES include "off") down to that narrower type before assigning
+	// it here; do not re-declare this field with the wider local
+	// `ThinkingLevel` or every `AgentLoopConfig` → `SimpleStreamOptions` call
+	// site (e.g. `agent-loop.ts`) stops type-checking.
 
 	/**
 	 * Converts AgentMessage[] to LLM-compatible Message[] before each LLM call.

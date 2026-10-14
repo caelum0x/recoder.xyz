@@ -14,7 +14,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { Workspace } from '@recoder/agent-os';
-import type { LoomResult } from '@recoder/agent-runtimes/loom';
+import type { LoomResult } from '@recoder/agent-runtimes/loom-client';
 import { AppError, ErrorCode } from '../../../shared/errors.js';
 import type { Principal } from '../../identity/types.js';
 import type { CompareView } from '../services/compare.service.js';

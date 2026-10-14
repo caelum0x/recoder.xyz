@@ -16,7 +16,7 @@
  *  - `nativeStatus` is carried as the RAW Loom status STRING per cell.
  */
 import { describe, it, expect } from 'vitest';
-import type { AgentStatus } from '@recoder/agent-runtimes/loom';
+import type { AgentStatus } from '@recoder/agent-runtimes/loom-client';
 import type { Workspace } from '@recoder/agent-os';
 import {
   StatusBoardService,

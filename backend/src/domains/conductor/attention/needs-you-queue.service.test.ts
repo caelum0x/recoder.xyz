@@ -13,7 +13,7 @@
  *  - scope narrows by owner + task group; teardown closes the stream + cancels reconnect.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { AgentStatus } from '@recoder/agent-runtimes/loom';
+import type { AgentStatus } from '@recoder/agent-runtimes/loom-client';
 import {
   NeedsYouQueueService,
   type NeedsYouEvent,

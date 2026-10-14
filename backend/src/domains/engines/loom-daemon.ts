@@ -42,7 +42,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { LoomSocketClient } from '@recoder/agent-runtimes/loom';
+import { LoomSocketClient } from '@recoder/agent-runtimes/loom-client';
 
 import { createLogger } from '../../shared/logger.js';
 

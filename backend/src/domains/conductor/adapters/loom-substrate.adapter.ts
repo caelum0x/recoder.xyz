@@ -54,7 +54,7 @@ import {
   LoomSocketClient,
   type LoomCallOptions,
   type LoomResult,
-} from '@recoder/agent-runtimes/loom';
+} from '@recoder/agent-runtimes/loom-client';
 import type {
   ConductorSubstrate,
   ContinueRunInput,

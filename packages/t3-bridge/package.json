@@ -1,0 +1,38 @@
+{
+  "name": "@recoder/t3-bridge",
+  "version": "0.1.0",
+  "description": "The adapter named by docs/T3CODE-FORK.md section 3: maps third_party/t3code (pingdotgg/t3code, MIT) session/terminal wire contracts to Recoder's governance CommandGate + agent-os ApprovalService. The ONLY package allowed to import @t3tools/* directly outside the two composition seams named in that doc.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "node --test --import tsx 'tests/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@recoder/agent-os": "workspace:*",
+    "@recoder/governance": "workspace:*",
+    "@recoder/substrate": "workspace:*"
+  },
+  "devDependencies": {
+    "@t3tools/contracts": "workspace:*",
+    "@types/node": "^20.10.0",
+    "effect": "catalog:",
+    "tsup": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0"
+  }
+}

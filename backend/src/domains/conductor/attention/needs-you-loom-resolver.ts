@@ -12,7 +12,7 @@
  * cache MISS (rate-limited by {@link NeedsYouResolverDeps.refreshIntervalMs}) so a burst of
  * unknown panes cannot hammer the daemon.
  */
-import type { AgentStatus } from '@recoder/agent-runtimes/loom';
+import type { AgentStatus } from '@recoder/agent-runtimes/loom-client';
 import type { Workspace } from '@recoder/agent-os';
 import type { LoggerPort } from '@recoder/substrate';
 import type { NeedsYouEvent } from './needs-you-queue.service.js';

@@ -23,7 +23,7 @@ import {
 	ToolResultStatus,
 } from "@aws-sdk/client-bedrock-runtime";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
-import type { BuildMiddleware, DocumentType, MetadataBearer } from "@smithy/types";
+import type { DocumentType } from "@smithy/types";
 import { HttpProxyAgent } from "http-proxy-agent";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { calculateCost } from "../models.ts";
@@ -359,19 +359,32 @@ function isReservedHeader(key: string): boolean {
  * all other caller headers override any existing same-named header on the request.
  */
 function addCustomHeadersMiddleware(client: BedrockRuntimeClient, headers: Record<string, string>): void {
-	const middleware: BuildMiddleware<object, MetadataBearer> = (next) => async (args) => {
-		const request = args.request;
-		if (request && typeof request === "object" && "headers" in request) {
-			const requestHeaders = (request as { headers: Record<string, string> }).headers;
-			for (const [key, value] of Object.entries(headers)) {
-				if (!isReservedHeader(key)) {
-					requestHeaders[key] = value;
+	// The middleware is written INLINE (not hoisted to a separately-typed
+	// `const`) so `middlewareStack.add`'s 5-overload set (one per pipeline
+	// step: initialize/serialize/build/finalizeRequest/deserialize, each with
+	// a DIFFERENT required `options` shape) resolves via normal contextual
+	// typing from this exact call site. A separately-declared
+	// `BuildMiddleware<Input, Output>` variable is structurally assignable to
+	// more than one of those five overloads (their handler argument/result
+	// shapes overlap enough that TS's overload resolution picked the
+	// "deserialize" one and reported a mismatch against ITS stricter
+	// non-optional `output`), even though the `{ step: "build", ... }` second
+	// argument unambiguously means the third ("build") overload.
+	client.middlewareStack.add(
+		(next) => async (args) => {
+			const request = args.request;
+			if (request && typeof request === "object" && "headers" in request) {
+				const requestHeaders = (request as { headers: Record<string, string> }).headers;
+				for (const [key, value] of Object.entries(headers)) {
+					if (!isReservedHeader(key)) {
+						requestHeaders[key] = value;
+					}
 				}
 			}
-		}
-		return next(args);
-	};
-	client.middlewareStack.add(middleware, { step: "build", name: "pi-ai-custom-headers", priority: "low" });
+			return next(args);
+		},
+		{ step: "build", name: "pi-ai-custom-headers", priority: "low" },
+	);
 }
 
 export const streamSimple: StreamFunction<"bedrock-converse-stream", SimpleStreamOptions> = (

@@ -1,0 +1,7 @@
+{
+  "name": "@recoder/agent-runtimes-loom-client-shim",
+  "private": true,
+  "main": "../dist/loom.js",
+  "module": "../dist/loom.mjs",
+  "types": "../dist/loom.d.ts"
+}
