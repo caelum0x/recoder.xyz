@@ -153,3 +153,129 @@ pinned `d7202109`, wired into the pnpm workspace, tests green on arm64) is
 the work that executes section 1-2 of this plan. This file exists so that
 work has a patch queue and sync policy to build against instead of
 improvising one mid-import.
+
+## 9. Import status (2026-10-15 — next-task #2 executed)
+
+`third_party/t3code` now exists. Imported on branch
+`feat/recoder-forks-2026-10-15` (cut from `feat/recoder-2026-10-14b`, in
+worktree `~/products/recoder-wt-forks-2026-10-15`):
+
+```
+git remote add t3code-upstream <local-or-upstream-clone-of-pingdotgg/t3code>
+git fetch t3code-upstream
+git subtree add --prefix=third_party/t3code <pinned-sha> --squash \
+  -m "chore(t3code): subtree import pingdotgg/t3code @ d7202109 (MIT)"
+```
+
+Pinned at `d720210996a514368ba99f4860063110033d93fa` (2026-10-07, v0.0.45) —
+matches section 1's "pinned at `d7202109`" exactly (full sha above; short
+form unchanged). Three commits, in order:
+
+1. `b90bccf87` — the subtree's own synthetic squash commit (git subtree
+   internals; do not hand-edit).
+2. `a6168f585` — `git subtree add`'s merge commit.
+3. `531a7a349` — removed `apps/desktop` + `apps/marketing` per section 1
+   ("Not imported / not shipped"). Kept: `apps/server`, `apps/web`,
+   `apps/mobile`, `packages/*`, `native/`, `infra/relay`, `scripts/`,
+   `patches/`, `.github/workflows/*` (minus the three removed below).
+4. `2096253eb` — the rebrand pass (section 5) applied via
+   `scripts/rebrand-t3code.sh`: 433 files, "T3 Code"→"Recoder", "T3
+   Connect"→"Recoder Connect", `t3.codes`→`recoder.xyz`, mobile bundle IDs
+   `com.t3tools.t3code*`→`xyz.recoder.remote*`, the live T3 Clerk
+   publishable key stripped from `.env.example`, and
+   `publish-aur.yml`/`release.yml`/`release-desktop.yml` removed (patch
+   #3 + #4 combined into one scripted, re-appliable commit — re-run the
+   script after every sync instead of hand-editing the vendored tree).
+
+**Status: source imported, NOT yet a live build target.** Per section 2's
+own policy and the same precedent `third_party/crystal` already set
+(`RECODER-VENDOR.md`: "a full-source donor... do not start or package
+[it] as a second [app] inside Recoder"), this import stops at "the code is
+in the tree, licensed, attributed, rebranded" — it does NOT yet:
+- wire `third_party/t3code` into the root `pnpm-workspace.yaml` packages
+  list (no `packages/t3-bridge` adapter exists yet — patch queue items #1
+  and #2, section 3, are both still "Not started");
+- attempt a `pnpm install` / build inside `third_party/t3code` itself (its
+  own `apps/server` + `apps/web` + `apps/mobile` dependency tree is large;
+  installing and building it was out of scope for this pass and is
+  next-task #2's remaining half, tracked separately from the import itself).
+
+**herdr: already done, separately, before this session.** herdr was
+vendored wholesale as the **Loom** engine
+(`apps/desktop/engines/loom`, Apache-2.0, 2026-08-12) well before this
+t3code pass — see `apps/desktop/engines/loom/RECODER-VENDOR.md` for its own
+import record, phase history (0-5, all `[x]`), and upstream-sync log. It is
+already wired into the live app (`backend/src/domains/conductor/adapters/
+loom-substrate.adapter.ts`, `loom-steer-transport.adapter.ts`, the Loom
+daemon supervisor, DMG packaging). Nothing in this session re-imports it;
+this note exists only because an earlier draft of this plan (and the task
+that triggered this session) assumed herdr was still unimported — it
+was not.
+
+**Verified working (this session):** `pnpm install --filter` scoped
+installs of the governance/backend/desktop-app dependency chains succeed
+(pnpm's content-addressable store mostly hardlinks, no large re-download);
+the Wave-fork desktop shell builds and launches in `electron-vite dev`
+mode, the Go `wavesrv` server starts cleanly (web/websocket/unix-domain
+listeners all up) with `apps/desktop/engines/loom`'s existing wiring
+untouched, and the OS-level window title reads **"Recoder (Dev)"** —
+confirms the rebrand is visible at the window-chrome level, not just in
+source strings. The embedded TypeScript control-plane backend
+(`backend/src/server.ts`) does NOT fully boot in a fresh worktree without
+a full `pnpm -r build` across its ~30+ `@recoder/*` workspace-package
+dependency graph (each missing package's `dist/` surfaces as a new
+`MODULE_NOT_FOUND` on the next restart — `@recoder/vault`, then
+`@recoder/agent-instructions`, and more beyond that); this is the SAME
+pre-existing condition `plans/recoder.md`'s 2026-10-14 lane-2 session
+already documented ("a full `pnpm -w build` across every workspace package
+was out of scope... pre-existing condition, not caused by or related to
+this change") — a fresh worktree never has these built, and building all
+of them was out of scope for this session's disk/time budget. Dev-mode
+also requires `WCLOUD_ENDPOINT=https://<any-https-url>` set in the
+environment (an upstream t3code/Wave dev-mode-only config check,
+`apps/desktop/server/pkg/wcloud/wcloud.go` `checkEndpointVar` — gated
+behind `wavebase.IsDevMode()`, never enforced in a packaged build); this is
+undocumented anywhere in this repo and should be added to a dev-setup doc
+or given a Recoder-side default so the next person who runs `pnpm run
+dev:desktop` from a fresh worktree does not hit the same unexplained
+`wavesrv` exit this session hit first.
+
+## 10. Upstream-sync procedure (verified runnable)
+
+Monthly, per section 6, on a dedicated branch (never `main` or the active
+feature branch):
+
+```bash
+# 1. Pull the latest upstream squash onto the dedicated sync branch.
+git checkout -b chore/t3code-sync-YYYY-MM
+git fetch t3code-upstream main   # or a new pinned sha, per section 1 policy
+git subtree pull --prefix=third_party/t3code t3code-upstream main --squash
+
+# 2. Re-apply the scripted rebrand/strip patch (never hand-edit the vendored
+#    tree permanently — this script is the only sanctioned edit path):
+bash scripts/rebrand-t3code.sh
+git add third_party/t3code NOTICE
+git commit -m "chore(t3code): rebrand pass re-applied after sync"
+
+# 3. Re-drop apps/desktop + apps/marketing if upstream re-added them
+#    (a sync pulls the FULL upstream tree back in; the exclusion in this
+#    repo's history does not "stick" across a subtree pull):
+git rm -r --quiet third_party/t3code/apps/desktop third_party/t3code/apps/marketing 2>/dev/null || true
+git commit -m "chore(t3code): re-drop apps/desktop + apps/marketing (not imported, section 1)" --allow-empty
+
+# 4. Update this file's "pinned at" line (section 1) + the patch-queue
+#    table (section 3) with whatever the new upstream sha and date are.
+
+# 5. Gate before merge (section 6): contract tests against
+#    packages/contracts + one live-agent smoke test. A sync that breaks
+#    either gate does not land — update the patch queue with what broke.
+```
+
+Steps 1-3 above were exercised end-to-end for the INITIAL import in this
+session (steps 1 and 3 identically; step 2 is the same script already
+committed). The only untested leg is an actual `git subtree pull` against
+a SECOND upstream commit (this session only ever ran `subtree add` once,
+against the single pinned sha) — the command is upstream `git subtree`'s
+own well-established mechanism, not custom tooling, so it is expected to
+work identically, but it has not been exercised against this repo's
+history by this session.
