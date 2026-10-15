@@ -68,12 +68,26 @@ in the adapter package described in section 3.
 
 ## 3. The patch queue
 
-A thin adapter package, `packages/t3-bridge`, is the **only** place upstream
-schema churn is allowed to land. It maps t3 contracts (`@t3tools/contracts`
-wire types, Effect service shapes) to Recoder backend calls (the governance
-gate, `ApprovalService`, the audit chain, conductor workspace state). Nothing
-outside `t3-bridge` imports `@t3tools/*` directly except the two composition
-seams in section 4.
+A thin adapter package, `packages/t3-bridge`, is the **only** backend place
+upstream schema churn is allowed to land. It maps t3 contracts
+(`@t3tools/contracts` wire types, Effect service shapes) to Recoder backend
+calls (the governance gate, `ApprovalService`, the audit chain, conductor
+workspace state). Nothing outside `t3-bridge` imports `@t3tools/*` directly
+on the backend except the two composition seams in section 4.
+
+On the Wave desktop side, `packages/t3-session-bridge` (2026-10-15) is the
+analogous third seam: the `recoder-session` Wave block
+(apps/desktop/app/frontend/app/view/recoder-session) depends on it, and it is
+the only place that imports `@t3tools/contracts` into the Electron renderer.
+It is deliberately **not** built on `@t3tools/client-runtime`'s
+`EnvironmentSupervisor`/`ConnectionDriver` stack — most of that stack's
+connect path (`RpcSessionFactory`) isn't part of the package's own `exports`
+map, and the rest (registry, platform-source, relay discovery, auth) is
+multi-route application plumbing a single local `recoder` CLI process
+doesn't need. `t3-session-bridge` instead builds the one-route WS RPC client
+directly on `effect/rpc` + `effect/socket` (part of `effect` itself) against
+the real, public `WsRpcGroup` schema. See its `src/effect-client.ts` header
+comment for the full reasoning.
 
 Patch queue (tracked here; each entry gets a `bd` issue when work starts —
 see `AGENTS.md` issue-tracking convention):
@@ -86,7 +100,7 @@ see `AGENTS.md` issue-tracking convention):
 | 4 | Strip t3 telemetry/analytics endpoints, `t3.codes` URLs, Clerk publishable keys, winget/AUR/Homebrew identifiers | Recoder telemetry is off by default and ships its own identity provider (Better Auth, not Clerk); these must never silently reappear on a sync | Not started |
 | 5 | License-notice generator: extend to also cover Wave (Apache-2.0, Command Line Inc) and herdr/Loom (Apache-2.0) in one `third-party-licenses.json`, not three | Upstream's generator only knows about its own deps | Not started |
 
-## 4. The two composition seams (unchanged from the design doc)
+## 4. The two composition seams (unchanged from the design doc) + the session seam
 
 1. **Terminal seam** — Loom (mac/linux) or `node-pty` (Windows) under a
    `TerminalManager` the t3 server drives.
@@ -98,6 +112,20 @@ see `AGENTS.md` issue-tracking convention):
 Both seams live in `packages/t3-bridge`, never inline in the vendored
 `third_party/t3code` tree — so a sync never has to re-find and re-patch a
 seam that moved.
+
+A third, Wave-side seam (2026-10-15, section 3): the `recoder-session` block
+talks to the `recoder` server's `orchestration.*` RPC over
+`packages/t3-session-bridge`, per the design doc's section 4 ("apps/web"
+row): "packages/contracts + client-runtime ... The single session protocol
+for Wave blocks. Replaces Recoder's bespoke remote-attach mint/monitor/steer
+API." That replacement has **not** happened yet: the bespoke API
+(`backend/src/domains/conductor/remote-attach/*`, routes at
+`POST/DELETE /api/conductor/remote/sessions*`) still has live callers — the
+desktop's own `recoder-remote-access.tsx` block and the hosted
+`app/app/[locale]/remote/[sessionId]` web page/API routes (stage (c), the
+hosted web at app.recoder.xyz, explicitly out of scope for this pass). It is
+not dead code; migrating those callers onto the new RPC seam is deferred to
+whenever stage (c) is picked up.
 
 ## 5. Rebranding (applied as a scripted patch, not hand-edited upstream)
 
@@ -519,3 +547,87 @@ Cursor, OpenCode, Pi, Grok, ACP registry drivers under `src/provider/`) —
 not run this session (time budget went to the two seams + CLI rename
 instead); a future pass should add the boot + Claude-adapter smoke test the
 original task asked for.
+
+## 13. `recoder-session` Wave block: Session + Review, (a)+(b) only (2026-10-15)
+
+Next-task #6 ("recoder-session web block in the Wave shell") from
+`~/products/plans/recoder.md`, scoped per
+`docs/RECODER-T3CODE-COMPOSITION.md` section 4's "apps/web" row to (a)+(b)
+only — no stage (c) hosted `app.recoder.xyz` in this pass.
+
+**Built**: `apps/desktop/app/frontend/app/view/recoder-session/` — a new Wave
+block (`viewType: "recoder-session"`, registered in `blockregistry.ts`
+alongside the other `recoder-*` blocks) with a thread sidebar, a composer, a
+message stream, and a Review panel rendering the active thread's full-thread
+diff via the real `@pierre/diffs` `CodeView` (Apache-2.0; `parsePatchFiles`
+turns the server's unified-diff string into `CodeViewDiffItem[]`). Board,
+approval, and converge blocks were not touched; the raw interactive terminal
+stays the existing Loom block (`recoder-loom-terminal`), meant to sit side by
+side per section 12's milestone row — this pass did not add a second,
+redundant interactive terminal inside `recoder-session` (apps/web's own
+ghostty-vt WASM terminal is used only for ITS interactive pane per
+`apps/web/src/terminal/ghostty/surface.ts`, not for rendering transcript tool
+output, so there was nothing there to port into the message stream either;
+this is a deliberate scope cut, not an oversight).
+
+**New package**: `packages/t3-session-bridge` — see section 3/4 above for why
+it is NOT built on `@t3tools/client-runtime`. Exports a plain
+`RecoderSessionRpcClient` interface (`connect`/`disconnect`/`listThreads`/
+`subscribeThread`/`sendMessage`/`getFullThreadDiff`), a real
+`EffectRecoderSessionRpcClient` (the only file touching `@t3tools/contracts`
+directly), and a `FakeRecoderSessionRpcClient` (in-memory, deterministic) the
+Wave block's own tests inject instead of needing a live `recoder` server.
+
+**Known, reported gap — this does not boot end-to-end yet**: per section 12
+above, `apps/server` is not currently spawned by, or connected to, the
+desktop app at all. `recoder-session`'s default socket URL
+(`defaultRecoderSessionSocketUrl()`, `ws://127.0.0.1:3773/ws`) assumes some
+process is already serving the `recoder` CLI's RPC socket on its default
+port — today that only happens if a developer runs
+`pnpm dev:recoder:cli` by hand in a second terminal. Wiring the desktop app
+to spawn (or attach to) that process is the same "separate, larger
+integration" section 12 already named for the Session/board view's
+poll-to-RunEvent swap, and was not attempted here either — reported honestly
+rather than silently assumed.
+
+**Bespoke remote-attach API — checked, found live, NOT migrated**: the
+design doc says the new RPC layer "replaces Recoder's bespoke remote-attach
+mint/monitor/steer API." That API
+(`backend/src/domains/conductor/remote-attach/*`, routes
+`POST/DELETE /api/conductor/remote/sessions*` in
+`backend/src/domains/conductor/routes/conductor.routes.ts`) has real, live
+callers today: the desktop's `recoder-model`-adjacent
+`recoder-remote-access.tsx` block, and the hosted web app's
+`app/app/[locale]/remote/[sessionId]/page.tsx` + its
+`app/api/remote/sessions/**` routes — the stage-(c) hosted-web surface this
+pass explicitly excludes. It is not dead code, so it was not removed or
+migrated this pass; that migration is deferred until stage (c) (hosted
+`app.recoder.xyz`) is picked up, per this task's own scope cut.
+
+**Tests**: `packages/t3-session-bridge/src/fake-client.test.ts` (the fake
+client's own contract) and `effect-client.test.ts` (the one pure, socket-free
+helper); the Wave block's own
+`apps/desktop/app/frontend/app/view/recoder-session/recoder-session-model.test.ts`
+covers session-open (connect → list threads → open the first one),
+message-stream (composer send round-trips exactly once; a server-pushed
+assistant reply lands without a resend; switching threads unsubscribes the
+old one so its late events never leak in), and diff-render (loads the active
+thread's diff; a thread with no diff yet renders the real empty-diff shape,
+never a `null`-as-loading state) — all against `FakeRecoderSessionRpcClient`,
+no live `recoder` server needed in CI.
+
+**Also deferred, reported honestly**:
+- `@pierre/diffs`'s inline accept/reject and edit-in-place are not wired;
+  the Review panel is read-only in this first version.
+- `third_party/t3code`'s own vendored, patched `@pierre/diffs` build
+  (`patches/@pierre%2Fdiffs@1.5.2.patch`, adding a find/search panel) was not
+  re-applied to Recoder's own direct dependency — the unpatched, published
+  1.5.2 is used as-is (see NOTICE).
+- The message stream only renders `message.updated` domain events; the other
+  ~20 `OrchestrationV2DomainEvent` kinds (run/turn-item/node/plan/checkpoint
+  updates — the data a richer "what is the agent doing right now" view would
+  need) are not yet mapped to anything the block renders.
+- No reconnect/backoff: `EffectRecoderSessionRpcClient` opens one socket and
+  reports it broken rather than retrying, unlike `client-runtime`'s own
+  `EnvironmentSupervisor`. Acceptable for a first version talking to a
+  same-machine dev server; revisit before stage (c)'s remote routes need it.
