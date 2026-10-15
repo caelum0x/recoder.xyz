@@ -20,7 +20,7 @@
     "build:all": "npm-run-all --parallel build:core build:platforms",
     "build:core": "pnpm run build:engine",
     "build:engine": "cd backend && pnpm build",
-    "build:recoder:packages": "pnpm -r --filter \"recoder-backend...\" --filter \"recoder-main-app...\" --filter \"@recoder/conductor-ui...\" --if-present run build",
+    "build:recoder:packages": "pnpm -r --filter \"recoder-backend...\" --filter \"recoder-main-app...\" --filter \"@recoder/conductor-ui...\" --filter \"@recoder/t3-session-bridge...\" --if-present run build",
     "build:recoder:backend": "pnpm -C backend run build",
     "build:recoder:backend:rust": "bash scripts/build-recoder-rust-engines.sh",
     "build:recoder:backend:py": "bash scripts/build-recoder-py-engines.sh",
