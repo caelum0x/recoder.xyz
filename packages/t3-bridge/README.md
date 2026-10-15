@@ -21,6 +21,18 @@ composition seams the fork doc names.
   so `effect` and the vendored t3code tree never reach a consumer's runtime
   dependency graph; they're devDependencies here only (needed to generate
   this package's own `.d.ts`).
+- `src/governed-pty-adapter.ts` — `createGovernedPtyProcess`, the wire that
+  was missing: `createT3TerminalCommandGate` had no real call site anywhere
+  in this tree before 2026-10-15 (verified by grepping for its name outside
+  this package's own tests — zero hits). This wraps any `PtyProcessLike`
+  engine (the same shape as upstream's `third_party/t3code/apps/server/src/
+  terminal/PtyAdapter.ts` `PtyProcess` — node-pty today, a future Loom/herdr-
+  backed adapter once the `recoder-wtlm` terminal seam lands) so every
+  `.write()` serializes through the gate before the real engine ever sees
+  the data. `src/child-process-pty-adapter.ts` is a real (not stubbed)
+  `node:child_process`-backed `PtyProcessLike` used by
+  `tests/governed-pty-adapter.test.ts` to prove the gate against an actually
+  running process.
 
 ## Build
 
@@ -32,7 +44,7 @@ pnpm --filter @recoder/t3-bridge run build
 ## Test
 
 ```bash
-pnpm --filter @recoder/t3-bridge run test        # node:test — 6 bridge unit tests
+pnpm --filter @recoder/t3-bridge run test        # node:test — 13 bridge unit tests
 ```
 
 `tests/t3-contracts-compatibility.test.ts` is the one test file that imports

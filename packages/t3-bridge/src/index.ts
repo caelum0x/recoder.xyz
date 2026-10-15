@@ -8,3 +8,16 @@ export {
   type T3TerminalWriteRequest,
   type CreateT3TerminalCommandGateDeps,
 } from './terminal-command-gate.adapter';
+
+export {
+  createGovernedPtyProcess,
+  type PtyProcessLike,
+  type GovernedPtyProcess,
+  type GovernedPtyProcessDeps,
+  type GovernedPtyWriteContext,
+} from './governed-pty-adapter';
+
+export {
+  createChildProcessPtyProcess,
+  type ChildProcessPtyOptions,
+} from './child-process-pty-adapter';
