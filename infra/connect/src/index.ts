@@ -4,6 +4,12 @@
 import { Hono } from 'hono';
 import type { ConnectEnv } from './env.js';
 import { createConnectAuth } from './auth/connect-auth.js';
+import {
+  buildMobileDeepLink,
+  extractSessionCookieValue,
+  renderMobileCompletePage,
+  resolveRemoteScheme,
+} from './auth/mobile-complete.js';
 import { billingRoutes } from './routes/billing.js';
 import { deviceRoutes } from './routes/devices.js';
 import { Pool } from 'pg';
@@ -16,6 +22,28 @@ app.on(['GET', 'POST'], '/api/auth/*', (c) => {
   const pool = new Pool({ connectionString: c.env.HYPERDRIVE.connectionString });
   const auth = createConnectAuth(c.env, pool);
   return auth.handler(c.req.raw);
+});
+
+/**
+ * Mobile magic-link completion — see src/auth/mobile-complete.ts for the
+ * full handshake. `callbackURL={CONNECT_URL}/link/mobile-complete` is
+ * same-origin as CONNECT_URL, so Better Auth's magic-link verify redirect
+ * reaches this route with the just-set session cookie already attached.
+ */
+app.get('/link/mobile-complete', async (c) => {
+  const pool = new Pool({ connectionString: c.env.HYPERDRIVE.connectionString });
+  const auth = createConnectAuth(c.env, pool);
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  const token = extractSessionCookieValue(c.req.raw.headers);
+  if (!session?.user?.email || !token) {
+    return c.html(renderMobileCompletePage({ ok: false }), 401);
+  }
+  const deepLink = buildMobileDeepLink({
+    scheme: resolveRemoteScheme(c.env),
+    token,
+    email: session.user.email,
+  });
+  return c.html(renderMobileCompletePage({ ok: true, deepLink }));
 });
 
 /**
