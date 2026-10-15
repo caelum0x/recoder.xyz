@@ -80,8 +80,8 @@ see `AGENTS.md` issue-tracking convention):
 
 | # | Patch | Why it's a patch, not upstream | Status |
 |---|---|---|---|
-| 1 | Terminal seam: a `TerminalManager` backend on Loom's protocol-20 socket (bidirectional PTY; worktree launch, pane handle, status) | Upstream's own `node-pty` terminal manager stays as the Windows fallback; macOS/Linux route through Loom instead so Recoder keeps one raw-PTY substrate, not two | **Done** (2026-10-15, Loom side — see section 11) |
-| 2 | Governance seam: `orchestration-v2` `CommandPolicy` + `EffectWorker` call the Recoder backend over loopback before every write/merge/other side effect | t3 upstream has no concept of an external governance backend; this is Recoder's core value and must never be upstream-mergeable away | Not started (ACP tool-call path — the nearest existing analogue — now opens a durable approval + audit entry per `backend/src/domains/conductor/adapters/acp-permission-gate.adapter.ts`, wired 2026-10-14 lane 2) |
+| 1 | Terminal seam: a `TerminalManager` backend on Loom's protocol-20 socket (bidirectional PTY; worktree launch, pane handle, status) | Upstream's own `node-pty` terminal manager stays as the Windows fallback; macOS/Linux route through Loom instead so Recoder keeps one raw-PTY substrate, not two | **Done** (2026-10-15, both sides — Loom side section 11; Node/apps/server side section 12: `apps/server/src/terminal/LoomTerminalManagerAdapter.ts` selected in `server.ts` on darwin/linux) |
+| 2 | Governance seam: `orchestration-v2` `CommandPolicy` + `EffectWorker` call the Recoder backend over loopback before every write/merge/other side effect | t3 upstream has no concept of an external governance backend; this is Recoder's core value and must never be upstream-mergeable away | **Done for one concrete write path** (2026-10-15, section 12): `POST /internal/agent-os/t3-write-gate/decide` (backend) + `apps/server/src/orchestration-v2/RecoderWriteGate.ts` (client), wired into `git/linkCreatedPullRequest.ts`'s PR-link dispatch. Worktree create/remove, `pr.create`/`pr.merge`, and `checkpoint.revert` call sites are NOT yet wired to this gate — same seam, same client, just not called from those sites yet. ACP tool-call path (the nearest existing analogue) still separately gated per `backend/src/domains/conductor/adapters/acp-permission-gate.adapter.ts`, wired 2026-10-14 lane 2. |
 | 3 | Rebrand pass (section 5) applied as a patch on top of each sync, never hand-edited into the vendored tree permanently | Keeps the diff against upstream small and mechanical (scriptable find/replace), so a sync is "reapply the patch," not "re-review every renamed identifier" | Not started |
 | 4 | Strip t3 telemetry/analytics endpoints, `t3.codes` URLs, Clerk publishable keys, winget/AUR/Homebrew identifiers | Recoder telemetry is off by default and ships its own identity provider (Better Auth, not Clerk); these must never silently reappear on a sync | Not started |
 | 5 | License-notice generator: extend to also cover Wave (Apache-2.0, Command Line Inc) and herdr/Loom (Apache-2.0) in one `third-party-licenses.json`, not three | Upstream's generator only knows about its own deps | Not started |
@@ -378,3 +378,144 @@ trace pointed straight at it. Fixed by not sharing that probe at all:
 `pump_output` now only checks the `running` flag and treats a failed write
 as disconnection, matching how `pane_terminal_stream.rs`'s own loop already
 detects disconnection (never via a read-probe on its public stream either).
+
+## 12. `apps/server` becomes a live build/dev/test target + both seams close, Node side (2026-10-15)
+
+**Status: `third_party/t3code/apps/server` is now a real, buildable,
+testable target** — through its OWN nested pnpm workspace (`pnpm install
+--filter t3... --filter scripts...`, run from `third_party/t3code`; root
+scripts: `install:recoder:cli`, `build:recoder:cli`, `dev:recoder:cli`,
+`typecheck:recoder:cli`, `test:recoder:cli`), NOT as a flat root-workspace
+member (section 1/9's reasoning against that still holds: it would also
+force `@t3tools/web`'s Expo+Electron dev dependency to resolve as a root
+member). The scoped install succeeds in about 2 minutes, no native-build
+failures (node-pty's prebuilds were found). `tsc --noEmit` (the project's
+own effect-tsgo-backed typecheck, which enforces house lint rules like
+`deterministicKeys`/`globalRandom`/`globalTimers`/`preferSchemaOverJson` as
+hard errors, not just the bare TypeScript compiler) is clean. `node
+--experimental-strip-types src/bin.ts --help` boots the real CLI and prints
+real subcommand help.
+
+**CLI rename (patch-queue nothing-numbered, but requested directly):** the
+rebrand pass (`scripts/rebrand-t3code.sh`) never covered the CLI's own
+identity — confirmed, then scoped deliberately narrow. Renamed: `apps/server/
+package.json`'s `"bin"` key (`t3` → `recoder`) and `src/binCli.ts`'s
+`Command.make("t3", ...)` + both `commandPath` arrays (the CLI's own
+self-reported usage/help text: `recoder <subcommand> [flags] [<cwd>]`, `recoder
+help`). Deliberately NOT renamed: `package.json`'s `"name"` field (still
+`t3`) — renaming it cascades into the effect-tsgo `deterministicKeys` lint
+rule, which derives EVERY `Context.Service`/`Context.Tag` string key in the
+whole `apps/server` tree from the package name (confirmed: renaming `name`
+alone produced 150+ new `error TS377049` diagnostics across completely
+unrelated files, e.g. `t3/terminal/PtyAdapter` → `recoder/terminal/
+PtyAdapter`); also NOT renamed: `src/cli/invocation.ts`'s npm/npx/pnpm-dlx/
+bunx package-runner-detection logic, `serviceLauncher.ts`/`cloud/
+pinnedRuntime.ts`'s pinned-executable-name constants, and the matching test
+fixtures — those are about the **npm package name** (still `t3`, so `npx t3
+serve` / `lib/node_modules/t3/` are the CORRECT, still-true paths) and the
+**release pipeline's built-artifact name** (untouched, out of scope per this
+task's "no deploy/release/CLI-publish action" instruction), not the CLI's
+own command identity. A full `t3`-package → `recoder`-package rename is a
+separate, larger future patch (it would need the `deterministicKeys` rule
+re-run/accepted across the whole tree, which is exactly the "re-rename pass
+on every sync" cost section 2 already warns `@t3tools/*` internals renames
+would cost — now proven true for this field too, not just `@t3tools/*`).
+Verified: `recoder --help`'s own output now says `USAGE: recoder <subcommand>`;
+393/395 tests pass across `src/terminal`, `src/git`, `src/cli` (the 2
+failures are pre-existing on pristine, UN-rebranded code too — see below).
+
+**Terminal seam, Node side** (`apps/server/src/terminal/
+LoomTerminalManagerAdapter.ts`, new file): implements `PtyAdapter.PtyAdapter`
+(the same `Context.Service` interface `NodePtyAdapter.layer` already
+satisfies) by talking to Loom's `terminal_manager.open/write/status/close/
+stream` socket methods from section 11. `server.ts`'s single `const
+layerPtyAdapter = NodePtyAdapter.layer;` composition line is now the ONLY
+vendored-tree edit this seam needed: `process.platform === "win32" ?
+NodePtyAdapter.layer : LoomTerminalManagerAdapter.layer`. The Node-side
+NDJSON client is a deliberate, narrow DUPLICATE of this repo's root-workspace
+canonical client (`packages/agent-runtimes/src/adapters/loom/
+{protocol,socket-client}.ts`, ALSO extended today with the same five
+`terminal_manager.*` methods + their own real tests) — `apps/server` cannot
+import a root-workspace `@recoder/*` package (see file header for the full
+reasoning). Known gaps, reported not hidden: no resize verb exists yet on
+`terminal_manager.*` (degrades to a no-op); `TerminalManagerOpenParams` has
+no `args` field (Loom's `CommandBuilder::new(&shell)` treats `shell` as a
+literal argv[0], so POSIX zsh's cosmetic `-o nopromptsp` flag is dropped with
+a one-time logged warning — no functional loss, just the raw-zsh-prompt `%`
+marker on an incomplete line). Real tests (`LoomTerminalManagerAdapter.test.ts`,
+a FAKE Loom socket server, no stubs): spawn → open round trip, streamed
+output/exit delivered to `onData`/`onExit`, `kill()` → `terminal_manager.close`,
+`resize()` no-op proof. (Tooling note: `it.effect`'s default virtual
+TestClock hangs `Effect.sleep` forever in this harness — these tests use
+`it.live` instead; cost ~45 minutes of debugging before being isolated via a
+scratch `zdiag.test.ts`, worth documenting here so the next person doesn't
+repeat it.)
+
+**Governance seam, Node side, ONE concrete write path**: `POST /internal/
+agent-os/t3-write-gate/decide` (`backend/src/domains/governance/{adapters/
+t3-write-gate.adapter.ts,routes/internal-t3-write-gate.routes.ts}`, wired
+into `backend/src/bootstrap/index.ts` next to `conductorCommandGate`) — a
+THIRD independent `CommandGate`+`FileAuditLog` instance (own audit log,
+`~/.recoder/audit/t3-write-gate.jsonl`), `requireInternal`-gated, same
+fail-closed contract as every other gate in this repo. Client side:
+`apps/server/src/orchestration-v2/RecoderWriteGate.ts` (new file, plain
+`fetch()` — the architecture doc's own wording, "over loopback", already
+names HTTP as this seam's wire, so unlike the terminal seam there was
+nothing to duplicate), wired into exactly ONE real call site:
+`git/linkCreatedPullRequest.ts`'s PR-link dispatch (`pr.link` action). Real
+tests: `backend/.../t3-write-gate.adapter.test.ts` (6 tests: allow path,
+audit-log recording, deny path, approval-record opening, no-fabricated-allow
+on retry, and the explicit "approval on target A does not clear target B"
+proof the architecture doc requires) all pass; `apps/server`'s own
+`linkCreatedPullRequest.test.ts` updated with an injectable
+`RecoderWriteGateDeciderRef` (mirrors `LoomSocketPathRef`'s pattern) so its
+existing tests never need a live backend. **Not yet wired**: worktree
+create/remove, `pr.create`, `pr.merge`, `checkpoint.revert` — same gate,
+same client, just not called from those sites in this pass. `backend`'s own
+`tsc --noEmit` shows zero new errors from either new file (108 pre-existing
+`MODULE_NOT_FOUND` errors remain, from unbuilt `@recoder/*` packages — the
+same documented pre-existing condition section 9 already called out, not
+something this session caused).
+
+**Confirmed pre-existing, NOT caused by this session** (isolated by
+re-running against pristine, un-rebranded `git show HEAD:...` copies of the
+files): `src/cli/invocation.test.ts`'s two "manual server installation
+ownership" tests fail identically on vanilla code, root-caused to this
+machine's `/var` → `/private/var` symlink (`fs.realPath` resolves the
+BSD/macOS symlink, a test fixture's expected string does not) — a macOS-only
+environment issue, not a logic bug, and not touched.
+
+**Not attempted this session** (explicitly out of scope per the task):
+backend's own `pnpm install`/typecheck hit a REAL, pre-existing regression —
+`packages/auth`'s `postinstall` (`prisma generate`) crashes
+(`SchemaAST.js:1705 TypeError: members.map is not a function`) because
+`effect@4.0.1` (the root catalog pin patch #2's t3-bridge session added for
+`@t3tools/contracts`/`@t3tools/shared`) is ALSO now resolving into
+`@prisma/config`'s dependency chain somewhere in the ~75-project root
+workspace, and `@prisma/config` was built against an older Effect Schema
+shape. Worked around for typecheck purposes via `--ignore-scripts`; the
+underlying `effect@4.0.1` catalog-wide resolution conflict is a real,
+separate bug for a future session (the t3-bridge README's "three SCOPED
+overrides, not the global floor" claim does not fully hold once a wider
+`pnpm install` actually reaches `packages/auth`).
+
+**Desktop polling → structured RunEvents swap: NOT done, and not even
+reachable yet.** `apps/server` is not currently spawned by, or connected to,
+the desktop app at all — the desktop's embedded control plane is still
+`backend/src/server.ts` (a separate TypeScript process), and the desktop's
+Session/board view (`apps/desktop/app/frontend/app/view/recoder/
+recoder-model.ts`) gets state from a 6-second `GET /workspaces?archived=false`
+poll with a "live state frame" fast path layered on top (from the EXISTING
+Loom/backend substrate, not from `apps/server`). Swapping that poll for a
+subscription to `apps/server`'s structured RunEvent stream requires, first,
+actually spawning `apps/server` as a process the desktop talks to (replacing
+or sitting beside `backend/`) — a separate, larger integration this session
+did not attempt. Reported honestly rather than claimed.
+
+**Provider adapters**: NOT separately verified this session beyond what
+already existed in the vendored tree (Claude Agent SDK, Codex app-server,
+Cursor, OpenCode, Pi, Grok, ACP registry drivers under `src/provider/`) —
+`pnpm --filter t3 exec vp test run` on the broader `src/provider` tree was
+not run this session (time budget went to the two seams + CLI rename
+instead); a future pass should add the boot + Claude-adapter smoke test the
+original task asked for.
