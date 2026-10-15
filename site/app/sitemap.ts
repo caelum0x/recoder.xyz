@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { DOC_PAGES } from "./docs/content";
 import { USE_CASES } from "./use-cases/use-cases";
+import { COMPARISONS } from "./compare/comparisons";
 import { getChangelog } from "./changelog/entries";
 
 const BASE = "https://recoder.xyz";
@@ -40,6 +41,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       path: `/use-cases/${u.slug}`,
       lastModified: BUILD_DATE,
       priority: 0.7,
+      changeFrequency: "monthly" as const,
+    })),
+    { path: "/compare", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "monthly" },
+    ...COMPARISONS.map((c) => ({
+      path: `/compare/${c.slug}`,
+      lastModified: BUILD_DATE,
+      priority: 0.6,
       changeFrequency: "monthly" as const,
     })),
     { path: "/enterprise", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "monthly" },
