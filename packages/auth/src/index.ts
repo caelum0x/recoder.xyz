@@ -57,6 +57,17 @@ export type {
   GenerateAppleClientSecretParams,
   AppleSecretParts,
 } from "./apple-client-secret";
+export {
+  createBetterAuthProvider,
+  createClerkAuthProvider,
+} from "./auth-provider";
+export type {
+  AuthProviderPort,
+  AuthProviderName,
+  AuthIdentity,
+  AuthProviderHealth,
+  ClerkAuthProviderOptions,
+} from "./auth-provider";
 
 /**
  * Trusted origins for cross-subdomain session sharing.

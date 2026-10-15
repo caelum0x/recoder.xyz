@@ -61,6 +61,15 @@ export async function POST(request: NextRequest) {
         dodoProductId: process.env.DODO_PRODUCT_PRO || 'prod_pro',
         creemProductId: process.env.CREEM_PRODUCT_PRO || '',
       },
+      // Pro billed yearly ($290/yr — pricing-config.ts 'pro-annual', 2 months
+      // free vs. $29/mo x 12). Previously missing from this record, so the
+      // annual plan on the pricing page could not actually be checked out
+      // (planConfig[plan] was undefined -> 400 "Invalid plan").
+      'pro-annual': {
+        paddleProductId: process.env.PADDLE_PRODUCT_PRO_ANNUAL || 'pro_annual',
+        dodoProductId: process.env.DODO_PRODUCT_PRO_ANNUAL || 'prod_pro_annual',
+        creemProductId: process.env.CREEM_PRODUCT_PRO_ANNUAL || '',
+      },
       team: {
         paddleProductId: process.env.PADDLE_PRODUCT_TEAM || 'pro_team',
         dodoProductId: process.env.DODO_PRODUCT_TEAM || 'prod_team',

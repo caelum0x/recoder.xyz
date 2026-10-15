@@ -11,10 +11,12 @@
     "./session": "./src/session.ts",
     "./verify": "./src/verify.ts",
     "./cross-domain": "./src/cross-domain.ts",
-    "./keys": "./src/keys.ts"
+    "./keys": "./src/keys.ts",
+    "./core": "./src/create-recoder-auth.ts",
+    "./auth-provider": "./src/auth-provider.ts"
   },
   "scripts": {
-    "test": "node --import tsx --test src/edge.test.ts src/cross-domain.test.ts src/apple-client-secret.test.ts src/oauth-link-guard.test.ts",
+    "test": "node --import tsx --test src/edge.test.ts src/cross-domain.test.ts src/apple-client-secret.test.ts src/oauth-link-guard.test.ts src/auth-provider.test.ts",
     "build": "node scripts/build-auth-client.mjs",
     "postinstall": "prisma generate --schema=\"./prisma/schema.prisma\" --no-hints"
   },

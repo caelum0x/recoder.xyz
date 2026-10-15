@@ -644,14 +644,26 @@ export class DodoPaymentsService {
   }
 
   /**
-   * Map Dodo Payments plan ID to internal plan name
+   * Map a Dodo Payments product id back to Recoder's internal plan name.
+   *
+   * Keyed by the SAME env vars (and placeholder fallbacks) as
+   * `app/app/api/billing/create-checkout/route.ts`'s `planConfig`, so a real
+   * Dodo product id set via env resolves correctly on both the outbound
+   * checkout path and this inbound webhook path — they must never drift.
+   *
+   * Previously this map was missing `team` and `pro-annual` entirely (every
+   * Team or Pro-annual `subscription.active`/`subscription.plan_changed`
+   * webhook silently fell through to `'free'`, downgrading a paying
+   * customer's access the moment Dodo confirmed their subscription).
    */
   private static mapPlanIdToPlanName(planId: string): string {
     const planMap: Record<string, string> = {
-      prod_weekly: 'weekly',
-      prod_monthly: 'monthly',
-      prod_pro: 'pro',
-      prod_enterprise: 'enterprise',
+      [process.env.DODO_PRODUCT_WEEKLY || 'prod_weekly']: 'weekly',
+      [process.env.DODO_PRODUCT_MONTHLY || 'prod_monthly']: 'monthly',
+      [process.env.DODO_PRODUCT_PRO || 'prod_pro']: 'pro',
+      [process.env.DODO_PRODUCT_PRO_ANNUAL || 'prod_pro_annual']: 'pro-annual',
+      [process.env.DODO_PRODUCT_TEAM || 'prod_team']: 'team',
+      [process.env.DODO_PRODUCT_ENTERPRISE || 'prod_enterprise']: 'enterprise',
     };
 
     return planMap[planId] || 'free';

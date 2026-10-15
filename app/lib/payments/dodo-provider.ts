@@ -39,17 +39,31 @@ export const DODO_SIGNATURE_HEADER = 'x-dodo-signature';
 
 const DODO_API_URL = 'https://api.dodopayments.com';
 
-// Same plan -> product mapping (env first, legacy defaults) as api/dodo/payment.
+// Same plan -> product mapping (env first, legacy defaults) as api/dodo/payment
+// and app/app/api/billing/create-checkout/route.ts's `planConfig` — all three
+// must stay in sync. Previously missing `team` and `pro-annual`: a Team or
+// Pro-annual checkout/change-plan through this provider returned
+// `dodo_product_not_configured` unless the operator happened to set the
+// right env var, which for `pro-annual` was not even reachable (see below).
 const DEFAULT_PRODUCTS: Record<string, string> = {
   weekly: 'prod_weekly',
   monthly: 'prod_monthly',
   pro: 'prod_pro',
+  'pro-annual': 'prod_pro_annual',
+  team: 'prod_team',
   enterprise: 'prod_enterprise',
 };
 
 export function dodoProductIdForPlan(planId: string): string | null {
   const key = planId.toLowerCase();
-  return process.env[`DODO_PRODUCT_${key.toUpperCase()}`] || DEFAULT_PRODUCTS[key] || null;
+  // Env var names use underscores (DODO_PRODUCT_PRO_ANNUAL, matching
+  // create-checkout/route.ts and wrangler.toml's documented secrets) — a
+  // hyphenated plan id like "pro-annual" must normalize to "_" before the
+  // lookup, or `DODO_PRODUCT_PRO-ANNUAL` (an env var name no operator would
+  // actually set) is checked instead and this always falls through to the
+  // default.
+  const envKey = `DODO_PRODUCT_${key.toUpperCase().replace(/-/g, '_')}`;
+  return process.env[envKey] || DEFAULT_PRODUCTS[key] || null;
 }
 
 function asString(value: unknown): string | undefined {

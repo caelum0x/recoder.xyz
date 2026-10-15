@@ -9,15 +9,26 @@ import { logger } from '@/lib/logger';
 const DEFAULT_FROM_EMAIL = 'noreply@recoder.xyz';
 const RESEND_FROM = process.env.RESEND_FROM || process.env.EMAIL_FROM || DEFAULT_FROM_EMAIL;
 const SMTP_FROM = process.env.SMTP_FROM || process.env.EMAIL_FROM || DEFAULT_FROM_EMAIL;
+const SCRIBASE_MAIL_FROM = process.env.SCRIBASE_MAIL_FROM || process.env.EMAIL_FROM || DEFAULT_FROM_EMAIL;
+const SCRIBASE_MAIL_DEFAULT_BASE_URL = 'https://api.scribase.com';
 const FROM_NAME = 'Recoder.xyz';
 const APP_URL = resolvePublicAppUrl();
 
-export type EmailProviderKind = 'smtp' | 'resend' | 'dev' | 'none';
+// Scribase Mail (~/products/plans/scribase-mail.md, api.scribase.com) is this
+// project's own Resend-compatible transactional mail API — same POST /emails
+// shape as the `resend` branch below, a different base URL + per-app key.
+// Kept as an explicit opt-in (EMAIL_PROVIDER=scribase) rather than the new
+// top 'auto' priority: Recoder is not yet on the migrated-senders list in
+// that plan file, so this never silently reroutes an already-working SMTP/
+// Resend deployment — it only activates when selected or when nothing else
+// is configured.
+export type EmailProviderKind = 'smtp' | 'resend' | 'scribase' | 'dev' | 'none';
 
 export interface EmailProviderStatus {
   provider: EmailProviderKind;
   hasSmtp: boolean;
   hasResend: boolean;
+  hasScribase: boolean;
   fromEmail: string;
 }
 
@@ -104,30 +115,59 @@ function createSmtpTransport(env: NodeJS.ProcessEnv = process.env) {
 export function getEmailProviderStatus(env: NodeJS.ProcessEnv = process.env): EmailProviderStatus {
   const preferred = (env.EMAIL_PROVIDER || 'auto').trim().toLowerCase();
   const hasResend = !!env.RESEND_API_KEY;
+  const hasScribase = !!env.SCRIBASE_MAIL_API_KEY;
   const smtp = getSmtpConfig(env);
   const hasSmtp = smtp.hasSmtp;
   const fromEmail = smtp.fromEmail || RESEND_FROM;
+  const scribaseFromEmail = env.SCRIBASE_MAIL_FROM || env.EMAIL_FROM || DEFAULT_FROM_EMAIL;
 
   if (preferred === 'smtp') {
-    return { provider: hasSmtp ? 'smtp' : env.NODE_ENV === 'development' ? 'dev' : 'none', hasSmtp, hasResend, fromEmail };
+    return {
+      provider: hasSmtp ? 'smtp' : env.NODE_ENV === 'development' ? 'dev' : 'none',
+      hasSmtp,
+      hasResend,
+      hasScribase,
+      fromEmail,
+    };
   }
 
   if (preferred === 'resend') {
-    return { provider: hasResend ? 'resend' : env.NODE_ENV === 'development' ? 'dev' : 'none', hasSmtp, hasResend, fromEmail: env.EMAIL_FROM || RESEND_FROM };
+    return {
+      provider: hasResend ? 'resend' : env.NODE_ENV === 'development' ? 'dev' : 'none',
+      hasSmtp,
+      hasResend,
+      hasScribase,
+      fromEmail: env.EMAIL_FROM || RESEND_FROM,
+    };
+  }
+
+  if (preferred === 'scribase') {
+    return {
+      provider: hasScribase ? 'scribase' : env.NODE_ENV === 'development' ? 'dev' : 'none',
+      hasSmtp,
+      hasResend,
+      hasScribase,
+      fromEmail: scribaseFromEmail,
+    };
   }
 
   if (hasSmtp) {
-    return { provider: 'smtp', hasSmtp, hasResend, fromEmail };
+    return { provider: 'smtp', hasSmtp, hasResend, hasScribase, fromEmail };
   }
 
   if (hasResend) {
-    return { provider: 'resend', hasSmtp, hasResend, fromEmail: env.EMAIL_FROM || RESEND_FROM };
+    return { provider: 'resend', hasSmtp, hasResend, hasScribase, fromEmail: env.EMAIL_FROM || RESEND_FROM };
+  }
+
+  if (hasScribase) {
+    return { provider: 'scribase', hasSmtp, hasResend, hasScribase, fromEmail: scribaseFromEmail };
   }
 
   return {
     provider: env.NODE_ENV === 'development' ? 'dev' : 'none',
     hasSmtp,
     hasResend,
+    hasScribase,
     fromEmail,
   };
 }
@@ -194,6 +234,39 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions) {
       }
 
       logger.info('Email sent via Resend', { to, subject, messageId: responseData.id });
+      return { success: true, messageId: responseData.id };
+    } catch (error: any) {
+      logger.error('Email error', { error: error.message });
+      return { success: false, error };
+    }
+  }
+
+  if (providerStatus.provider === 'scribase') {
+    try {
+      const baseUrl = (process.env.SCRIBASE_MAIL_BASE_URL || SCRIBASE_MAIL_DEFAULT_BASE_URL).replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}/emails`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.SCRIBASE_MAIL_API_KEY}`,
+        },
+        body: JSON.stringify({
+          from: `${FROM_NAME} <${SCRIBASE_MAIL_FROM}>`,
+          to: [to],
+          subject,
+          html,
+          text: text || html.replace(/<[^>]*>/g, ''),
+        }),
+      });
+
+      const responseData = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        logger.error('Scribase Mail error', { status: String(response.status), response: JSON.stringify(responseData) });
+        throw new Error(responseData.message || responseData.error || 'Scribase Mail API error');
+      }
+
+      logger.info('Email sent via Scribase Mail', { to, subject, messageId: responseData.id });
       return { success: true, messageId: responseData.id };
     } catch (error: any) {
       logger.error('Email error', { error: error.message });
