@@ -83,22 +83,23 @@ describe('provider registry — selection + degrade-safety', () => {
   });
 });
 
-describe('selling-provider policy — Creem is the sole active MoR (recoder-nn4o)', () => {
-  it('names Creem as the single canonical selling provider (never Stripe/Polar/Paddle/Dodo)', () => {
-    expect(CANONICAL_SELLING_PROVIDER).toBe('creem');
-    expect([...ENABLED_SELLING_PROVIDERS]).toEqual(['creem']);
+describe('selling-provider policy — Dodo is the sole active MoR (recoder-nn4o, flipped from Creem 2026-10-15)', () => {
+  it('names Dodo as the single canonical selling provider (never Stripe/Polar/Paddle/Creem)', () => {
+    expect(CANONICAL_SELLING_PROVIDER).toBe('dodo');
+    expect([...ENABLED_SELLING_PROVIDERS]).toEqual(['dodo']);
   });
 
-  it('ENABLES only Creem for selling; Paddle, Dodo, and Polar are inactive', () => {
-    expect(isSellingProviderEnabled('creem')).toBe(true);
-    for (const inactive of ['paddle', 'dodo', 'polar'] as BillingProviderName[]) {
+  it('ENABLES only Dodo for selling; Creem, Paddle, and Polar are inactive', () => {
+    expect(isSellingProviderEnabled('dodo')).toBe(true);
+    for (const inactive of ['creem', 'paddle', 'polar'] as BillingProviderName[]) {
       expect(isSellingProviderEnabled(inactive)).toBe(false);
     }
   });
 
-  it('keeps every MoR adapter addressable (webhook/cancel of pre-existing subs) even though only Creem sells', () => {
-    // The Creem-only SELLING policy must NOT drop the other adapters: inbound
-    // webhooks and cancellations of any legacy subscription still need them.
+  it('keeps every MoR adapter addressable (webhook/cancel of pre-existing subs) even though only Dodo sells', () => {
+    // The Dodo-only SELLING policy must NOT drop the other adapters: inbound
+    // webhooks and cancellations of any legacy (Creem-sold) subscription still
+    // need them.
     const names = registry().all().map((a) => a.name).sort();
     expect(names).toEqual([...BILLING_PROVIDERS].sort());
     for (const p of BILLING_PROVIDERS) {

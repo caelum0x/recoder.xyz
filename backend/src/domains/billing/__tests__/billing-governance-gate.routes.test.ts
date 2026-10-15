@@ -76,12 +76,12 @@ interface Harness {
 function buildHarness(opts: {
   gate?: BillingWriteGate | undefined;
   activeSub?: BillingSubscription | null;
-  /** The active selling provider (default: the canonical Creem). */
+  /** The active selling provider (default: the canonical Dodo). */
   activeProvider?: BillingProviderName;
 }): Promise<Harness> {
-  // Default to the canonical selling provider (Creem) — the only one enabled to
-  // originate a checkout under the Creem-only policy.
-  const active: BillingProviderName = opts.activeProvider ?? 'creem';
+  // Default to the canonical selling provider (Dodo) — the only one enabled to
+  // originate a checkout under the Dodo-only policy (flipped from Creem 2026-10-15).
+  const active: BillingProviderName = opts.activeProvider ?? 'dodo';
   const decide = vi.fn(async () => verdict('allow'));
   const createCheckout = vi.fn(
     async (): Promise<CheckoutResult> => ({ checkoutId: 'co_1', url: 'https://pay.example/co_1', provider: active }),
@@ -205,20 +205,20 @@ describe('billing checkout — governance gate', () => {
   });
 });
 
-describe('billing checkout — Creem-only selling policy (recoder-nn4o)', () => {
-  it('allows a checkout when the active provider is the canonical Creem', async () => {
-    const h = await buildHarness({ activeProvider: 'creem' });
+describe('billing checkout — Dodo-only selling policy (recoder-nn4o, flipped from Creem 2026-10-15)', () => {
+  it('allows a checkout when the active provider is the canonical Dodo', async () => {
+    const h = await buildHarness({ activeProvider: 'dodo' });
     const res = await request(h.base, '/api/billing/checkout', { method: 'POST', body: checkoutBody });
     expect(res.status).toBe(201);
     expect(h.createCheckout).toHaveBeenCalledTimes(1);
     await h.close();
   });
 
-  for (const inactive of ['paddle', 'dodo', 'polar'] as BillingProviderName[]) {
+  for (const inactive of ['paddle', 'creem', 'polar'] as BillingProviderName[]) {
     it(`refuses a checkout when the active provider is '${inactive}' — never fabricates a URL, provider untouched`, async () => {
       const h = await buildHarness({ activeProvider: inactive });
       const res = await request(h.base, '/api/billing/checkout', { method: 'POST', body: checkoutBody });
-      // Truthful degrade: a non-Creem selling provider is unavailable (503), and
+      // Truthful degrade: a non-Dodo selling provider is unavailable (503), and
       // the provider adapter is NEVER touched (no fabricated checkout).
       expect(res.status).toBe(503);
       expect(h.createCheckout).not.toHaveBeenCalled();

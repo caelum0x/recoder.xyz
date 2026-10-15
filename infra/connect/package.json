@@ -1,0 +1,35 @@
+{
+  "name": "@recoder/connect",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Recoder Connect — accounts, remote reach, and Dodo billing. Cloudflare Worker, box Postgres via Hyperdrive + Workers VPC, Better Auth magic link over Scribase Mail.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "dodo:sync-products": "tsx scripts/create-dodo-products.ts",
+    "dev": "wrangler dev",
+    "deploy": "echo 'deploy is a manual, owner-run step — see README.md; this script intentionally does not deploy' && exit 1"
+  },
+  "dependencies": {
+    "better-auth": "^1.2.0",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.6.0",
+    "pg": "^8.13.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251008.0",
+    "@types/pg": "^8.11.10",
+    "@vitest/coverage-v8": "^2.1.4",
+    "drizzle-kit": "^0.31.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.4",
+    "wrangler": "^3.90.0"
+  }
+}
