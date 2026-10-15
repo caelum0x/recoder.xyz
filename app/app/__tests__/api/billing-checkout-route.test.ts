@@ -236,4 +236,28 @@ describe('POST /api/billing/create-checkout', () => {
     const data = await res.json();
     expect(data.error).toContain('not configured');
   });
+
+  it('fails Creem checkout creation closed and never calls fetch, even if CREEM_API_KEY is set', async () => {
+    mockRequireAuth.mockResolvedValue({
+      error: false,
+      user: { id: 'user-1', email: 'test@example.com' },
+    } as any);
+    const originalCreemKey = process.env.CREEM_API_KEY;
+    process.env.CREEM_API_KEY = 'creem_live_key_should_never_be_used';
+    const fetchMock = vi.mocked(global.fetch);
+    fetchMock.mockClear();
+
+    try {
+      const res = await POST(buildRequest({ plan: 'monthly', paymentMethod: 'creem' }));
+
+      expect(res.status).toBe(503);
+      const data = await res.json();
+      expect(data.error).toMatch(/no longer offered|not configured/i);
+      // The hard requirement: regardless of a configured CREEM_API_KEY, the
+      // route must never make an outbound call to api.creem.io.
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      process.env.CREEM_API_KEY = originalCreemKey;
+    }
+  });
 });

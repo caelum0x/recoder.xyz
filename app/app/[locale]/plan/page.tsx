@@ -87,10 +87,11 @@ const plans = [
   },
 ];
 
-// Dodo is the Merchant of Record going forward (Creem/Paddle remain configured
-// fallbacks for any pre-existing subscription). This mirrors the onboarding
-// checkout flow (POST /api/billing/create-checkout).
-const CHECKOUT_PROVIDERS = ['dodo', 'paddle', 'creem'] as const;
+// Dodo is the Merchant of Record going forward; Paddle remains a configured
+// fallback. Creem removed from this try-order (owner directive 2026-10-16) —
+// the server also fails Creem checkout creation closed regardless of this
+// list. This mirrors the onboarding checkout flow (POST /api/billing/create-checkout).
+const CHECKOUT_PROVIDERS = ['dodo', 'paddle'] as const;
 
 export default function PlanPage() {
   const [pendingPlan, setPendingPlan] = useState<string | null>(null);
