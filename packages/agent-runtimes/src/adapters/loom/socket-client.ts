@@ -29,6 +29,7 @@ import {
   isLoomSubscriptionEvent,
   isLoomSuccessResponse,
   isLoomTerminalEvent,
+  isLoomTerminalManagerStreamEvent,
   parseAgentQueryResult,
   parseEventSeq,
   parseWorktreeStatusResult,
@@ -41,7 +42,13 @@ import {
   type EventsSubscribeParams,
   type PongResult,
   type LoomTerminalEvent,
+  type LoomTerminalManagerStreamEvent,
   type PaneTerminalStreamParams,
+  type TerminalManagerOpenedResult,
+  type TerminalManagerOpenParams,
+  type TerminalManagerPaneTarget,
+  type TerminalManagerStatusResult,
+  type TerminalManagerWriteParams,
   type WorktreeStatus,
   type WorktreeStatusParams,
 } from './protocol';
@@ -114,6 +121,19 @@ export interface LoomTerminalStream extends AsyncIterable<LoomTerminalEvent> {
   sendInput(data: string): void;
   resize(cols: number, rows: number): void;
   scroll(direction: 'up' | 'down', lines: number): void;
+  close(): void;
+}
+
+/**
+ * A bidirectional `terminal_manager.stream` connection for one headless pane.
+ * No `resize` — the `terminal_manager.*` wire has no resize verb (section 5
+ * of docs/RECODER-T3CODE-COMPOSITION.md; tracked as a known gap, not a bug).
+ */
+export interface LoomTerminalManagerStream extends AsyncIterable<LoomTerminalManagerStreamEvent> {
+  /** Encodes a UTF-8 string to base64 and writes it to the pane's PTY stdin. */
+  writeData(data: string): void;
+  /** Writes already-base64-encoded bytes directly (binary-safe, no re-encode). */
+  writeBase64(data_base64: string): void;
   close(): void;
 }
 
@@ -191,8 +211,8 @@ export class LoomSocketClient {
 
   /**
    * Connect + handshake guard. Rejects unless the server answers `pong` with the
-   * expected `protocol` (20). Callers should run this before issuing any other
-   * method.
+   * expected `protocol` ({@link LOOM_PROTOCOL_VERSION}). Callers should run this
+   * before issuing any other method.
    */
   async ping(options?: LoomCallOptions): Promise<PongResult> {
     const result = await this.call<LoomResult>('ping', {}, options);
@@ -226,6 +246,69 @@ export class LoomSocketClient {
   ): Promise<AgentInfo[]> {
     const result = await this.call<LoomResult>('agent.query', params, options);
     return parseAgentQueryResult(result);
+  }
+
+  /**
+   * `terminal_manager.open`: launch a headless, worktree-scoped PTY with no
+   * workspace/tab/pane layout — the seam a caller with no open Loom window
+   * (the forked t3 environment server) uses instead of `node-pty`. Returns
+   * the opaque `pane_handle` plus the child's `pid`.
+   */
+  async terminalManagerOpen(
+    params: TerminalManagerOpenParams,
+    options?: LoomCallOptions
+  ): Promise<TerminalManagerOpenedResult> {
+    const result = await this.call<LoomResult>('terminal_manager.open', params, options);
+    if (result.type !== 'terminal_manager_opened') {
+      throw new LoomError(
+        'unexpected_response',
+        `loom terminal_manager.open returned '${result.type}', expected 'terminal_manager_opened'`
+      );
+    }
+    return result as TerminalManagerOpenedResult;
+  }
+
+  /** `terminal_manager.status`: `{alive, exit_code?, pid, worktree_id}` for one pane handle. */
+  async terminalManagerStatus(
+    params: TerminalManagerPaneTarget,
+    options?: LoomCallOptions
+  ): Promise<TerminalManagerStatusResult> {
+    const result = await this.call<LoomResult>('terminal_manager.status', params, options);
+    if (result.type !== 'terminal_manager_status') {
+      throw new LoomError(
+        'unexpected_response',
+        `loom terminal_manager.status returned '${result.type}', expected 'terminal_manager_status'`
+      );
+    }
+    return result as TerminalManagerStatusResult;
+  }
+
+  /** `terminal_manager.close`: kills the process and removes the handle from Loom's registry. */
+  async terminalManagerClose(
+    params: TerminalManagerPaneTarget,
+    options?: LoomCallOptions
+  ): Promise<void> {
+    const result = await this.call<LoomResult>('terminal_manager.close', params, options);
+    if (result.type !== 'ok') {
+      throw new LoomError(
+        'unexpected_response',
+        `loom terminal_manager.close returned '${result.type}', expected 'ok'`
+      );
+    }
+  }
+
+  /** `terminal_manager.write`: writes base64-encoded bytes to the pane's PTY stdin (fire-and-forget verb, acked with `ok`). */
+  async terminalManagerWrite(
+    params: TerminalManagerWriteParams,
+    options?: LoomCallOptions
+  ): Promise<void> {
+    const result = await this.call<LoomResult>('terminal_manager.write', params, options);
+    if (result.type !== 'ok') {
+      throw new LoomError(
+        'unexpected_response',
+        `loom terminal_manager.write returned '${result.type}', expected 'ok'`
+      );
+    }
   }
 
   /**
@@ -564,6 +647,151 @@ export class LoomSocketClient {
         write({ type: 'terminal.release' });
         settle();
       },
+    };
+  }
+
+  /**
+   * `terminal_manager.stream`: attach to the bidirectional output/input
+   * stream of a headless pane previously opened with `terminal_manager.open`
+   * (see `defaultLoomSocketPath`/`call`'s `terminal_manager.open`). Mirrors
+   * {@link terminalStream}'s shape (ack-then-push over one connection,
+   * closed by the server on `terminal_manager.closed`), but the push frames
+   * and the write payload are a different shape — plain
+   * `{data_base64}` on the wire, not `{type: 'terminal.input', bytes}`.
+   */
+  terminalManagerStream(params: TerminalManagerPaneTarget): LoomTerminalManagerStream {
+    const socket = createConnection(this.socketPath);
+    const request: LoomRequest<TerminalManagerPaneTarget> = {
+      id: this.nextId(),
+      method: 'terminal_manager.stream',
+      params,
+    };
+    const lineBuffer = new LineBuffer();
+    const queued: LoomTerminalManagerStreamEvent[] = [];
+    let resolveNext:
+      | ((result: IteratorResult<LoomTerminalManagerStreamEvent>) => void)
+      | null = null;
+    let rejectNext: ((reason: unknown) => void) | null = null;
+    let failure: unknown = null;
+    let finished = false;
+    let acknowledged = false;
+
+    const settle = (reason?: unknown): void => {
+      if (finished) return;
+      finished = true;
+      if (reason != null) failure = reason;
+      socket.destroy();
+      if (reason != null && rejectNext != null) {
+        const reject = rejectNext;
+        resolveNext = null;
+        rejectNext = null;
+        reject(reason);
+      } else if (resolveNext != null) {
+        const resolve = resolveNext;
+        resolveNext = null;
+        rejectNext = null;
+        resolve({ value: undefined, done: true });
+      }
+    };
+
+    const emit = (event: LoomTerminalManagerStreamEvent): void => {
+      if (resolveNext != null) {
+        const resolve = resolveNext;
+        resolveNext = null;
+        rejectNext = null;
+        resolve({ value: event, done: false });
+      } else {
+        queued.push(event);
+      }
+    };
+
+    const write = (message: unknown): void => {
+      if (!finished && acknowledged && socket.writable) {
+        socket.write(`${JSON.stringify(message)}\n`);
+      }
+    };
+
+    socket.on('connect', () => socket.write(`${JSON.stringify(request)}\n`));
+    socket.on('error', err => settle(err));
+    socket.on('close', () => {
+      if (!finished) {
+        settle(new LoomError('connection_closed', 'loom terminal manager stream closed'));
+      }
+    });
+    socket.on('data', chunk => {
+      for (const line of lineBuffer.push(chunk)) {
+        if (line.trim().length === 0) continue;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          settle(
+            new LoomError('malformed_event', 'loom terminal manager stream emitted non-JSON')
+          );
+          return;
+        }
+        if (isLoomErrorResponse(parsed)) {
+          settle(new LoomError(parsed.error.code, parsed.error.message));
+          return;
+        }
+        if (!acknowledged) {
+          if (
+            isLoomSuccessResponse(parsed) &&
+            parsed.result.type === 'terminal_manager_stream_started'
+          ) {
+            acknowledged = true;
+            continue;
+          }
+          settle(
+            new LoomError(
+              'unexpected_response',
+              'loom terminal manager stream was not acknowledged'
+            )
+          );
+          return;
+        }
+        if (isLoomTerminalManagerStreamEvent(parsed)) {
+          emit(parsed);
+          if (parsed.type === 'terminal_manager.closed') settle();
+          continue;
+        }
+        settle(
+          new LoomError(
+            'unexpected_event',
+            'loom terminal manager stream emitted an unknown frame'
+          )
+        );
+        return;
+      }
+    });
+
+    const iterator: AsyncIterator<LoomTerminalManagerStreamEvent> = {
+      next: () => {
+        if (queued.length > 0) {
+          return Promise.resolve({
+            value: queued.shift() as LoomTerminalManagerStreamEvent,
+            done: false,
+          });
+        }
+        if (failure != null) return Promise.reject(failure);
+        if (finished) return Promise.resolve({ value: undefined, done: true });
+        return new Promise<IteratorResult<LoomTerminalManagerStreamEvent>>((resolve, reject) => {
+          resolveNext = resolve;
+          rejectNext = reject;
+        });
+      },
+      return: () => {
+        settle();
+        return Promise.resolve({ value: undefined, done: true });
+      },
+    };
+
+    return {
+      [Symbol.asyncIterator]: () => iterator,
+      /** Writes binary-safe raw bytes to the pane's PTY stdin (`{data_base64}`, no `type` wrapper). */
+      writeData: data => write({ data_base64: Buffer.from(data, 'utf8').toString('base64') }),
+      writeBase64: data_base64 => write({ data_base64 }),
+      close: () => settle(),
     };
   }
 

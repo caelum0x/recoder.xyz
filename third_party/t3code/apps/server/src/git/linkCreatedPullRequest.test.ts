@@ -13,6 +13,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
+import * as RecoderWriteGate from "../orchestration-v2/RecoderWriteGate.ts";
 import {
   type PullRequestTestThread,
   v2PullRequestThread,
@@ -71,6 +72,18 @@ function prResult(pr: GitRunStackedActionResult["pr"]): Pick<GitRunStackedAction
   return { pr };
 }
 
+/**
+ * This file tests the PR-linking logic, not the Recoder write gate
+ * (RecoderWriteGate.test.ts, if/when added, owns that) — a stub decider that
+ * always allows keeps these tests from making a real loopback HTTP call to
+ * an unrunning backend. `RecoderWriteGate.RecoderWriteGateDeciderRef` is the
+ * injectable seam that makes this possible without a live server.
+ */
+const alwaysAllowWriteGate: Layer.Layer<never> = Layer.succeed(
+  RecoderWriteGate.RecoderWriteGateDeciderRef,
+  () => Effect.succeed({ allowed: true, reason: "test-allow", tier: undefined, degraded: false }),
+);
+
 const layerDependenciesFor = (
   dispatch: Orchestrator.OrchestratorV2Shape["dispatch"],
   threadShell: PullRequestTestThread | null = thread,
@@ -83,6 +96,7 @@ const layerDependenciesFor = (
       getThreadShell: () => Effect.succeed(threadShell ? v2PullRequestThread(threadShell) : null),
       dispatch,
     }),
+    alwaysAllowWriteGate,
   );
 
 const recordingDispatch = Effect.fn("recordingDispatch")(function* () {
