@@ -12,7 +12,11 @@ import { BillingShell, BillingLoadingBlock, BillingErrorBlock } from './BillingS
 // use a per-plan-id name that cannot carry a hyphen).
 const OFFERED_PLANS: PlanId[] = ['weekly', 'monthly', 'pro', 'team'];
 
-const CHECKOUT_PROVIDERS = ['dodo', 'paddle', 'creem'] as const;
+// Creem removed from the client try-order (owner directive 2026-10-16: Creem
+// is retired for new checkout sessions; the server also fails it closed — see
+// app/api/billing/create-checkout/route.ts). Dodo is the Merchant of Record;
+// Paddle remains a configured fallback.
+const CHECKOUT_PROVIDERS = ['dodo', 'paddle'] as const;
 
 export function UpgradePlans() {
   const { data, loading, error, reload } = useBillingData();

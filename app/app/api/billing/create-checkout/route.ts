@@ -1,9 +1,12 @@
 /**
  * Create Checkout Session API
  * Handles creation of hosted checkout sessions. Dodo is the Merchant of Record
- * (tried first by every client surface); Paddle and Creem remain as configured
- * fallbacks for any pre-existing subscription. Provider selection itself comes
- * from the client's `paymentMethod` body field, not from an order encoded here.
+ * (tried first by every client surface); Paddle remains a configured fallback.
+ * Creem is retired for NEW checkout creation (owner directive 2026-10-16 — see
+ * the `paymentMethod === 'creem'` branch below) and always fails closed with a
+ * 503, regardless of whether CREEM_API_KEY is still set in the environment.
+ * Provider selection itself comes from the client's `paymentMethod` body
+ * field, not from an order encoded here.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -93,56 +96,22 @@ export async function POST(request: NextRequest) {
     const baseUrl = resolvePublicAppUrl();
 
     if (paymentMethod === 'creem') {
-      // Creem — Merchant of Record. Hosted checkout via POST /v1/checkouts.
-      const creemApiKey = process.env.CREEM_API_KEY?.trim();
-      if (!creemApiKey || !selectedPlan.creemProductId) {
-        logger.warn('Creem not configured (missing CREEM_API_KEY or product id)', {
-          route: 'api/billing/create-checkout',
-          plan,
-        });
-        return NextResponse.json(
-          { error: 'Payment provider not configured. Please contact support.' },
-          { status: 503 },
-        );
-      }
-
-      // CREEM_API_BASE_URL is canonical; CREEM_API_URL kept for back-compat so a
-      // single override works for both this route and the Creem service.
-      const creemBaseUrl =
-        process.env.CREEM_API_BASE_URL?.trim() ||
-        process.env.CREEM_API_URL?.trim() ||
-        'https://api.creem.io';
-      const creemResponse = await fetch(`${creemBaseUrl}/v1/checkouts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': creemApiKey,
-        },
-        body: JSON.stringify({
-          product_id: selectedPlan.creemProductId,
-          success_url: `${baseUrl}/checkout/success?plan=${plan}`,
-          customer: { email: user.email },
-          metadata: { userId: user.id, plan },
-        }),
-      });
-
-      const creemData = (await creemResponse.json().catch(() => null)) as {
-        checkout_url?: string;
-      } | null;
-
-      if (creemResponse.ok && creemData?.checkout_url) {
-        return NextResponse.json({
-          success: true,
-          checkoutUrl: creemData.checkout_url,
-          provider: 'creem',
-        });
-      }
-
-      logger.warn('Creem checkout creation failed', {
+      // Creem is retired for NEW checkout sessions (owner directive 2026-10-16:
+      // Dodo is the only provider going forward; the Creem API key/webhook
+      // secret shared in chat has an unconfirmed rotation status). Fail closed
+      // without ever calling api.creem.io, even if CREEM_API_KEY is still set
+      // in the environment — a new customer must never be sent to Creem.
+      // The Creem webhook handler (api/webhooks/creem) is intentionally left
+      // untouched so any pre-existing Creem subscriber's billing events still
+      // reconcile; this only blocks *new* checkout creation.
+      logger.warn('Creem checkout creation blocked (retired for new subscriptions)', {
         route: 'api/billing/create-checkout',
-        status: creemResponse.status,
+        plan,
       });
-      throw new Error('Failed to create Creem checkout');
+      return NextResponse.json(
+        { error: 'Creem checkout is no longer offered for new subscriptions. Please use Dodo Payments.' },
+        { status: 503 },
+      );
     } else if (paymentMethod === 'paddle') {
       // Paddle integration
       const paddleVendorId = resolvePaddleVendorId();

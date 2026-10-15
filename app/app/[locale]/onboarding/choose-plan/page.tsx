@@ -95,9 +95,11 @@ export default function ChoosePlanPage() {
   ];
 
   const createCheckoutSession = async (plan: string) => {
-    // Dodo is the Merchant of Record going forward; the others remain as
-    // configured fallbacks for any pre-existing subscription.
-    const providers = ['dodo', 'paddle', 'creem'] as const;
+    // Dodo is the Merchant of Record going forward; Paddle remains a
+    // configured fallback. Creem removed from this try-order (owner directive
+    // 2026-10-16) — the server also fails Creem checkout creation closed
+    // regardless of this list.
+    const providers = ['dodo', 'paddle'] as const;
 
     for (const paymentMethod of providers) {
       const response = await fetch('/api/billing/create-checkout', {
