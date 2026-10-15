@@ -13,6 +13,20 @@ relay's PlanetScale.
 - **Checkout, webhook verification, entitlement storage, magic-link auth**:
   fully implemented, unit-tested (`pnpm test`). They are NOT stubs — given
   real Dodo/Scribase Mail credentials and a real Postgres, they work.
+- **Mobile magic-link completion** (`GET /link/mobile-complete`,
+  `src/auth/mobile-complete.ts`): closes the handshake Recoder Remote's
+  client already expects (`apps/mobile/.../connectAuthClient.ts`'s
+  `parseAuthCallbackUrl` / `RecoderAuthProvider.tsx`'s
+  `magicLinkCallbackUrl()`, both on `feat/recoder-remote-mobile-2026-10-15`).
+  The app's callback URL is same-origin with `CONNECT_URL`, so no
+  `trustedOrigins` change was needed — Better Auth's verify-redirect lands
+  on this route with the fresh session cookie already attached; it reads the
+  raw cookie value and the signed-in user's email, then hands both back to
+  the app as a `{RECODER_REMOTE_SCHEME}://auth/callback?token=...&email=...`
+  deep link. `RECODER_REMOTE_SCHEME` is optional (defaults to
+  `recoder-remote`, matching the app's own default) and is read ONLY from
+  env, never from request input — accepting a caller-supplied scheme here
+  would be an open redirect leaking a live session token.
 - **Device linking** (`POST /devices/link/start`, `GET /devices/link/status`,
   `POST /devices/link/claim`, `GET /devices`, `POST /devices/:id/revoke`):
   fully implemented and unit-tested — a desktop generates a short-lived code
