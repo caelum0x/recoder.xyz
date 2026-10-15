@@ -13,6 +13,13 @@ relay's PlanetScale.
 - **Checkout, webhook verification, entitlement storage, magic-link auth**:
   fully implemented, unit-tested (`pnpm test`). They are NOT stubs — given
   real Dodo/Scribase Mail credentials and a real Postgres, they work.
+- **Device linking** (`POST /devices/link/start`, `GET /devices/link/status`,
+  `POST /devices/link/claim`, `GET /devices`, `POST /devices/:id/revoke`):
+  fully implemented and unit-tested — a desktop generates a short-lived code
+  (`src/auth/link-codes.ts`), the user claims it from an authenticated
+  browser tab, and that creates a real `connect_devices` row. This is
+  "link a desktop", NOT "open its live session" — see the managed-tunnels
+  bullet below for what's still missing to make a linked device reachable.
 - **Dodo products**: this product has no Dodo API key yet (confirmed absent
   from env and from every `*.env.example` in the repo, 2026-10-15). Nothing
   here fabricates product ids. `scripts/create-dodo-products.ts` creates the
@@ -23,10 +30,13 @@ relay's PlanetScale.
   `wrangler login` (owner credential) and the box's tunnel id — see
   `scripts/create-hyperdrive.zsh`. `wrangler.jsonc`'s `hyperdrive[0].id` is a
   placeholder until that script runs.
-- **Managed tunnels for `connect.recoder.xyz/*` device sessions**: NOT built
-  in this pass — the plan's own milestone for environment linking over a
-  managed tunnel is a separate, later task (Dec 7 milestone in
-  `plans/recoder-connect.md`). This Worker is accounts + billing + auth only.
+- **Managed tunnels for `connect.recoder.xyz/*` device sessions** (actually
+  opening a linked desktop's live session from another device, and minting
+  the DPoP-bound credential that would authorize it): NOT built in this
+  pass — the plan's own milestone for environment linking over a managed
+  tunnel is a separate, later task (Dec 7 milestone in
+  `plans/recoder-connect.md`). Device *linking* (pairing a desktop to an
+  account — see above) is built; device *reach* is not.
 
 ## Setup (owner steps marked)
 

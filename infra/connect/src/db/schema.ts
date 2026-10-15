@@ -115,6 +115,28 @@ export const dodoWebhookEvents = pgTable('dodo_webhook_events', {
   receivedAtIdx: index('dodo_webhook_events_received_at_idx').on(t.receivedAt),
 }));
 
+/**
+ * Short-lived device-link codes: the desktop generates a code and shows it to
+ * the user, who claims it from an authenticated browser tab at
+ * connect.recoder.xyz/link. Deliberately NOT a bearer credential — claiming
+ * only creates a `connect_devices` row; it never hands back a session or
+ * DPoP-bound token (minting one is queued — see infra/connect/README.md's
+ * "explicitly out of scope" list). `claimedDeviceId` is set once and the
+ * code becomes single-use.
+ */
+export const connectLinkCodes = pgTable('connect_link_codes', {
+  code: text('code').primaryKey(),
+  label: text('label').notNull(),
+  platform: text('platform').notNull(),
+  dpopPublicKeyThumbprint: text('dpop_public_key_thumbprint'),
+  claimedByAccountId: text('claimed_by_account_id'),
+  claimedDeviceId: text('claimed_device_id'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  expiresAtIdx: index('connect_link_codes_expires_at_idx').on(t.expiresAt),
+}));
+
 export const connectAccountsRelations = relations(connectAccounts, ({ many, one }) => ({
   devices: many(connectDevices),
   entitlement: one(connectEntitlements, {

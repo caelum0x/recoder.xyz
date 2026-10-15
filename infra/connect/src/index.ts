@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import type { ConnectEnv } from './env.js';
 import { createConnectAuth } from './auth/connect-auth.js';
 import { billingRoutes } from './routes/billing.js';
+import { deviceRoutes } from './routes/devices.js';
 import { Pool } from 'pg';
 
 const app = new Hono<{ Bindings: ConnectEnv }>();
@@ -17,24 +18,31 @@ app.on(['GET', 'POST'], '/api/auth/*', (c) => {
   return auth.handler(c.req.raw);
 });
 
-app.route(
-  '/billing',
-  (() => {
-    // Lazily built per-request below (needs c.env), so this route group is a
-    // thin re-dispatch rather than a module-level singleton.
-    const dispatch = new Hono<{ Bindings: ConnectEnv }>();
-    dispatch.all('*', async (c) => {
-      const pool = new Pool({ connectionString: c.env.HYPERDRIVE.connectionString });
-      const auth = createConnectAuth(c.env, pool);
-      const routed = billingRoutes({ auth });
-      const url = new URL(c.req.raw.url);
-      url.pathname = url.pathname.replace(/^\/billing/, '');
-      const subRequest = new Request(url, c.req.raw);
-      return routed.fetch(subRequest, c.env);
-    });
-    return dispatch;
-  })(),
-);
+/**
+ * Mounts a sub-router that needs `{ auth }` built per-request (it needs
+ * `c.env`, which isn't available at module scope) under `prefix`, stripping
+ * the prefix before re-dispatching. Shared by `/billing` and `/devices` so
+ * the per-request auth-instance wiring lives in exactly one place.
+ */
+function mountAuthedRoutes<Deps extends { auth: ReturnType<typeof createConnectAuth> }>(
+  prefix: string,
+  buildRoutes: (deps: Deps) => Hono<{ Bindings: ConnectEnv }>,
+): Hono<{ Bindings: ConnectEnv }> {
+  const dispatch = new Hono<{ Bindings: ConnectEnv }>();
+  dispatch.all('*', async (c) => {
+    const pool = new Pool({ connectionString: c.env.HYPERDRIVE.connectionString });
+    const auth = createConnectAuth(c.env, pool);
+    const routed = buildRoutes({ auth } as Deps);
+    const url = new URL(c.req.raw.url);
+    url.pathname = url.pathname.replace(new RegExp(`^${prefix}`), '');
+    const subRequest = new Request(url, c.req.raw);
+    return routed.fetch(subRequest, c.env);
+  });
+  return dispatch;
+}
+
+app.route('/billing', mountAuthedRoutes('/billing', billingRoutes));
+app.route('/devices', mountAuthedRoutes('/devices', deviceRoutes));
 
 export default {
   fetch: app.fetch,

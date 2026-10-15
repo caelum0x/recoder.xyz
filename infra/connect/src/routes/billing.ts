@@ -10,12 +10,11 @@ import { z } from 'zod';
 import type { ConnectEnv } from '../env.js';
 import { dodoCredential, dodoProducts } from '../env.js';
 import { connectDb } from '../db/client.js';
-import { connectAccounts } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
 import { createDodoCheckout, DodoNotConfiguredError, parseDodoEvent, verifyDodoWebhook } from '../billing/dodo.js';
 import { applyDodoEvent, entitlementToken, getEntitlement } from '../billing/entitlements.js';
 import { recordWebhookEvent, markWebhookEventProcessed } from '../billing/webhook-events.js';
 import type { ConnectAuth } from '../auth/connect-auth.js';
+import { requireAccount } from '../auth/require-account.js';
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
@@ -27,28 +26,6 @@ const checkoutBodySchema = z.object({
 
 export interface BillingRouteDeps {
   readonly auth: ConnectAuth;
-}
-
-/** Resolves the authenticated Connect account for the current request, or
- * `null` when there is no valid session — callers must 401, never guess. */
-async function requireAccount(
-  auth: ConnectAuth,
-  request: Request,
-  env: ConnectEnv,
-): Promise<{ accountId: string; userId: string; email: string } | null> {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session?.user?.id || !session.user.email) return null;
-  const db = connectDb(env);
-  const [existing] = await db
-    .select()
-    .from(connectAccounts)
-    .where(eq(connectAccounts.userId, session.user.id))
-    .limit(1);
-  if (existing) return { accountId: existing.id, userId: session.user.id, email: session.user.email };
-
-  const id = crypto.randomUUID();
-  await db.insert(connectAccounts).values({ id, userId: session.user.id, email: session.user.email });
-  return { accountId: id, userId: session.user.id, email: session.user.email };
 }
 
 export function billingRoutes(deps: BillingRouteDeps) {
