@@ -14,6 +14,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
   connect_accounts,
   connect_devices,
   connect_entitlements,
+  connect_link_codes,
   dodo_webhook_events
 TO recoder_connect_runtime;
 -- Better Auth's own tables (created by its migrator, not drizzle) — granted by
