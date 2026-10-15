@@ -78,6 +78,8 @@ import { createAcpSubstrate } from '../domains/conductor/adapters/acp-substrate.
 import { createLoomSubstrate } from '../domains/conductor/adapters/loom-substrate.adapter.js';
 import { createLoomSteerTransport } from '../domains/conductor/adapters/loom-steer-transport.adapter.js';
 import { createCommandGateAdapter } from '../domains/governance/adapters/command-gate.adapter.js';
+import { createT3WriteCommandGate } from '../domains/governance/adapters/t3-write-gate.adapter.js';
+import { buildInternalT3WriteGateRouter } from '../domains/governance/routes/internal-t3-write-gate.routes.js';
 import { Governance as StandaloneGovernance, FileAuditLog } from '@recoder/governance';
 import { createSteerTransportRouter } from '../domains/conductor/adapters/steer-transport-router.adapter.js';
 import { createSwarmUnblockDeps } from '../domains/conductor/adapters/swarm-unblock-wiring.js';
@@ -1085,6 +1087,25 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       request: p => governance.approvals().request(p),
     },
     logger: childLogger('conductor-command-gate'),
+  });
+  // t3 write/merge governance seam (docs/T3CODE-FORK.md patch-queue #2,
+  // docs/RECODER-T3CODE-COMPOSITION.md section 5): third_party/t3code/
+  // apps/server calls POST /internal/agent-os/t3-write-gate/decide over
+  // loopback BEFORE every worktree/PR/checkpoint write — a NEW write-capable
+  // surface this repo's governance scope did not cover before today. Own
+  // dedicated Governance + durable audit log, same fail-closed-on-
+  // construction-fault posture as conductorCommandGate above.
+  const t3WriteGateGovernance = await StandaloneGovernance.create();
+  const t3WriteGateAuditLog = FileAuditLog.open(
+    joinPath(homedir(), '.recoder', 'audit', 't3-write-gate.jsonl'),
+  );
+  const t3WriteGate = createT3WriteCommandGate({
+    governance: t3WriteGateGovernance,
+    auditLog: t3WriteGateAuditLog,
+    approvals: {
+      request: p => governance.approvals().request(p),
+    },
+    logger: childLogger('t3-write-gate'),
   });
   const conductorLoomSteer = createLoomSteerTransport({
     client: {
@@ -2183,6 +2204,17 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       'governance',
       DOMAIN_REGISTRY.governance.mountBase,
       governance.routes()
+    ),
+    // t3 write/merge governance seam (INTERNAL_SERVICE_KEY-gated internally):
+    // POST /internal/agent-os/t3-write-gate/decide — third_party/t3code/
+    // apps/server's loopback call before every worktree/PR/checkpoint write.
+    routerProvider(
+      't3-write-gate-internal',
+      '/internal/agent-os/t3-write-gate',
+      buildInternalT3WriteGateRouter({
+        gate: t3WriteGate,
+        middleware: identity.middleware(),
+      })
     ),
     // Interop edges: A2A health + agent-card + ext-authz-guarded JSON-RPC ingress.
     routerProvider(
