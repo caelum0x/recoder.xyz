@@ -80,7 +80,7 @@ see `AGENTS.md` issue-tracking convention):
 
 | # | Patch | Why it's a patch, not upstream | Status |
 |---|---|---|---|
-| 1 | Terminal seam: a `TerminalManager` backend on Loom's protocol-20 socket (bidirectional PTY; worktree launch, pane handle, status) | Upstream's own `node-pty` terminal manager stays as the Windows fallback; macOS/Linux route through Loom instead so Recoder keeps one raw-PTY substrate, not two | Not started |
+| 1 | Terminal seam: a `TerminalManager` backend on Loom's protocol-20 socket (bidirectional PTY; worktree launch, pane handle, status) | Upstream's own `node-pty` terminal manager stays as the Windows fallback; macOS/Linux route through Loom instead so Recoder keeps one raw-PTY substrate, not two | **Done** (2026-10-15, Loom side — see section 11) |
 | 2 | Governance seam: `orchestration-v2` `CommandPolicy` + `EffectWorker` call the Recoder backend over loopback before every write/merge/other side effect | t3 upstream has no concept of an external governance backend; this is Recoder's core value and must never be upstream-mergeable away | Not started (ACP tool-call path — the nearest existing analogue — now opens a durable approval + audit entry per `backend/src/domains/conductor/adapters/acp-permission-gate.adapter.ts`, wired 2026-10-14 lane 2) |
 | 3 | Rebrand pass (section 5) applied as a patch on top of each sync, never hand-edited into the vendored tree permanently | Keeps the diff against upstream small and mechanical (scriptable find/replace), so a sync is "reapply the patch," not "re-review every renamed identifier" | Not started |
 | 4 | Strip t3 telemetry/analytics endpoints, `t3.codes` URLs, Clerk publishable keys, winget/AUR/Homebrew identifiers | Recoder telemetry is off by default and ships its own identity provider (Better Auth, not Clerk); these must never silently reappear on a sync | Not started |
@@ -279,3 +279,102 @@ against the single pinned sha) — the command is upstream `git subtree`'s
 own well-established mechanism, not custom tooling, so it is expected to
 work identically, but it has not been exercised against this repo's
 history by this session.
+
+## 11. Patch-queue item #1, Loom side: TerminalManager on protocol-20 (2026-10-15)
+
+**Status: the Loom (Rust) side is done.** The Node/t3-bridge side that will
+call it from the forked t3 server's terminal manager is a separate,
+follow-up patch (`packages/t3-bridge` does not exist yet — see section 3,
+patch #2 is also still "Not started").
+
+What "protocol-20" means precisely: not Loom's binary `ClientMessage`/
+`ServerMessage` wire protocol used by its own interactive TUI client
+(`crate::protocol`, currently at `PROTOCOL_VERSION = 21` — a different,
+unrelated version counter) — it is Loom's separate JSON-RPC-over-Unix-socket
+**API** (`LOOM_SOCKET_PATH`, `crate::api::schema::{Method, Request}`),
+documented at `apps/desktop/engines/loom/docs/next/api/loom-api.schema.json`,
+whose own `"protocol"` field reads `20`. That socket already has `pane.*`/
+`worktree.*` verbs, but every one of them is bound to a running interactive
+app's workspace/tab/pane layout — there was no way to launch a bare,
+worktree-scoped PTY without a workspace already open. This patch adds one.
+
+Added five new JSON-RPC methods on that same socket, all implemented in
+`apps/desktop/engines/loom/src/terminal_manager.rs` (the registry) plus
+`src/api/server/terminal_manager_ops.rs` (open/write/status/close) and
+`src/api/server/terminal_manager_stream.rs` (the output stream):
+
+- `terminal_manager.open` — `{worktree_id, cwd, cols?, rows?, env?, shell?}`
+  → `{pane_handle, pid, worktree_id}`. `worktree_id` is an opaque scoping key
+  the caller already knows the path for (not resolved by Loom); it is
+  recorded for isolation/observability only.
+- `terminal_manager.write` — `{pane_handle, data_base64}` → `ok`.
+  Base64, binary-safe (unlike `pane.send_text`'s plain-UTF-8 `text`).
+- `terminal_manager.status` — `{pane_handle}` →
+  `{alive, exit_code?, pid, worktree_id}`.
+- `terminal_manager.close` — `{pane_handle}` → `ok`. Kills the process and
+  removes the handle from the registry immediately.
+- `terminal_manager.stream` — `{pane_handle}` upgrades the connection into a
+  bidirectional push stream: `terminal_manager.output` /
+  `terminal_manager.exited` / `terminal_manager.closed` lines pushed to the
+  client, and inbound `{"data_base64": "..."}` lines written to the pane's
+  stdin — mirroring `pane.terminal.stream`'s shape, but self-contained (no
+  bridging to a second, private binary-protocol connection, since these
+  panes have no TUI pane/app state to bridge to).
+
+Deliberately independent of `crate::app`'s workspace/tab/pane actor: a pane
+opened here is not a TUI pane, has no layout, and does not require a running
+interactive app — this is what makes it usable from a headless caller (the
+t3 server) instead of only from inside an already-open Loom window. One
+`TerminalManager` registry is shared process-wide (`terminal_manager::global()`,
+a `OnceLock`), the same sharing shape `EventHub` already uses, so a pane
+opened on one API connection is reachable from `write`/`status`/`close`/
+`stream` on later, independent connections — proven by the end-to-end test
+below, which issues each verb as its own separate socket connection, same as
+production.
+
+PTY spawning reuses the crate's existing `portable_pty`-based Unix backend
+(`crate::pty::backend::spawn_with_portable_pty`, already used by Loom's own
+interactive panes) rather than reinventing fork/exec — only the raw
+byte-passthrough read/write loop is new (no VT/ANSI emulation needed here,
+unlike the interactive pane renderer: the caller, like `node-pty`, does its
+own terminal rendering). Output delivery is a bounded ring buffer polled via
+`output_events_after(handle, since_seq)`/`current_output_sequence(handle)`,
+the same shape `EventHub::events_after`/`current_sequence` already use —
+kept the reader thread fully synchronous (no async runtime needed inside a
+plain `std::thread`), consistent with the rest of this file's socket-server
+code. Unix-only (`#[cfg(unix)]`): Windows keeps `node-pty` as its substrate
+per this file's own architecture (section 4), so there is intentionally no
+Windows backend here to keep in sync.
+
+Tests (all real — spawn actual `/bin/sh` subprocesses, not stubs):
+
+- `src/terminal_manager.rs` unit tests: `open_write_read_close_round_trips`,
+  `two_worktrees_do_not_cross_talk` (two panes under different
+  `worktree_id`s never see each other's output — structural isolation, each
+  pane is an independent process + ring), `status_reports_alive_then_exit_code`,
+  `unknown_pane_handle_errors_everywhere`, `global_registry_is_a_shared_singleton`.
+- `src/api/schema/tests.rs`: JSON round-trip tests for all five `Method`
+  variants.
+- `src/api/server.rs`:
+  `terminal_manager_open_write_stream_status_close_round_trips` — the full
+  protocol round trip over a real `LocalStream` socket: open → write →
+  stream (reads the echoed output back over the push stream) → status →
+  close → status-after-close (confirms the handle is gone, not just dead).
+
+One real bug found and fixed by that last test while writing it: `pump_output`
+originally called the existing `should_stop_connection`/`local_stream_peer_closed`
+helper on its `output` handle to detect a disconnected client.
+That helper (`probe_stream_closed` in `src/ipc.rs`) flips the stream
+non-blocking, probes, then flips it back to **blocking** when done. `output`
+is a `try_clone()` of the same connection `forward_write_commands` holds
+permanently non-blocking on its own thread (for its inbound-write poll
+loop) — `dup`'d descriptors share one open-file-description's status flags
+on POSIX, so every `pump_output` poll tick was briefly, racily putting the
+*other* thread's socket back into blocking mode, and that thread could then
+block forever in `read()` waiting for client input that was never coming,
+hanging the whole connection (and, in a test, the test process) on a timing
+race — reproduced directly with `sample`(1) on a hung test process, stack
+trace pointed straight at it. Fixed by not sharing that probe at all:
+`pump_output` now only checks the `running` flag and treats a failed write
+as disconnection, matching how `pane_terminal_stream.rs`'s own loop already
+detects disconnection (never via a read-probe on its public stream either).
