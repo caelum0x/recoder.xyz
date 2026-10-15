@@ -23,13 +23,22 @@ packages:
   # packages/t3-bridge needs (@t3tools/contracts wire types, @t3tools/shared
   # helpers). Deliberately NOT apps/server, apps/web, apps/mobile, ssh,
   # tailscale, effect-acp, effect-codex-app-server, client-runtime — those
-  # pull t3code's own huge Effect/Expo/Electron dependency tree and are not a
-  # live build target yet (T3CODE-FORK.md section 9). third_party/t3code's
-  # OWN pnpm-workspace.yaml stays untouched for upstream-sync purposes; these
-  # two paths become ALSO root-workspace members (root's glob patterns
-  # control membership during a root install, so this does not create a
-  # nested-workspace conflict) only so `@t3tools/contracts`/`@t3tools/shared`
-  # resolve via `workspace:*` for `packages/t3-bridge`.
+  # pull t3code's own huge Effect/Expo/Electron dependency tree. third_party/
+  # t3code's OWN pnpm-workspace.yaml stays untouched for upstream-sync
+  # purposes; these two paths become ALSO root-workspace members (root's glob
+  # patterns control membership during a root install, so this does not
+  # create a nested-workspace conflict) only so `@t3tools/contracts`/
+  # `@t3tools/shared` resolve via `workspace:*` for `packages/t3-bridge`.
+  #
+  # apps/server (the `recoder` CLI, née `t3`) IS now a live build/dev/test
+  # target (T3CODE-FORK.md section 9 update, 2026-10-15) — through
+  # `third_party/t3code`'s OWN nested pnpm workspace (`pnpm --filter t3...
+  # --filter scripts...`), NOT as a flat root-workspace member (that would
+  # also force its `@t3tools/web` Expo+Electron dev dependency to resolve as
+  # a root member, the exact huge-tree outcome this comment's first
+  # paragraph avoided). Root scripts: `pnpm install:recoder:cli`,
+  # `build:recoder:cli`, `dev:recoder:cli`, `typecheck:recoder:cli`,
+  # `test:recoder:cli`.
   - third_party/t3code/packages/contracts
   - third_party/t3code/packages/shared
 
