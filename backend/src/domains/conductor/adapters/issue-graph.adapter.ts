@@ -115,6 +115,13 @@ export function createIssueGraphTracker(deps: IssueGraphTrackerDeps): IssueGraph
         () => beads.note(id, `Recoder workspace run ${outcome}`, actor),
         logger, { taskId: id, outcome }, 'note run outcome',
       );
+      // A completed run closes the issue; a failed run stays open for retry/triage.
+      if (outcome === 'completed') {
+        await run(
+          () => beads.close(id, 'Completed via Recoder workspace run', actor),
+          logger, { taskId: id, outcome }, 'close completed issue',
+        );
+      }
     },
 
     async deliverWork(taskId: string, workspaceId: string): Promise<void> {
