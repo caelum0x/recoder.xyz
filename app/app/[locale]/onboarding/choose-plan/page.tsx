@@ -95,8 +95,9 @@ export default function ChoosePlanPage() {
   ];
 
   const createCheckoutSession = async (plan: string) => {
-    // Creem is the Merchant of Record; the others remain as configured fallbacks.
-    const providers = ['creem', 'paddle', 'dodo'] as const;
+    // Dodo is the Merchant of Record going forward; the others remain as
+    // configured fallbacks for any pre-existing subscription.
+    const providers = ['dodo', 'paddle', 'creem'] as const;
 
     for (const paymentMethod of providers) {
       const response = await fetch('/api/billing/create-checkout', {
@@ -144,7 +145,7 @@ export default function ChoosePlanPage() {
       return;
     }
 
-    // Paid plan → real hosted checkout (Creem). If the checkout isn't wired yet,
+    // Paid plan → real hosted checkout (Dodo). If the checkout isn't wired yet,
     // fall back honestly and let the user finish onboarding + subscribe later —
     // never a dead end and never "coming soon".
     try {
@@ -302,7 +303,7 @@ export default function ChoosePlanPage() {
 
           {/* Additional Info */}
           <div className="text-center text-sm text-gray-400 mb-8">
-            <p>Free forever with your own API key (BYOK). Pro and Team add higher limits, retention, and team features — billed through Creem.</p>
+            <p>Free forever with your own API key (BYOK). Pro and Team add higher limits, retention, and team features — billed through Dodo Payments.</p>
             <p>You always bring your own model keys; Recoder never resells tokens.</p>
           </div>
 

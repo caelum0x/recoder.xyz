@@ -141,8 +141,8 @@ export function buildBillingRouter(deps: BillingRouterDeps): Router {
         return;
       }
       const subject = subjectOf(principal);
-      // SELLING-PROVIDER POLICY: only the canonical MoR provider (Creem) may
-      // originate a new checkout. Paddle/Dodo/Polar stay wired for webhook +
+      // SELLING-PROVIDER POLICY: only the canonical MoR provider (Dodo) may
+      // originate a new checkout. Creem/Paddle/Polar stay wired for webhook +
       // cancel of pre-existing subscriptions, but they are NOT enabled to sell —
       // fail safe with a truthful error, never a fabricated checkout URL.
       if (!isSellingProviderEnabled(registry.activeName)) {

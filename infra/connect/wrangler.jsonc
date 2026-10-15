@@ -1,0 +1,64 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// Recoder Connect — accounts, remote reach, and Dodo billing (ported from
+	// third_party/t3code/infra/relay's Alchemy stack). No Alchemy / Effect-TS
+	// IaC here on purpose: the Worker config is plain wrangler, the DB is box
+	// Postgres (not relay's PlanetScale) reached through Hyperdrive + a Workers
+	// VPC service over the box's Cloudflare Tunnel — the exact pattern already
+	// proven live for Bidstage (bidstage-tenders/wrangler.jsonc, "bidstage-box").
+	"name": "recoder-connect",
+	"account_id": "REPLACE_WITH_CLOUDFLARE_ACCOUNT_ID",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-15",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"preview_urls": false,
+	"routes": [
+		{
+			"pattern": "connect.recoder.xyz/*",
+			"custom_domain": false
+		}
+	],
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"invocation_logs": false
+		}
+	},
+	"vars": {
+		"APP_URL": "https://recoder.xyz",
+		"CONNECT_URL": "https://connect.recoder.xyz",
+		"BETTER_AUTH_BASE_URL": "https://connect.recoder.xyz/api/auth",
+		// Owner-only: Dodo product ids (not secret) once the Recoder Dodo business
+		// exists. Until then these stay empty and checkout fails safe (503, never
+		// a fabricated checkout URL) — see src/billing/dodo.ts.
+		"RECODER_CONNECT_DODO_PRODUCT_PRO_MONTHLY": "",
+		"RECODER_CONNECT_DODO_PRODUCT_PRO_ANNUAL": "",
+		"RECODER_CONNECT_DODO_PRODUCT_TEAM_MONTHLY": "",
+		"RECODER_CONNECT_DODO_TEST_MODE": "true",
+		"SCRIBASE_MAIL_FROM": "Recoder <connect@mail.recoder.xyz>",
+		"SCRIBASE_MAIL_API_URL": "https://api.scribase.com"
+	},
+	"secrets": {
+		// Documented here for the owner runbook; wrangler reads actual values
+		// from `wrangler secret put <name>`, never from this file.
+		"required": [
+			"BETTER_AUTH_SECRET",
+			"SCRIBASE_MAIL_API_KEY",
+			"RECODER_CONNECT_DODO_API_KEY",
+			"RECODER_CONNECT_DODO_WEBHOOK_SECRET"
+		]
+	},
+	// recoder-connect-box: recoder_connect_runtime on the box's private Postgres via
+	// Workers VPC service "recoder-connect-pg" -> box Cloudflare Tunnel, same shape
+	// as bidstage-box. Fill in after `scripts/create-hyperdrive.zsh` runs (owner step,
+	// needs `wrangler login` + the box tunnel id). Placeholder id until then.
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "REPLACE_AFTER_CREATE_HYPERDRIVE_SCRIPT"
+		}
+	]
+}

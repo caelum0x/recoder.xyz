@@ -1,7 +1,9 @@
 /**
  * Create Checkout Session API
- * Handles creation of hosted checkout sessions. Creem is the Merchant of Record
- * (tried first); Paddle and DODO remain as configured fallbacks.
+ * Handles creation of hosted checkout sessions. Dodo is the Merchant of Record
+ * (tried first by every client surface); Paddle and Creem remain as configured
+ * fallbacks for any pre-existing subscription. Provider selection itself comes
+ * from the client's `paymentMethod` body field, not from an order encoded here.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

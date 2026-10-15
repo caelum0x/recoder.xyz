@@ -12,7 +12,7 @@ import { BillingShell, BillingLoadingBlock, BillingErrorBlock } from './BillingS
 // use a per-plan-id name that cannot carry a hyphen).
 const OFFERED_PLANS: PlanId[] = ['weekly', 'monthly', 'pro', 'team'];
 
-const CHECKOUT_PROVIDERS = ['creem', 'paddle', 'dodo'] as const;
+const CHECKOUT_PROVIDERS = ['dodo', 'paddle', 'creem'] as const;
 
 export function UpgradePlans() {
   const { data, loading, error, reload } = useBillingData();
@@ -28,8 +28,9 @@ export function UpgradePlans() {
   );
 
   const startCheckout = async (planId: PlanId) => {
-    // Free -> paid: hosted checkout. Creem is the Merchant of Record; the others
-    // remain configured fallbacks (mirrors onboarding).
+    // Free -> paid: hosted checkout. Dodo is the Merchant of Record going
+    // forward; the others remain configured fallbacks for any pre-existing
+    // subscription (mirrors onboarding).
     for (const paymentMethod of CHECKOUT_PROVIDERS) {
       const response = await fetch('/api/billing/create-checkout', {
         method: 'POST',
@@ -102,7 +103,7 @@ export function UpgradePlans() {
   return (
     <BillingShell
       title={hasActivePaidPlan ? 'Change your plan' : 'Upgrade your plan'}
-      description="Free forever with your own API key. Paid plans add platform-provided keys, higher limits, and team features — billed securely through Creem."
+      description="Free forever with your own API key. Paid plans add platform-provided keys, higher limits, and team features — billed securely through Dodo Payments."
       backLink="/billing"
       backText="Back to Billing"
     >
