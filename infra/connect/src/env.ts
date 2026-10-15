@@ -28,6 +28,9 @@ export interface ConnectEnv {
   readonly RECODER_CONNECT_DODO_PRODUCT_PRO_ANNUAL?: string;
   readonly RECODER_CONNECT_DODO_PRODUCT_TEAM_MONTHLY?: string;
   readonly RECODER_CONNECT_DODO_TEST_MODE?: string;
+  /** Recoder Remote's custom URL scheme — see src/auth/mobile-complete.ts.
+   * Optional: falls back to the app's own shipped default when unset. */
+  readonly RECODER_REMOTE_SCHEME?: string;
 }
 
 const presentString = z.string().trim().min(1);
