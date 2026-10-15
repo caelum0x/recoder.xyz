@@ -98,6 +98,25 @@ describe('dodoProductIdForPlan', () => {
     expect(dodoProductIdForPlan('pro')).toBe('prod_pro');
     expect(dodoProductIdForPlan('gold')).toBeNull();
   });
+
+  it('resolves team and pro-annual to their default product ids (previously missing)', () => {
+    expect(dodoProductIdForPlan('team')).toBe('prod_team');
+    expect(dodoProductIdForPlan('pro-annual')).toBe('prod_pro_annual');
+  });
+
+  it('normalizes a hyphenated plan id to an underscored env var name', () => {
+    vi.stubEnv('DODO_PRODUCT_PRO_ANNUAL', 'pdt_real_pro_annual');
+    expect(dodoProductIdForPlan('pro-annual')).toBe('pdt_real_pro_annual');
+    // The un-normalized (hyphenated) env var name must NOT be consulted.
+    vi.stubEnv('DODO_PRODUCT_PRO_ANNUAL', '');
+    vi.stubEnv('DODO_PRODUCT_PRO-ANNUAL', 'should_never_be_read');
+    expect(dodoProductIdForPlan('pro-annual')).toBe('prod_pro_annual');
+  });
+
+  it('resolves a configured team product id from env over the default', () => {
+    vi.stubEnv('DODO_PRODUCT_TEAM', 'pdt_real_team');
+    expect(dodoProductIdForPlan('team')).toBe('pdt_real_team');
+  });
 });
 
 describe('DodoProvider.createCheckout — wraps the real service', () => {

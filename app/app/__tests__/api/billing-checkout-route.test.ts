@@ -187,6 +187,27 @@ describe('POST /api/billing/create-checkout', () => {
     );
   });
 
+  it('creates a DODO checkout session for the pro-annual plan ($290/yr)', async () => {
+    mockRequireAuth.mockResolvedValue({
+      error: false,
+      user: { id: 'user-1', email: 'test@example.com' },
+    } as any);
+
+    const res = await POST(buildRequest({ plan: 'pro-annual', paymentMethod: 'dodo' }));
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.provider).toBe('dodo');
+
+    expect(DodoPaymentsService.createCheckoutSession).toHaveBeenCalledWith(
+      'user-1',
+      expect.any(String),
+      undefined,
+      'https://recoder.xyz/checkout/success?plan=pro-annual'
+    );
+  });
+
   it('returns 503 when Paddle credentials are not configured', async () => {
     mockRequireAuth.mockResolvedValue({
       error: false,

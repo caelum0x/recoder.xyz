@@ -79,4 +79,44 @@ describe('email provider selection', () => {
     } as NodeJS.ProcessEnv);
     expect(provider.provider).toBe('none');
   });
+
+  it('selects Scribase Mail when explicitly requested and configured', () => {
+    const provider = getEmailProviderStatus({
+      EMAIL_PROVIDER: 'scribase',
+      SCRIBASE_MAIL_API_KEY: 'smail_test_key',
+      NODE_ENV: 'production',
+    } as NodeJS.ProcessEnv);
+    expect(provider.provider).toBe('scribase');
+    expect(provider.hasScribase).toBe(true);
+  });
+
+  it('does not select Scribase in auto mode when SMTP is already configured (no silent reroute)', () => {
+    const provider = getEmailProviderStatus({
+      EMAIL_PROVIDER: 'auto',
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_USER: 'mailer@example.com',
+      SMTP_PASSWORD: 'secret',
+      SCRIBASE_MAIL_API_KEY: 'smail_test_key',
+      NODE_ENV: 'production',
+    } as NodeJS.ProcessEnv);
+    expect(provider.provider).toBe('smtp');
+  });
+
+  it('falls back to Scribase in auto mode when neither SMTP nor Resend is configured', () => {
+    const provider = getEmailProviderStatus({
+      EMAIL_PROVIDER: 'auto',
+      SCRIBASE_MAIL_API_KEY: 'smail_test_key',
+      NODE_ENV: 'production',
+    } as NodeJS.ProcessEnv);
+    expect(provider.provider).toBe('scribase');
+  });
+
+  it('returns none in production for an explicitly requested but unconfigured Scribase', () => {
+    const provider = getEmailProviderStatus({
+      EMAIL_PROVIDER: 'scribase',
+      NODE_ENV: 'production',
+    } as NodeJS.ProcessEnv);
+    expect(provider.provider).toBe('none');
+    expect(provider.hasScribase).toBe(false);
+  });
 });
