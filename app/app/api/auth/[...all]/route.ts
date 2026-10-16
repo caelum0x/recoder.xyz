@@ -20,7 +20,10 @@ import { SURFACE_ORIGINS } from "@recoder/auth/edge";
  *    real HTTP redirect, forwarding the state cookies.
  *
  * Truthful degrade: an unreachable backend is a 503 with a clear error — never
- * a faked session.
+ * a faked session. A `BACKEND_URL` that resolves back to this same process
+ * (loopback host + our own port) is a distinct failure mode — fail fast via
+ * `isSelfReferentialTarget` instead of ever issuing a self-fetch; see that
+ * function's comment for why.
  */
 
 /** The control-plane backend origin (prod: pm2 recoder-backend on :8000). */
@@ -29,6 +32,32 @@ const BACKEND_URL = (
   process.env.BACKEND_URL ||
   "http://127.0.0.1:8000"
 ).replace(/\/+$/, "");
+
+/** This Next.js process's own listening port, so we can detect a backend
+ * target that resolves back to ourselves (see `isSelfReferentialTarget`). */
+const SELF_PORT = process.env.PORT || "3000";
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * Detect a `BACKEND_URL` that points at this very process (loopback host +
+ * our own listening port). Without this guard, a misconfigured env var makes
+ * every `/api/auth/*` request — including this handler's own proxy fetch —
+ * recurse into itself: the self-fetch lands back on this same catch-all
+ * route, which issues another self-fetch, forever. That is not a theoretical
+ * risk: it was caught live on 2026-10-16 running the production box's single
+ * `recoder-app` process up to 100% CPU / ~450MB RSS on a 956Mi box from a
+ * SINGLE request, contributing to repeated OOM restarts. Fail fast and
+ * truthfully instead of ever issuing that fetch.
+ */
+function isSelfReferentialTarget(target: string, selfPort: string): boolean {
+  try {
+    const parsed = new URL(target);
+    const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+    return LOOPBACK_HOSTNAMES.has(parsed.hostname) && port === selfPort;
+  } catch {
+    return false;
+  }
+}
 
 const getAllowedOrigins = () => [
   ...Object.values(SURFACE_ORIGINS),
@@ -78,6 +107,21 @@ async function proxyToBackend(
   init?: { method?: string; body?: BodyInit | null },
 ): Promise<NextResponse> {
   const origin = request.headers.get("origin") || "";
+
+  // Never issue the self-recursive fetch described above — fail fast and
+  // truthfully instead of letting this process call itself. Checked first,
+  // before any header/body work, so a misconfigured target costs nothing.
+  if (isSelfReferentialTarget(BACKEND_URL, SELF_PORT)) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "auth service misconfigured: BACKEND_URL points at this app's own port; no separate identity backend is configured",
+      },
+      { status: 503, headers: corsHeadersFor(origin) },
+    );
+  }
+
   const target = `${BACKEND_URL}${request.nextUrl.pathname}${request.nextUrl.search}`;
 
   const headers = new Headers();
@@ -105,7 +149,15 @@ async function proxyToBackend(
 
   let upstream: Response;
   try {
-    upstream = await fetch(target, { method, headers, body, redirect: "manual" });
+    upstream = await fetch(target, {
+      method,
+      headers,
+      body,
+      redirect: "manual",
+      // Bound worst-case hang time if BACKEND_URL points somewhere real but
+      // slow/hung — never let a client-facing auth request wait forever.
+      signal: AbortSignal.timeout(5000),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "auth backend unreachable";
     return NextResponse.json(
