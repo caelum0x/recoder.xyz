@@ -100,9 +100,11 @@ const NAV_LINKS = [
   { href: "/pricing", label: "Pricing" },
 ];
 
+// "/compare" is retired (owner rule 2026-09-25: no competitor pages) and
+// permanently redirects to "/" in next.config.ts. Do not link it from nav —
+// a nav item that silently bounces to the homepage reads as a broken link.
 const MORE_LINKS = [
   { href: "/enterprise", label: "Enterprise" },
-  { href: "/compare", label: "Compare" },
   { href: "/proof", label: "Proof" },
   { href: "/changelog", label: "Changelog" },
   { href: "/contact", label: "Contact" },
@@ -194,7 +196,6 @@ export function Footer() {
             { href: "/features", label: "Features" },
             { href: "/how-it-works", label: "How it works" },
             { href: "/docs", label: "Docs" },
-            { href: "/compare", label: "Compare" },
             { href: "/self-host", label: "Self-host" },
             { href: "/changelog", label: "Changelog" },
           ]}
