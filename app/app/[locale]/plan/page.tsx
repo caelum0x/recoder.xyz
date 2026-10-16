@@ -35,54 +35,52 @@ const plans = [
     highlight: false,
   },
   {
-    name: 'Weekly',
-    planId: 'weekly',
-    price: '$10',
-    period: '/week',
-    description: 'We provide API keys',
-    features: [
-      '10 sessions per day',
-      'Platform-provided API keys',
-      'Priority model access',
-      'All platform services',
-      'Email support',
-    ],
-    cta: 'Subscribe Weekly',
-    ctaLink: '/billing/upgrade',
-    highlight: false,
-  },
-  {
-    name: 'Monthly',
-    planId: 'monthly',
-    price: '$20',
+    name: 'Pro',
+    planId: 'pro',
+    price: '$29',
     period: '/month',
-    description: 'Best value for individuals',
+    description: 'Per developer — $290/year billed annually (2 months free)',
     features: [
-      '15 sessions per day',
-      'Platform-provided API keys',
-      'Priority model access',
-      'Advanced analytics',
-      'Priority support',
+      'More parallel agents per console',
+      'Longer run history and retention',
+      'Context reuse across runs (repo intel)',
+      'Persistent shared brain across your own machines',
+      'Priority changelog and early builds',
     ],
-    cta: 'Subscribe Monthly',
+    cta: 'Go Pro',
     ctaLink: '/billing/upgrade',
     highlight: true,
   },
   {
-    name: 'Pro',
-    planId: 'pro',
-    price: '$100',
+    name: 'Team',
+    planId: 'team',
+    price: '$99',
     period: '/month',
-    description: 'For power users and teams',
+    description: 'For teams sharing an audited agent fleet across machines',
     features: [
-      '20 sessions per day',
-      'Premium model access',
-      'Team collaboration',
-      'Custom integrations',
+      'Everything in Pro',
+      'Shared workspaces + audit across machines',
+      'Shared approvals on agent merges',
+      'Cross-machine fleet mesh (zero-trust Envoy)',
+      'Per-seat management and team-wide retention',
+    ],
+    cta: 'Go Team',
+    ctaLink: '/billing/upgrade',
+    highlight: false,
+  },
+  {
+    name: 'Enterprise',
+    price: 'Custom',
+    period: '',
+    description: 'Negotiated — SSO, isolation, support',
+    features: [
+      'Unlimited everything',
+      'On-premise / self-host deployment',
+      'SLA guarantees + security audit',
       'Dedicated support',
     ],
-    cta: 'Go Pro',
-    ctaLink: '/billing/upgrade',
+    cta: 'Talk to Us',
+    ctaLink: '/enterprise',
     highlight: false,
   },
 ];
@@ -222,7 +220,7 @@ export default function PlanPage() {
                     </li>
                   ))}
                 </ul>
-                {plan.name === 'Free' ? (
+                {!plan.planId ? (
                   <Link
                     href={plan.ctaLink}
                     className="block text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-zinc-800 hover:bg-zinc-700"

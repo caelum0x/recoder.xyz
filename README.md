@@ -63,11 +63,11 @@ Every command above is verified against the live, published package (`npx recode
 | Plan | Price | For |
 |---|---|---|
 | **Free** | $0 | Try the full loop with a capped monthly allowance |
-| **Weekly** | $10 / week | Flexible, low-commitment access with all models |
-| **Pro / Team** | monthly | Higher quotas + team features |
+| **Pro** | $29 / month ($290 / year) | Higher quotas, hosted model access, per-developer |
+| **Team** | $99 / month | Team features on top of Pro |
 | **Enterprise** | custom | Negotiated — SSO, isolation, support |
 
-Billing runs through **Creem** (Merchant of Record). See **[recoder.xyz/pricing](https://recoder.xyz/pricing)** for current tiers.
+Billing runs through **Dodo Payments** (Merchant of Record). See **[recoder.xyz/pricing](https://recoder.xyz/pricing)** for current tiers.
 
 ## Documentation
 

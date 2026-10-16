@@ -39,7 +39,7 @@ source-of-record + billing + marketing + docs, and a thin **marketing site** (`s
 | Desktop shell | Electron 41, React 19, Wave-fork frontend, 21 `recoder-*` views | `apps/desktop/app/frontend` |
 | Durable shell (Go) | tmux control-mode driver, session reconciler | `apps/desktop/server` (Go) |
 | Control-plane backend | Node + Express 4 + express-ws, 15 composed domains | `backend/src` |
-| Web app / auth / billing | Next.js 16, React 19, Payload CMS, Prisma, Better Auth, Creem (MoR) | `app/` |
+| Web app / auth / billing | Next.js 16, React 19, Payload CMS, Prisma, Better Auth, Dodo Payments (MoR) | `app/` |
 | Marketing site | Next.js 16 | `site/` |
 | Contract packages | 70 first-party TS packages (`@recoder/*`) | `packages/` |
 | Native engines (Rust) | openfang, tensorzero, recoder-governance (napi `.node`) | `backend/engines/rust` |
@@ -72,7 +72,7 @@ merge-trust-gate, preview-evidence, finding-vote), `swarm/`, `wait/`, `attention
 | Inference ladder (TensorZero napi SSE → loopback → BYOK router) | **BUILT**; `feedback()` not wired to outcomes; some call sites bypass ladder | `domains/inference` |
 | Memory (beads + mem0 + colbert rerank) | **BUILT but shallow**; 2 mem0 impls (drift), colbert rerank is lexical-fallback when torch absent | `domains/memory`, PARKED items |
 | Desktop `recoder-*` views (21) | **BUILT** | `app/frontend/app/view/recoder-*` |
-| Website auth/billing (Better Auth, Creem MoR) | **BUILT**; org/user reconciliation owner-gated | `app/` |
+| Website auth/billing (Better Auth, Dodo MoR) | **BUILT**; org/user reconciliation owner-gated | `app/` |
 | openfang Hands lifecycle | **PARKED** — napi `runAgent` blocks event loop; needs async seam | depth-gap notes |
 | NETWORKING (ziti, recoder-xds) | **STUB / cloud-tier** — registered, no live config push | depth-gap notes |
 | Python deep-loop sidecars (mem0, browser-use) | **PARKED** — health-probed shells; TS packages serve live path | depth-gap notes |

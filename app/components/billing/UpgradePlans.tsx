@@ -7,10 +7,17 @@ import { PLANS, type PlanId } from '@/lib/pricing-config';
 import { useBillingData, planDisplayName, isPaidPlan } from './useBillingData';
 import { BillingShell, BillingLoadingBlock, BillingErrorBlock } from './BillingShell';
 
-// Purchasable plans offered for self-serve upgrade/downgrade. Enterprise is a
-// contact-sales flow; pro-annual is offered at checkout only (env product ids
-// use a per-plan-id name that cannot carry a hyphen).
-const OFFERED_PLANS: PlanId[] = ['weekly', 'monthly', 'pro', 'team'];
+// Purchasable plans offered for self-serve upgrade/downgrade. Matches the
+// real, live product catalog shown on the public pricing page (Free / Pro /
+// Team / Enterprise — see site/app/pricing/page.tsx and
+// infra/connect/scripts/create-dodo-products.ts). 'weekly'/'monthly' are
+// legacy tiers from before the Dodo cutover with no real Dodo product behind
+// them (create-checkout/route.ts falls back to placeholder ids) and are not
+// offered anywhere on the marketing site — removed here so this screen never
+// shows a tier a visitor can't actually buy. Enterprise is a contact-sales
+// flow (the panel below); pro-annual is offered at checkout only (env product
+// ids use a per-plan-id name that cannot carry a hyphen).
+const OFFERED_PLANS: PlanId[] = ['pro', 'team'];
 
 // Creem removed from the client try-order (owner directive 2026-10-16: Creem
 // is retired for new checkout sessions; the server also fails it closed — see
