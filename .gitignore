@@ -739,3 +739,7 @@ apps/desktop/engines/**/.env.*
 
 # Wrangler local dev state (miniflare R2/D1/KV blobs; can be hundreds of MB)
 **/.wrangler/
+
+# local deploy scratch (artifacts/rollback tarballs downloaded during manual deploys)
+/.deploy-artifact/
+/.deploy-backups/
