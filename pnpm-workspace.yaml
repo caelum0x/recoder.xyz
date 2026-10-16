@@ -32,6 +32,19 @@ packages:
   # resolve via `workspace:*` for `packages/t3-bridge`.
   - third_party/t3code/packages/contracts
   - third_party/t3code/packages/shared
+  # recoder-code subtree (packages/recoder-code) is itself a root pnpm member
+  # via the `packages/*` glob above, but that glob is one level deep, so its
+  # OWN nested npm-workspace packages (packages/recoder-code/packages/cli,
+  # .../core) are two levels deep and are not picked up. cli depends on core
+  # ("recoder-code-core": "workspace:*") and both depend on
+  # "@recoder/pi-coding-agent": "workspace:*" (already resolved via the
+  # packages/* glob). Same pattern as the t3code pair above: add these two
+  # explicit paths ALSO as root-workspace members so `workspace:*` resolves
+  # for `pnpm -C packages/recoder-code/packages/cli build`/`tsc`, without
+  # touching packages/recoder-code's own package.json "workspaces" field
+  # (npm-level, used when installing that subtree standalone).
+  - packages/recoder-code/packages/cli
+  - packages/recoder-code/packages/core
 
 catalog:
   # t3code subtree deps (packages/contracts + packages/shared only — pinned
