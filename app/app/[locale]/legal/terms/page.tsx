@@ -218,22 +218,22 @@ export default function TermsOfServicePage() {
                 <Link href="/pricing" className="text-orange-500 hover:text-orange-400 underline">pricing page</Link>.
               </p>
 
-              <h3 className="text-xl font-semibold mb-3 text-orange-500">10.2 Merchant of Record (Creem)</h3>
+              <h3 className="text-xl font-semibold mb-3 text-orange-500">10.2 Merchant of Record (Dodo Payments)</h3>
               <p className="text-gray-300 leading-relaxed mb-4">
                 Paid subscriptions are sold and processed by our Merchant of Record,{' '}
-                <a href="https://www.creem.io" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Creem</a>.
-                When you purchase a plan, Creem is the seller of record: it handles checkout, payment
+                <a href="https://dodopayments.com" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Dodo Payments</a>.
+                When you purchase a plan, Dodo Payments is the seller of record: it handles checkout, payment
                 processing, and the collection and remittance of any applicable sales tax or VAT, and
                 it issues your invoice. Your purchase is therefore also subject to{' '}
-                <a href="https://www.creem.io/legal/terms" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Creem&rsquo;s Terms</a>{' '}
+                <a href="https://dodopayments.com/legal/terms-of-use" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Dodo Payments&rsquo; Terms</a>{' '}
                 and{' '}
-                <a href="https://www.creem.io/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Privacy Policy</a>.
+                <a href="https://dodopayments.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Privacy Policy</a>.
               </p>
 
               <h3 className="text-xl font-semibold mb-3 text-orange-500">10.3 Recurring Billing</h3>
               <ul className="list-disc list-inside space-y-2 text-gray-300 mb-4">
-                <li>Paid plans are billed in advance on a recurring basis (weekly or monthly, per the plan you choose) until cancelled.</li>
-                <li>By subscribing, you authorize Creem to charge your payment method for each renewal at the then-current price.</li>
+                <li>Paid plans are billed in advance on a recurring basis (monthly or annually, per the plan you choose) until cancelled.</li>
+                <li>By subscribing, you authorize Dodo Payments to charge your payment method for each renewal at the then-current price.</li>
                 <li>We will give reasonable advance notice of any change to your subscription price before it takes effect.</li>
                 <li>Applicable taxes may be added at checkout based on your billing location.</li>
               </ul>
@@ -253,8 +253,8 @@ export default function TermsOfServicePage() {
                 <a href="mailto:contact@recoder.xyz" className="text-orange-500 hover:text-orange-400 underline">contact@recoder.xyz</a>{' '}
                 within <strong className="text-white">14 days</strong> of a charge and we will review
                 your request for a refund of that most recent payment. Refunds for duplicate or clearly
-                erroneous charges are always honored. Because payments are processed by Creem as
-                Merchant of Record, approved refunds are issued through Creem to your original payment
+                erroneous charges are always honored. Because payments are processed by Dodo Payments as
+                Merchant of Record, approved refunds are issued through Dodo Payments to your original payment
                 method. This policy does not limit any statutory refund or cancellation rights you may
                 have under the consumer-protection laws of your jurisdiction.
               </p>

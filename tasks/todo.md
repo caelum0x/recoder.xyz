@@ -14,7 +14,7 @@ artifact (test / script / live check). Do not fake done.
 ## Track A — Go-live gates (OWNER-gated)
 - [ ] **Prod website deploy** behind shipped positioning + cli-auth — `recoder-qtac` (approval-gated).
 - [x] **Canonical trunk** — `recoder-mhyt`: reconciled release line fast-forwarded to `main` at `ffbda52cb` on 2026-08-31.
-- [ ] **Billing cutover to Creem** — `recoder-t24j` (C6): wire approved key + one enforcing webhook path; rotate after.
+- [ ] **Billing cutover to Dodo** — `recoder-t24j` (C6): flipped from Creem 2026-10-15 (`CANONICAL_SELLING_PROVIDER='dodo'`); still needs the owner's live Dodo API key + product IDs (confirmed absent from every env/env.example as of this pass) + one enforcing webhook path; rotate after.
 - [ ] **Free-tier inference policy** decision — `recoder-bb1n` `[OWNER]`.
 - [x] **Prod-box integrity resolution** — `recoder-5iqy`: v3 monitor glob identified as root cause, v4 corrected, coreutils restored, and `dpkg -V` clean; bead closed 2026-08-17.
 - [ ] **License resolution** — `recoder-rxn0` (P1): recodergit already un-bundled; confirm `multica` not in the Go binary.

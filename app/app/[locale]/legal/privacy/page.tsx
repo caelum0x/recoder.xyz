@@ -108,9 +108,9 @@ export default function PrivacyPolicyPage() {
               <h3 className="text-xl font-semibold mb-3 mt-6 text-orange-500">2.5 Billing and Subscription Information</h3>
               <p className="text-gray-300 leading-relaxed mb-4">
                 If you purchase a paid subscription, checkout and payment are handled by our
-                Merchant of Record, <strong className="text-white">Creem</strong>. We do{' '}
+                Merchant of Record, <strong className="text-white">Dodo Payments</strong>. We do{' '}
                 <strong className="text-white">not</strong> collect or store your full card number
-                or other complete payment credentials on our servers. Creem processes your payment
+                or other complete payment credentials on our servers. Dodo Payments processes your payment
                 and shares limited billing details back with us so we can provision your plan,
                 including:
               </p>
@@ -198,8 +198,8 @@ export default function PrivacyPolicyPage() {
               <ul className="list-disc list-inside space-y-2 text-gray-300 mb-4">
                 <li>
                   <strong className="text-white">Payments &amp; subscriptions:</strong>{' '}
-                  <a href="https://www.creem.io/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Creem</a>{' '}
-                  &mdash; our Merchant of Record. Creem processes card payments, calculates and remits
+                  <a href="https://dodopayments.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Dodo Payments</a>{' '}
+                  &mdash; our Merchant of Record. Dodo Payments processes card payments, calculates and remits
                   applicable sales tax/VAT, and issues invoices. We never receive your full card details.
                 </li>
                 <li><strong className="text-white">Database hosting:</strong> Managed PostgreSQL database hosting</li>
@@ -208,8 +208,8 @@ export default function PrivacyPolicyPage() {
               </ul>
               <p className="text-gray-300 leading-relaxed">
                 These providers are contractually obligated to protect your data and only use it to
-                provide services to us. Payment data handled by Creem is also subject to{' '}
-                <a href="https://www.creem.io/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Creem&rsquo;s Privacy Policy</a>.
+                provide services to us. Payment data handled by Dodo Payments is also subject to{' '}
+                <a href="https://dodopayments.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Dodo Payments&rsquo; Privacy Policy</a>.
               </p>
 
               <h3 className="text-xl font-semibold mb-3 text-orange-500">5.3 Legal Requirements</h3>
