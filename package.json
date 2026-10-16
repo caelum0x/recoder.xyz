@@ -300,7 +300,7 @@
       "socket.io-parser": ">=4.2.6",
       "immutable": ">=5.1.5",
       "valibot": ">=1.2.0",
-      "effect": ">=3.20.0",
+      "effect": ">=3.20.0 <4.0.0",
       "@t3tools/contracts>effect": "4.0.1",
       "@t3tools/shared>effect": "4.0.1",
       "@recoder/t3-bridge>effect": "4.0.1",
