@@ -87,6 +87,8 @@ recoder --help
 | `recoder` | Start interactive AI chat |
 | `recoder init` | Initialize `.recoder` folder |
 | `recoder plan` | Project planning module |
+| `recoder parallel "<task>"` | Run a task in an isolated git worktree |
+| `recoder parallel-finish` | Commit and finish a parallel worktree |
 
 ### Planning Commands
 
@@ -127,6 +129,25 @@ recoder ai chat                      # Start AI chat
 recoder ai models                    # List available models
 recoder ai usage                     # Show usage stats
 ```
+
+### Parallel Agents (git worktrees)
+
+This is the command behind [recoder.xyz](https://recoder.xyz)'s core workflow:
+run a task in an isolated git worktree so it never collides with your working
+tree, then review and merge when it's ready.
+
+```bash
+recoder parallel "implement user auth"              # Start a task on a new worktree branch
+recoder parallel -b recoder/user-auth-123 "continue" # Resume an existing parallel branch
+recoder parallel --list                             # List active parallel worktrees
+recoder parallel --cleanup                          # Remove stale parallel worktrees
+recoder parallel-finish -b recoder/user-auth-123     # Commit the worktree's changes and finish
+```
+
+Each `parallel` run gets its own branch and worktree, so you can kick off
+several at once and compare the results before merging. `parallel-finish`
+commits the worktree's changes so you can diff, merge, or open a PR from the
+resulting branch.
 
 ## Configuration
 
