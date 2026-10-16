@@ -40,6 +40,16 @@ else
       NEXT_PUBLIC_APP_URL="https://recoder.xyz" pnpm build
     test -d .next/standalone || { echo "NO standalone output"; ls -la .next; exit 1; }
     SA=.next/standalone
+    # Turbopack's standalone output copies EVERY pnpm-workspace member
+    # verbatim, not just the 3 @recoder/* packages app/ actually depends on
+    # (workspace:* in package.json) — it has no dependency on apps/desktop
+    # (apps/mobile, apps/frontend, etc. don't exist in this checkout, but if
+    # they ever do, strip them too). apps/desktop alone is ~1.9G (the
+    # Electron app + its bundled engine binaries: tmux/cloudflared/dmux/loom)
+    # and is only referenced as inert string-literal paths in
+    # lib/subagent-workflow.ts, never actually required at runtime. Dropping
+    # it cuts the artifact from ~2.5G to ~600M. See plans/recoder.md 2026-10-16.
+    rm -rf "$SA/apps"
     SRV="$(find "$SA" -maxdepth 3 -name server.js | head -1)"
     APPDIR="$(dirname "$SRV")"
     mkdir -p "$APPDIR/.next"
