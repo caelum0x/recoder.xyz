@@ -1,7 +1,6 @@
 import type { MetadataRoute } from "next";
 import { DOC_PAGES } from "./docs/content";
 import { USE_CASES } from "./use-cases/use-cases";
-import { COMPARISONS } from "./compare/comparisons";
 import { getChangelog } from "./changelog/entries";
 
 const BASE = "https://recoder.xyz";
@@ -43,13 +42,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
       changeFrequency: "monthly" as const,
     })),
-    { path: "/compare", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "monthly" },
-    ...COMPARISONS.map((c) => ({
-      path: `/compare/${c.slug}`,
-      lastModified: BUILD_DATE,
-      priority: 0.6,
-      changeFrequency: "monthly" as const,
-    })),
+    // "/compare" and its slugs are retired (owner rule 2026-09-25: no
+    // competitor pages) and permanently redirect to "/" — do not submit
+    // redirect targets to search engines as if they were indexable pages.
     { path: "/enterprise", lastModified: BUILD_DATE, priority: 0.7, changeFrequency: "monthly" },
     { path: "/design-partners", lastModified: BUILD_DATE, priority: 0.6, changeFrequency: "monthly" },
     { path: "/proof", lastModified: BUILD_DATE, priority: 0.6, changeFrequency: "monthly" },
