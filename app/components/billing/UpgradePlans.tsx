@@ -18,12 +18,38 @@ const OFFERED_PLANS: PlanId[] = ['weekly', 'monthly', 'pro', 'team'];
 // Paddle remains a configured fallback.
 const CHECKOUT_PROVIDERS = ['dodo', 'paddle'] as const;
 
+// Same inbox the /contact page already publishes as the team's primary
+// channel — reused here, not invented, so support replies land in one place.
+const CONTACT_EMAIL = 'contact@recoder.xyz';
+
+/**
+ * Thrown by `startCheckout` only when every configured provider refused the
+ * request (verified live 2026-10-16: Dodo returns 503 unconfigured, Paddle
+ * has no vendor credentials set, and Creem now fails closed by policy — so
+ * this is not hypothetical, it is the current production state). Kept as a
+ * distinct type so the UI can offer a manual, human fallback instead of a
+ * dead-end error for a visitor who was ready to pay.
+ */
+class CheckoutUnavailableError extends Error {}
+
+function checkoutFallbackMailto(planId: PlanId): string {
+  const plan = PLANS[planId];
+  const subject = `Upgrade to ${plan.name} ($${plan.price}/${plan.period})`;
+  const body =
+    `Hi, I tried to upgrade to the ${plan.name} plan on recoder.xyz but ` +
+    'automatic checkout was unavailable. Please help me complete this upgrade.';
+  return `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 export function UpgradePlans() {
   const { data, loading, error, reload } = useBillingData();
   const [selected, setSelected] = useState<PlanId | null>(null);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmPlan, setConfirmPlan] = useState<PlanId | null>(null);
+  // Set only when every checkout provider refused the request — offers a
+  // manual mailto path instead of leaving an interested payer with a dead end.
+  const [contactFallbackPlan, setContactFallbackPlan] = useState<PlanId | null>(null);
 
   const currentPlan = data?.subscription.plan ?? 'free';
   const hasActivePaidPlan = useMemo(
@@ -54,7 +80,9 @@ export function UpgradePlans() {
         return;
       }
     }
-    throw new Error('Checkout is not available right now. Please try again later or contact support.');
+    throw new CheckoutUnavailableError(
+      'Checkout is not available right now. Please try again later or contact support.'
+    );
   };
 
   const changePlan = async (planId: PlanId) => {
@@ -80,6 +108,7 @@ export function UpgradePlans() {
   const handleConfirm = async (planId: PlanId) => {
     setPending(true);
     setActionError(null);
+    setContactFallbackPlan(null);
     try {
       if (hasActivePaidPlan) {
         await changePlan(planId);
@@ -89,6 +118,9 @@ export function UpgradePlans() {
       setConfirmPlan(null);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      if (err instanceof CheckoutUnavailableError) {
+        setContactFallbackPlan(planId);
+      }
     } finally {
       setPending(false);
     }
@@ -96,6 +128,7 @@ export function UpgradePlans() {
 
   const onPlanAction = (planId: PlanId) => {
     setActionError(null);
+    setContactFallbackPlan(null);
     if (hasActivePaidPlan) {
       // In-place change is a real billing action → confirm first.
       setConfirmPlan(planId);
@@ -103,6 +136,16 @@ export function UpgradePlans() {
       void handleConfirm(planId);
     }
   };
+
+  const contactFallback = contactFallbackPlan ? (
+    <p className="mt-1 text-sm text-gray-400">
+      We can still set this up by hand —{' '}
+      <a href={checkoutFallbackMailto(contactFallbackPlan)} className="text-white underline underline-offset-4">
+        email {CONTACT_EMAIL}
+      </a>{' '}
+      and we&apos;ll get you on {PLANS[contactFallbackPlan].name} directly.
+    </p>
+  ) : null;
 
   return (
     <BillingShell
@@ -182,6 +225,7 @@ export function UpgradePlans() {
           </div>
 
           {actionError ? <p className="text-sm text-red-300">{actionError}</p> : null}
+          {contactFallback}
         </div>
       )}
 
@@ -194,6 +238,7 @@ export function UpgradePlans() {
               {PLANS[confirmPlan].period})? Your provider will prorate the difference.
             </p>
             {actionError ? <p className="mt-3 text-sm text-red-300">{actionError}</p> : null}
+            {contactFallback}
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button
                 disabled={pending}
@@ -208,6 +253,7 @@ export function UpgradePlans() {
                 onClick={() => {
                   setConfirmPlan(null);
                   setActionError(null);
+                  setContactFallbackPlan(null);
                 }}
                 className="inline-flex flex-1 items-center justify-center rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium hover:border-white/40 disabled:opacity-60"
               >
