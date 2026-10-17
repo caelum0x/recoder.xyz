@@ -1,0 +1,50 @@
+# Recoder self-host systemd unit (Linux).
+#
+# Runs the docker-compose.selfhost.yml stack on boot, the same way the
+# Packer-built machine image does (deploy/packer/provision.sh installs the
+# identical unit onto a baked AMI/host). This copy is standalone: install it
+# directly onto any systemd Linux box via scripts/install-selfhost.sh without
+# needing Packer, AWS credentials, or an SSH-target build.
+#
+# Install:
+#   sudo scripts/install-selfhost.sh
+#
+# or by hand:
+#   sudo cp deploy/systemd/recoder-selfhost.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable recoder-selfhost.service
+#   sudo systemctl start recoder-selfhost.service   # after .env.selfhost has POSTGRES_PASSWORD set
+#
+# WorkingDirectory below assumes the repo lives at /opt/recoder. If you clone
+# it elsewhere, edit WorkingDirectory and the ExecStart/ExecStop paths to
+# match (scripts/install-selfhost.sh does this substitution for you).
+
+[Unit]
+Description=Recoder self-host stack (docker compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/recoder
+SyslogIdentifier=recoder-selfhost
+# selfhost-up.sh waits up to 600s for healthchecks on a cold (build) first
+# boot. Give systemd enough runway to cover that bounded wait plus image build
+# time so it does not kill the bring-up mid-flight. infinity is intentional:
+# the script's own deadline is the real bound and it fails fast/non-zero on a
+# stuck service.
+TimeoutStartSec=infinity
+# Confirm the Docker daemon is actually accepting before we try to bring the
+# stack up (Requires/After order the unit but do not prove dockerd is ready).
+ExecStartPre=/usr/bin/env bash -c 'for i in $(seq 1 60); do docker info >/dev/null 2>&1 && exit 0; sleep 2; done; echo "docker daemon not ready" >&2; exit 1'
+# selfhost-up.sh validates env, generates safe secrets, builds (cached), waits
+# for health, and prints URLs. POSTGRES_PASSWORD must be set in .env.selfhost
+# (or injected by cloud-init/user-data) before first boot, or the service
+# fails fast with a clear message — exactly the intended fail-safe behavior.
+ExecStart=/usr/bin/env bash /opt/recoder/scripts/selfhost-up.sh
+ExecStop=/usr/bin/env bash /opt/recoder/scripts/selfhost-down.sh
+
+[Install]
+WantedBy=multi-user.target

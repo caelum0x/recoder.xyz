@@ -10,7 +10,7 @@ import {
 export const metadata: Metadata = {
   title: "Self-host Recoder",
   description:
-    "Run Recoder in your own infrastructure with Docker Compose, Postgres, an edge proxy, and a Packer-built machine image.",
+    "Run Recoder on your own Linux server, Mac mini, or Windows box with Docker Compose. Bring your own AI provider keys — Recoder is the governed orchestration layer, not another AI subscription.",
   alternates: { canonical: "https://recoder.xyz/self-host" },
 };
 
@@ -113,6 +113,56 @@ export default function SelfHost() {
                 we&apos;ll send the deploy bundle and walk you through it.
               </p>
             )}
+          </div>
+        </section>
+
+        {/* BYOK positioning */}
+        <section className="border-b border-border bg-bg-soft">
+          <div className="mx-auto max-w-4xl px-6 py-20">
+            <div className="max-w-2xl">
+              <div className="text-xs font-medium uppercase tracking-wider text-accent">
+                Not another AI bill
+              </div>
+              <h2 className="text-balance mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
+                Bring the AI subscriptions you already pay for.
+              </h2>
+              <p className="mt-4 text-muted">
+                You already have Claude Code, Codex, or another agent CLI and
+                a model key. Recoder doesn&apos;t sell you another one — it&apos;s
+                the governed orchestration layer underneath: parallel git
+                worktrees, an audit trail, approvals, and shared memory,
+                running on a control plane that lives on your own box.
+              </p>
+            </div>
+
+            <div className="mt-8 grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-3">
+              <div className="bg-bg p-7">
+                <h3 className="font-medium">Your box</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  A Linux server, a Mac mini, or a Windows box via WSL2 +
+                  Docker. The control plane, the audit log, and your code stay
+                  on hardware you own.
+                </p>
+              </div>
+              <div className="bg-bg p-7">
+                <h3 className="font-medium">Your AI keys</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  Set <code className="font-mono text-xs text-fg">ANTHROPIC_API_KEY</code>,{" "}
+                  <code className="font-mono text-xs text-fg">OPENAI_API_KEY</code>, or{" "}
+                  <code className="font-mono text-xs text-fg">GEMINI_API_KEY</code> in
+                  your own env. All optional, all degrade-safe — Recoder never
+                  requires a key of its own to run.
+                </p>
+              </div>
+              <div className="bg-bg p-7">
+                <h3 className="font-medium">Our governance layer</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  A fail-closed Envoy edge, a deny-biased governance daemon,
+                  and a tamper-evident audit chain in front of every agent
+                  action — the part that&apos;s hard to build yourself.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 

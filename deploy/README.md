@@ -223,6 +223,26 @@ config to Envoy live over ADS (optionally sourced from `XDS_CONFIG_URL`).
 
 ---
 
+## Fastest path on a bare Linux box: install script + systemd unit
+
+If you don't need an AMI or Packer, `scripts/install-selfhost.sh` +
+`deploy/systemd/recoder-selfhost.service` give a one-command path on any
+systemd Linux host:
+
+```bash
+sudo scripts/install-selfhost.sh
+```
+
+Installs Docker (via get.docker.com) if missing, seeds `.env.selfhost` from
+the template if absent (never overwrites one you already have), installs the
+systemd unit rewritten for this checkout's path, and enables it. It does
+**not** auto-start — set `POSTGRES_PASSWORD` in `.env.selfhost` first, then
+`systemctl start recoder-selfhost.service`. See `docs/SELF-HOST.md` for the
+macOS/Windows notes (no launchd/Windows-service wrapper yet — tracked as a
+known gap, not faked as shipped).
+
+---
+
 ## Machine image (AMI / generic host)
 
 `deploy/packer/recoder.pkr.hcl` bakes Docker + the compose stack + the pinned
