@@ -381,25 +381,24 @@ is now Loom, not tmux.
 
 These were confirmed against the source and the build, not assumed:
 
-1. **The backend image does not bake the `loom` binary.** Loom
-   (`apps/desktop/engines/loom`) is the Conductor's **default** workspace
-   substrate — `backend/src/bootstrap/index.ts` fails loud if it can't find
-   one, by design ("no silent fallback"). `backend/Dockerfile` has a
-   dedicated substrate stage for `tmux`/`bd`/`recoder-xds` but no equivalent
-   stage for Loom. Until that stage exists, a vanilla
-   `docker compose up` of this stack will fail to launch workspaces unless
-   you either:
+1. ~~The backend image does not bake the `loom` binary.~~ **Fixed.**
+   `backend/Dockerfile` now has a dedicated `loom` build stage (Rust 1.96.1 +
+   Zig exactly 0.15.2, mirroring the existing `tmux`/`bd`/`recoder-xds`
+   substrate stage) that builds `apps/desktop/engines/loom` and bakes the
+   binary into the image at the path
+   [`backend/src/domains/engines/loom-path.ts`](../backend/src/domains/engines/loom-path.ts)
+   expects via `CONDUCTOR_LOOM_BIN` (exported by
+   `docker-substrate-entrypoint.sh`, same degrade-safe pattern as tmux/bd). A
+   vanilla `docker compose up` now launches workspaces on Loom without either
+   workaround below. The build stage is degrade-safe like its siblings — if
+   the toolchain or network is unavailable during the image build, the binary
+   is simply absent and the two workarounds below still apply:
    - set `CONDUCTOR_LOOM_DISABLED=1` in `.env.selfhost` (falls back to the
      tmux substrate, fully supported), or
    - build Loom yourself (`cd apps/desktop/engines/loom && cargo build
      --release --locked` — requires Rust 1.96.1 and **exactly** Zig 0.15.2,
      see `apps/desktop/engines/loom/RECODER-VENDOR.md`) and mount it into the
      backend container with `CONDUCTOR_LOOM_BIN=/path/to/loom`.
-
-   Both workarounds are real and already supported by
-   [`backend/src/domains/engines/loom-path.ts`](../backend/src/domains/engines/loom-path.ts);
-   what's missing is baking the binary into the shipped image so neither
-   workaround is necessary.
 
 2. **No coding-agent CLI is installed in the backend image.** The
    "bring your own AI subscription" story is real for the *API key*
