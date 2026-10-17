@@ -11,8 +11,20 @@
 //
 // Only the narrow methods Recoder needs are typed here (ping, session.snapshot,
 // worktree.create, worktree.remove, agent.start, agent.get, agent.read,
-// agent.prompt, agent.wait, pane.send_text, events.subscribe). The full engine
-// exposes a much larger control surface.
+// agent.prompt, agent.wait, pane.send_text, events.subscribe, and the
+// terminal_manager.* family below). The full engine exposes a much larger
+// control surface.
+//
+// terminal_manager.* (open/write/status/close/stream) is the seam
+// docs/T3CODE-FORK.md's patch queue #1 names: a headless, worktree-scoped PTY
+// a caller with no open Loom workspace/tab/pane layout (i.e. the forked t3
+// environment server, `third_party/t3code/apps/server`) can drive directly —
+// see `apps/desktop/engines/loom/src/terminal_manager.rs` (the registry) and
+// `src/api/server/terminal_manager_{ops,stream}.rs` (this protocol's Rust
+// implementation), landed 2026-10-15 on the Loom side. These five methods are
+// a DIFFERENT shape from `pane.*`/`worktree.*` above: no workspace/tab/pane
+// target, just an opaque `pane_handle` scoped by a caller-supplied
+// `worktree_id` string (Loom does not resolve or validate it).
 
 /**
  * loom `PROTOCOL_VERSION`. A `ping` reply whose `protocol` differs from this is
@@ -41,7 +53,12 @@ export type LoomMethod =
   | 'agent.wait'
   | 'pane.send_text'
   | 'pane.terminal.stream'
-  | 'events.subscribe';
+  | 'events.subscribe'
+  | 'terminal_manager.open'
+  | 'terminal_manager.write'
+  | 'terminal_manager.status'
+  | 'terminal_manager.close'
+  | 'terminal_manager.stream';
 
 export interface LoomRequest<Params = Record<string, unknown>> {
   /** Caller-chosen correlation id, echoed back on the response. */
@@ -155,6 +172,46 @@ export interface PaneTerminalStreamParams {
   rows: number;
   takeover?: boolean;
 }
+
+/**
+ * `terminal_manager.open` params (`TerminalManagerOpenParams` in
+ * `apps/desktop/engines/loom/src/api/schema/terminal_manager.rs`).
+ * `worktree_id` is an opaque scoping key the CALLER chooses (Loom does not
+ * resolve or validate it against a real worktree path) — it exists purely
+ * for isolation + observability, echoed back by `terminal_manager.status`.
+ */
+export interface TerminalManagerOpenParams {
+  worktree_id: string;
+  cwd: string;
+  cols?: number;
+  rows?: number;
+  env?: Record<string, string>;
+  shell?: string;
+}
+
+/** Shared target shape for every other `terminal_manager.*` method. */
+export interface TerminalManagerPaneTarget {
+  pane_handle: string;
+}
+
+/** `terminal_manager.write` params — binary-safe (unlike `pane.send_text`'s plain-UTF-8 `text`). */
+export interface TerminalManagerWriteParams {
+  pane_handle: string;
+  /** Base64-encoded raw bytes written to the pane's PTY stdin. */
+  data_base64: string;
+}
+
+/**
+ * The two push frames and the terminal frame emitted on a
+ * `terminal_manager.stream` connection after its initial
+ * `terminal_manager_stream_started` ack — bare `{type, ...}` lines, same
+ * convention as {@link LoomTerminalEvent} (`pane.terminal.stream`'s own
+ * push frames), not an `events.subscribe`-style `{event, data}` envelope.
+ */
+export type LoomTerminalManagerStreamEvent =
+  | { type: 'terminal_manager.output'; pane_handle: string; data_base64: string }
+  | { type: 'terminal_manager.exited'; pane_handle: string; exit_code: number | null }
+  | { type: 'terminal_manager.closed'; pane_handle: string; reason?: string | null };
 
 export interface LoomTerminalFrame {
   type: 'terminal.frame';
@@ -614,8 +671,29 @@ export type LoomResult =
   | { type: 'agent_prompted'; agent: AgentInfo }
   | { type: 'pane_read'; read: PaneReadResult }
   | { type: 'subscription_started'; cursor?: number }
+  | {
+      type: 'terminal_manager_opened';
+      pane_handle: string;
+      pid: number;
+      worktree_id: string;
+    }
+  | {
+      type: 'terminal_manager_status';
+      pane_handle: string;
+      alive: boolean;
+      exit_code?: number | null;
+      pid: number;
+      worktree_id: string;
+    }
+  | { type: 'terminal_manager_stream_started'; pane_handle: string }
   | { type: 'ok' }
   | { type: string; [key: string]: unknown };
+
+/** Convenience narrower for a successful `terminal_manager.open` reply. */
+export type TerminalManagerOpenedResult = Extract<LoomResult, { type: 'terminal_manager_opened' }>;
+
+/** Convenience narrower for a successful `terminal_manager.status` reply. */
+export type TerminalManagerStatusResult = Extract<LoomResult, { type: 'terminal_manager_status' }>;
 
 /** Convenience narrower for the `pong` handshake result. */
 export type PongResult = Extract<LoomResult, { type: 'pong' }>;
@@ -701,6 +779,36 @@ export function isLoomTerminalEvent(value: unknown): value is LoomTerminalEvent 
     typeof value.height === 'number' &&
     typeof value.full === 'boolean' &&
     typeof value.bytes === 'string'
+  );
+}
+
+const TERMINAL_MANAGER_STREAM_EVENT_TYPES = new Set([
+  'terminal_manager.output',
+  'terminal_manager.exited',
+  'terminal_manager.closed',
+]);
+
+/** Validate the three server-to-client messages on a `terminal_manager.stream` connection. */
+export function isLoomTerminalManagerStreamEvent(
+  value: unknown
+): value is LoomTerminalManagerStreamEvent {
+  if (!isRecord(value)) return false;
+  if (typeof value.type !== 'string' || !TERMINAL_MANAGER_STREAM_EVENT_TYPES.has(value.type)) {
+    return false;
+  }
+  if (value.type === 'terminal_manager.output') {
+    return typeof value.pane_handle === 'string' && typeof value.data_base64 === 'string';
+  }
+  if (value.type === 'terminal_manager.exited') {
+    return (
+      typeof value.pane_handle === 'string' &&
+      (value.exit_code === null || typeof value.exit_code === 'number')
+    );
+  }
+  // terminal_manager.closed
+  return (
+    typeof value.pane_handle === 'string' &&
+    (value.reason == null || typeof value.reason === 'string')
   );
 }
 

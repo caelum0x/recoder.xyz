@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "protocol": 20,
+  "protocol": 21,
   "schema_version": 1,
   "schemas": {
     "error_response": {
@@ -3280,6 +3280,46 @@
           ],
           "type": "object"
         },
+        "PaneTerminalStreamMode": {
+          "enum": [
+            "control",
+            "observe"
+          ],
+          "type": "string"
+        },
+        "PaneTerminalStreamParams": {
+          "properties": {
+            "cols": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mode": {
+              "$ref": "#/schemas/request/$defs/PaneTerminalStreamMode"
+            },
+            "pane_id": {
+              "type": "string"
+            },
+            "rows": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "takeover": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "pane_id",
+            "mode",
+            "cols",
+            "rows"
+          ],
+          "type": "object"
+        },
         "PaneWaitForOutputParams": {
           "properties": {
             "lines": {
@@ -4267,6 +4307,81 @@
           },
           "required": [
             "tab_id"
+          ],
+          "type": "object"
+        },
+        "TerminalManagerOpenParams": {
+          "description": "Opens a new worktree-scoped PTY and returns its pane handle. See\n`docs/T3CODE-FORK.md` patch-queue item #1: this is the seam the forked t3\nserver's node-pty-based terminal manager drives on macOS/Linux instead of\n`node-pty` directly.",
+          "properties": {
+            "cols": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "env": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "rows": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "shell": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "worktree_id": {
+              "description": "Opaque scoping key chosen by the caller. Not resolved by Loom — the\ncaller already knows the worktree's absolute path and passes it as\n`cwd` — this field exists purely for isolation and observability\n(reported back by `terminal_manager.status`).",
+              "type": "string"
+            }
+          },
+          "required": [
+            "worktree_id",
+            "cwd"
+          ],
+          "type": "object"
+        },
+        "TerminalManagerPaneTarget": {
+          "description": "Shared target shape for every other `terminal_manager.*` method, mirroring\n`PaneTarget`'s reuse across `pane.get`/`pane.focus`/`pane.close`.",
+          "properties": {
+            "pane_handle": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pane_handle"
+          ],
+          "type": "object"
+        },
+        "TerminalManagerWriteParams": {
+          "properties": {
+            "data_base64": {
+              "description": "Base64-encoded raw bytes to write to the pane's PTY stdin.\nBinary-safe, unlike `pane.send_text`'s plain-UTF-8 `text`.",
+              "type": "string"
+            },
+            "pane_handle": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pane_handle",
+            "data_base64"
           ],
           "type": "object"
         },
@@ -5654,6 +5769,22 @@
         {
           "properties": {
             "method": {
+              "const": "pane.terminal.stream",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/PaneTerminalStreamParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "pane.graphics.set",
               "type": "string"
             },
@@ -5851,6 +5982,86 @@
             },
             "params": {
               "$ref": "#/schemas/request/$defs/PaneWaitForOutputParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal_manager.open",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/TerminalManagerOpenParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal_manager.write",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/TerminalManagerWriteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal_manager.status",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/TerminalManagerPaneTarget"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal_manager.close",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/TerminalManagerPaneTarget"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal_manager.stream",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/TerminalManagerPaneTarget"
             }
           },
           "required": [
@@ -7636,6 +7847,13 @@
             },
             "agent_status": {
               "$ref": "#/schemas/success_response/$defs/AgentStatus"
+            },
+            "capability_token": {
+              "description": "Runtime-only bearer credential for a managed pane's Recoder MCP route.\nIt is absent for unmanaged panes and is never written into session snapshots.",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "cwd": {
               "type": [
@@ -9567,6 +9785,13 @@
           ],
           "type": "object"
         },
+        "PaneTerminalStreamMode": {
+          "enum": [
+            "control",
+            "observe"
+          ],
+          "type": "string"
+        },
         "PaneZoomReason": {
           "enum": [
             "single_pane",
@@ -10898,6 +11123,40 @@
             },
             {
               "properties": {
+                "cols": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "mode": {
+                  "$ref": "#/schemas/success_response/$defs/PaneTerminalStreamMode"
+                },
+                "pane_id": {
+                  "type": "string"
+                },
+                "rows": {
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": {
+                  "const": "terminal_stream_started",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "pane_id",
+                "mode",
+                "cols",
+                "rows"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
                 "revision": {
                   "format": "uint64",
                   "minimum": 0,
@@ -11420,6 +11679,86 @@
                 "type",
                 "status",
                 "diagnostics"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "pane_handle": {
+                  "type": "string"
+                },
+                "pid": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": {
+                  "const": "terminal_manager_opened",
+                  "type": "string"
+                },
+                "worktree_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "pane_handle",
+                "pid",
+                "worktree_id"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "alive": {
+                  "type": "boolean"
+                },
+                "exit_code": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "pane_handle": {
+                  "type": "string"
+                },
+                "pid": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": {
+                  "const": "terminal_manager_status",
+                  "type": "string"
+                },
+                "worktree_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "pane_handle",
+                "alive",
+                "pid",
+                "worktree_id"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "pane_handle": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "terminal_manager_stream_started",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "pane_handle"
               ],
               "type": "object"
             },

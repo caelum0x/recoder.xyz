@@ -92,16 +92,35 @@ import — Recoder ships one desktop shell only (the Wave fork) and keeps
 recoder.xyz as its own marketing site; only patterns from those two apps are
 mined, not their code.
 
-t3code is a source donor, not yet a live build target: `packages/t3-bridge`
-(docs/T3CODE-FORK.md section 3) is the only place allowed to import
-`@t3tools/*` internals into Recoder's own runtime. Internal package names,
-Effect service names, and wire field names inside third_party/t3code stay
-upstream-shaped (same policy as Wave's `wsh`/`WAVETERM_*` and herdr/Loom's
-pre-rebrand internals) so `git subtree pull` stays a clean sync, not a
-re-rename pass. Only user-facing strings are rebranded, via the scripted,
-re-appliable patch at scripts/rebrand-t3code.sh (never hand-edited into the
-vendored tree permanently).
+`third_party/t3code/apps/server` (the `recoder` CLI, née `t3`) and its
+`apps/web` are now live build/consumption targets (docs/T3CODE-FORK.md
+section 9/12): `packages/t3-bridge` (section 3) is the only place allowed to
+import `@t3tools/*` internals into Recoder's backend runtime (the terminal
+and governance seams, section 4); `packages/t3-session-bridge` is the
+analogous seam on the Wave desktop side, wrapping `@t3tools/contracts`'
+`WsRpcGroup` wire schema for the `recoder-session` Wave block
+(apps/desktop/app/frontend/app/view/recoder-session). Nothing else imports
+`@t3tools/*` directly. Internal package names, Effect service names, and wire
+field names inside third_party/t3code stay upstream-shaped (same policy as
+Wave's `wsh`/`WAVETERM_*` and herdr/Loom's pre-rebrand internals) so
+`git subtree pull` stays a clean sync, not a re-rename pass. Only user-facing
+strings are rebranded, via the scripted, re-appliable patch at
+scripts/rebrand-t3code.sh (never hand-edited into the vendored tree
+permanently).
 
 MIT is compatible with the Apache-2.0 code already vendored here (Wave,
 herdr/Loom, cloudflared).
+================================================================================
+@pierre/diffs — https://www.npmjs.com/package/@pierre/diffs
+Copyright (c) Pierre. Licensed under the Apache License, Version 2.0.
+
+`@pierre/diffs@1.5.2` is a direct npm dependency of
+`apps/desktop/app/frontend` (the `recoder-session` Wave block's Review
+panel, docs/RECODER-T3CODE-COMPOSITION.md section 4's "apps/web" row) and of
+`third_party/t3code/apps/web` (upstream, which additionally vendors a
+patched build at `third_party/t3code/patches/@pierre%2Fdiffs@1.5.2.patch`
+adding find/search — NOT applied to Recoder's own direct dependency in this
+first version; see docs/T3CODE-FORK.md). Used to parse (`parsePatchFiles`)
+and render (`CodeView`) the recoder environment server's full-thread unified
+diff for review. Unmodified, used as published.
 ================================================================================

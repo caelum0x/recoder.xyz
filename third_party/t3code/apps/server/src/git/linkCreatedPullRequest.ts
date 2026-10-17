@@ -11,8 +11,10 @@ import { parseChangeRequestUrl } from "@t3tools/shared/changeRequestUrl";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
+import * as RecoderWriteGate from "../orchestration-v2/RecoderWriteGate.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 
 export interface CreatedPullRequestKey {
@@ -73,6 +75,17 @@ export const linkCreatedPullRequest = <E>(input: {
     const key = createdPullRequestKey(input.result, project);
     if (key === null) return;
     const commandId = yield* input.commandId;
+    // Governance seam (docs/T3CODE-FORK.md patch-queue #2): a PR link is a
+    // write/merge action on the new apps/server write-capable surface — it
+    // must clear the Recoder backend's write gate over loopback BEFORE the
+    // link is dispatched, same fail-closed contract as every other gate in
+    // this repo. See RecoderWriteGate.ts for the full rationale.
+    yield* RecoderWriteGate.requireRecoderWriteApproval({
+      actorId: `t3-thread-${input.threadId}`,
+      action: "pr.link",
+      target: `${key.host}/${key.repository}#${key.number} (${key.url})`,
+      taskId: input.threadId,
+    });
     yield* engine
       .dispatch({
         type: "thread.pull-request.link",
@@ -84,6 +97,16 @@ export const linkCreatedPullRequest = <E>(input: {
       .pipe(Effect.asVoid);
   }).pipe(
     Effect.withSpan("linkCreatedPullRequest"),
+    Effect.catchIf(
+      Schema.is(RecoderWriteGate.RecoderWriteGateDeniedError),
+      (denial) =>
+        Effect.logWarning("pull request link denied by the Recoder write gate", {
+          threadId: input.threadId,
+          reason: denial.reason,
+          tier: denial.tier,
+          degraded: denial.degraded,
+        }),
+    ),
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.failCause(cause as Cause.Cause<never>)
