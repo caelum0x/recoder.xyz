@@ -24,6 +24,8 @@ use crate::ipc::{
 
 mod pane_graphics_stream;
 mod pane_terminal_stream;
+mod terminal_manager_ops;
+mod terminal_manager_stream;
 
 const SOCKET_PERMISSION_MODE: u32 = 0o600;
 pub(super) const CONNECTION_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -299,6 +301,90 @@ fn handle_connection_with_stop(
                 wait_for_output(request_id.clone(), params, &mut stream, api_tx, running)?;
             finish_wait_response(&mut stream, response, &request_id, method, changes_ui)
         }
+        Method::TerminalManagerStream(params) => {
+            let result = terminal_manager_stream::serve(stream, request_id.clone(), params, running);
+            match &result {
+                Ok(()) => crate::logging::api_request_completed(
+                    &request_id,
+                    method,
+                    "stream_closed",
+                    changes_ui,
+                ),
+                Err(err) => {
+                    crate::logging::api_request_failed(&request_id, method, &err.to_string())
+                }
+            }
+            result
+        }
+        // `terminal_manager.open`/`write`/`status`/`close` are synchronous
+        // and never touch `api_tx` (the app actor channel) — these panes
+        // are not TUI panes and don't require a running interactive app.
+        // See `terminal_manager_ops.rs` and `docs/T3CODE-FORK.md`
+        // patch-queue item #1.
+        Method::TerminalManagerOpen(params) => {
+            let response = terminal_manager_ops::open(request_id.clone(), params);
+            let result = write_text_line_allow_disconnect(&mut stream, &response);
+            match &result {
+                Ok(()) => crate::logging::api_request_completed(
+                    &request_id,
+                    method,
+                    api_response_outcome(&response),
+                    changes_ui,
+                ),
+                Err(err) => {
+                    crate::logging::api_request_failed(&request_id, method, &err.to_string())
+                }
+            }
+            result
+        }
+        Method::TerminalManagerWrite(params) => {
+            let response = terminal_manager_ops::write(request_id.clone(), params);
+            let result = write_text_line_allow_disconnect(&mut stream, &response);
+            match &result {
+                Ok(()) => crate::logging::api_request_completed(
+                    &request_id,
+                    method,
+                    api_response_outcome(&response),
+                    changes_ui,
+                ),
+                Err(err) => {
+                    crate::logging::api_request_failed(&request_id, method, &err.to_string())
+                }
+            }
+            result
+        }
+        Method::TerminalManagerStatus(params) => {
+            let response = terminal_manager_ops::status(request_id.clone(), params);
+            let result = write_text_line_allow_disconnect(&mut stream, &response);
+            match &result {
+                Ok(()) => crate::logging::api_request_completed(
+                    &request_id,
+                    method,
+                    api_response_outcome(&response),
+                    changes_ui,
+                ),
+                Err(err) => {
+                    crate::logging::api_request_failed(&request_id, method, &err.to_string())
+                }
+            }
+            result
+        }
+        Method::TerminalManagerClose(params) => {
+            let response = terminal_manager_ops::close(request_id.clone(), params);
+            let result = write_text_line_allow_disconnect(&mut stream, &response);
+            match &result {
+                Ok(()) => crate::logging::api_request_completed(
+                    &request_id,
+                    method,
+                    api_response_outcome(&response),
+                    changes_ui,
+                ),
+                Err(err) => {
+                    crate::logging::api_request_failed(&request_id, method, &err.to_string())
+                }
+            }
+            result
+        }
         method_body => {
             let (response_write_tx, response_write_rx) = std::sync::mpsc::channel();
             let response = handle_request(
@@ -488,6 +574,11 @@ fn api_method_name(method: &Method) -> &'static str {
         Method::EventsSubscribe(_) => "events.subscribe",
         Method::EventsWait(_) => "events.wait",
         Method::PaneWaitForOutput(_) => "pane.wait_for_output",
+        Method::TerminalManagerOpen(_) => "terminal_manager.open",
+        Method::TerminalManagerWrite(_) => "terminal_manager.write",
+        Method::TerminalManagerStatus(_) => "terminal_manager.status",
+        Method::TerminalManagerClose(_) => "terminal_manager.close",
+        Method::TerminalManagerStream(_) => "terminal_manager.stream",
         Method::IntegrationInstall(_) => "integration.install",
         Method::IntegrationUninstall(_) => "integration.uninstall",
         Method::PluginLink(_) => "plugin.link",
@@ -948,6 +1039,7 @@ fn error_response_json(id: String, code: &str, message: String) -> String {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use base64::Engine as _;
     use interprocess::local_socket::traits::Listener as _;
     use std::collections::HashMap;
     use std::io::{BufRead, BufReader};
@@ -1251,6 +1343,217 @@ mod tests {
         let response: SuccessResponse = serde_json::from_str(&read_line(&mut client)).unwrap();
         assert_eq!(response.id, "req_write");
         server_thread.join().unwrap().unwrap();
+    }
+
+    /// Full `terminal_manager.*` protocol round trip over the real JSON
+    /// socket: open -> write -> stream (read the echoed output back) ->
+    /// status -> close. Each verb is its own connection, same as production;
+    /// the pane handle from `open` is reused across all of them, proving the
+    /// registry is shared process-wide the same way `EventHub` is. See
+    /// `docs/T3CODE-FORK.md` patch-queue item #1.
+    /// Polls `client` for one newline-terminated line, the same
+    /// non-blocking-poll-plus-deadline shape `read_initial_request_line_with_limits`
+    /// already uses in production, instead of relying on a blocking read with
+    /// `set_recv_timeout` (observed flaky under load in this test: an
+    /// OS-level `SO_RCVTIMEO` read can apparently fire before data that was
+    /// already flushed becomes visible, under heavy concurrent build load on
+    /// the test machine).
+    fn read_line_with_timeout(stream: &mut LocalStream, timeout: Duration) -> String {
+        set_local_stream_polling(stream, true).expect("enable polling for test read");
+        let deadline = Instant::now() + timeout;
+        let mut bytes = Vec::new();
+        let mut byte = [0u8; 1];
+        loop {
+            match poll_local_stream_read(stream, &mut byte).expect("poll test stream read") {
+                LocalStreamRead::Data => {
+                    bytes.push(byte[0]);
+                    if byte[0] == b'\n' {
+                        break;
+                    }
+                }
+                LocalStreamRead::Pending => {
+                    assert!(
+                        Instant::now() < deadline,
+                        "timed out waiting for a response line"
+                    );
+                    std::thread::sleep(CONNECTION_POLL_INTERVAL);
+                }
+                LocalStreamRead::Closed => break,
+            }
+        }
+        String::from_utf8(bytes).expect("response line is valid utf8")
+    }
+
+    #[test]
+    fn terminal_manager_open_write_stream_status_close_round_trips() {
+        const TEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+        fn send_request(
+            client: &mut LocalStream,
+            running: &Arc<AtomicBool>,
+            server: LocalStream,
+            request: &Request,
+        ) -> serde_json::Value {
+            client
+                .write_all(serde_json::to_vec(request).unwrap().as_slice())
+                .unwrap();
+            client.write_all(b"\n").unwrap();
+            client.flush().unwrap();
+
+            let (api_tx, _api_rx) = mpsc::unbounded_channel();
+            let event_hub = EventHub::default();
+            handle_connection(server, &api_tx, &event_hub, running, None).unwrap();
+            serde_json::from_str(&read_line_with_timeout(client, TEST_TIMEOUT)).unwrap()
+        }
+
+        let running = Arc::new(AtomicBool::new(true));
+
+        let (mut client, server, _path) = local_stream_pair("tm-open");
+        let open_response = send_request(
+            &mut client,
+            &running,
+            server,
+            &Request {
+                id: "tm_open".into(),
+                method: Method::TerminalManagerOpen(crate::api::schema::TerminalManagerOpenParams {
+                    worktree_id: "wt-server-roundtrip".into(),
+                    cwd: "/tmp".into(),
+                    cols: Some(80),
+                    rows: Some(24),
+                    env: HashMap::new(),
+                    shell: Some("/bin/sh".into()),
+                }),
+            },
+        );
+        assert_eq!(open_response["id"], "tm_open");
+        assert_eq!(open_response["result"]["type"], "terminal_manager_opened");
+        assert!(open_response["result"]["pid"].as_u64().unwrap() > 0);
+        let pane_handle = open_response["result"]["pane_handle"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        let (mut client, server, _path) = local_stream_pair("tm-write");
+        let write_response = send_request(
+            &mut client,
+            &running,
+            server,
+            &Request {
+                id: "tm_write".into(),
+                method: Method::TerminalManagerWrite(crate::api::schema::TerminalManagerWriteParams {
+                    pane_handle: pane_handle.clone(),
+                    data_base64: base64::engine::general_purpose::STANDARD
+                        .encode(b"echo tm-roundtrip-ok\n"),
+                }),
+            },
+        );
+        assert_eq!(write_response["id"], "tm_write");
+        assert_eq!(write_response["result"]["type"], "ok");
+
+        // Stream: a long-lived connection pushing output until the echoed
+        // text shows up, proving `write` landed in the same pane `stream`
+        // reads from.
+        let (mut client, server, _path) = local_stream_pair("tm-stream");
+        client
+            .write_all(
+                serde_json::to_vec(&Request {
+                    id: "tm_stream".into(),
+                    method: Method::TerminalManagerStream(
+                        crate::api::schema::TerminalManagerPaneTarget {
+                            pane_handle: pane_handle.clone(),
+                        },
+                    ),
+                })
+                .unwrap()
+                .as_slice(),
+            )
+            .unwrap();
+        client.write_all(b"\n").unwrap();
+        client.flush().unwrap();
+
+        let stream_running = Arc::new(AtomicBool::new(true));
+        let stream_running_for_thread = Arc::clone(&stream_running);
+        let server_thread = std::thread::spawn(move || {
+            let (api_tx, _api_rx) = mpsc::unbounded_channel();
+            let event_hub = EventHub::default();
+            handle_connection(server, &api_tx, &event_hub, &stream_running_for_thread, None)
+        });
+
+        let started: serde_json::Value = serde_json::from_str(&read_line_with_timeout(&mut client, TEST_TIMEOUT)).unwrap();
+        assert_eq!(started["id"], "tm_stream");
+        assert_eq!(
+            started["result"]["type"],
+            "terminal_manager_stream_started"
+        );
+
+        let mut saw_echo = false;
+        for _ in 0..200 {
+            let line = read_line_with_timeout(&mut client, TEST_TIMEOUT);
+            if line.trim().is_empty() {
+                continue;
+            }
+            let event: serde_json::Value = serde_json::from_str(&line).unwrap();
+            if event["type"] == "terminal_manager.output" {
+                let data = base64::engine::general_purpose::STANDARD
+                    .decode(event["data_base64"].as_str().unwrap())
+                    .unwrap();
+                if String::from_utf8_lossy(&data).contains("tm-roundtrip-ok") {
+                    saw_echo = true;
+                    break;
+                }
+            }
+        }
+        assert!(saw_echo, "expected to observe the echoed output over the stream");
+
+        stream_running.store(false, Ordering::Relaxed);
+        server_thread.join().unwrap().unwrap();
+
+        let (mut client, server, _path) = local_stream_pair("tm-status");
+        let status_response = send_request(
+            &mut client,
+            &running,
+            server,
+            &Request {
+                id: "tm_status".into(),
+                method: Method::TerminalManagerStatus(crate::api::schema::TerminalManagerPaneTarget {
+                    pane_handle: pane_handle.clone(),
+                }),
+            },
+        );
+        assert_eq!(status_response["id"], "tm_status");
+        assert_eq!(status_response["result"]["type"], "terminal_manager_status");
+        assert_eq!(status_response["result"]["alive"], true);
+        assert_eq!(status_response["result"]["worktree_id"], "wt-server-roundtrip");
+
+        let (mut client, server, _path) = local_stream_pair("tm-close");
+        let close_response = send_request(
+            &mut client,
+            &running,
+            server,
+            &Request {
+                id: "tm_close".into(),
+                method: Method::TerminalManagerClose(crate::api::schema::TerminalManagerPaneTarget {
+                    pane_handle: pane_handle.clone(),
+                }),
+            },
+        );
+        assert_eq!(close_response["id"], "tm_close");
+        assert_eq!(close_response["result"]["type"], "ok");
+
+        // The handle is gone immediately after close, not just dead.
+        let (mut client, server, _path) = local_stream_pair("tm-status-after-close");
+        let status_after_close = send_request(
+            &mut client,
+            &running,
+            server,
+            &Request {
+                id: "tm_status_after_close".into(),
+                method: Method::TerminalManagerStatus(crate::api::schema::TerminalManagerPaneTarget {
+                    pane_handle,
+                }),
+            },
+        );
+        assert_eq!(status_after_close["error"]["code"], "unknown_pane");
     }
 
     #[test]

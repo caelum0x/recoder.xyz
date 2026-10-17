@@ -194,6 +194,76 @@ fn request_round_trips_for_server_stop() {
 }
 
 #[test]
+fn request_round_trips_for_terminal_manager_open() {
+    let request = Request {
+        id: "req_tm_open".into(),
+        method: Method::TerminalManagerOpen(TerminalManagerOpenParams {
+            worktree_id: "wt-1".into(),
+            cwd: "/tmp/worktrees/wt-1".into(),
+            cols: Some(120),
+            rows: Some(40),
+            env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
+            shell: Some("/bin/zsh".into()),
+        }),
+    };
+
+    let json = serde_json::to_value(&request).unwrap();
+    assert_eq!(json["method"], "terminal_manager.open");
+    assert_eq!(json["params"]["worktree_id"], "wt-1");
+    let restored: Request = serde_json::from_value(json).unwrap();
+    assert_eq!(restored, request);
+}
+
+#[test]
+fn request_round_trips_for_terminal_manager_write() {
+    let request = Request {
+        id: "req_tm_write".into(),
+        method: Method::TerminalManagerWrite(TerminalManagerWriteParams {
+            pane_handle: "tm_1".into(),
+            data_base64: "aGVsbG8=".into(),
+        }),
+    };
+
+    let json = serde_json::to_value(&request).unwrap();
+    assert_eq!(json["method"], "terminal_manager.write");
+    let restored: Request = serde_json::from_value(json).unwrap();
+    assert_eq!(restored, request);
+}
+
+#[test]
+fn request_round_trips_for_terminal_manager_status_and_close_and_stream() {
+    for (method_name, method) in [
+        (
+            "terminal_manager.status",
+            Method::TerminalManagerStatus(TerminalManagerPaneTarget {
+                pane_handle: "tm_1".into(),
+            }),
+        ),
+        (
+            "terminal_manager.close",
+            Method::TerminalManagerClose(TerminalManagerPaneTarget {
+                pane_handle: "tm_1".into(),
+            }),
+        ),
+        (
+            "terminal_manager.stream",
+            Method::TerminalManagerStream(TerminalManagerPaneTarget {
+                pane_handle: "tm_1".into(),
+            }),
+        ),
+    ] {
+        let request = Request {
+            id: "req_tm".into(),
+            method,
+        };
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(json["method"], method_name);
+        let restored: Request = serde_json::from_value(json).unwrap();
+        assert_eq!(restored, request);
+    }
+}
+
+#[test]
 fn request_round_trips_for_server_reload_config() {
     let request = Request {
         id: "req_reload".into(),

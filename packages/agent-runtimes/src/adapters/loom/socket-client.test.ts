@@ -12,6 +12,7 @@ import {
   type LoomEventStream,
   type LoomTerminalStream,
 } from './socket-client';
+import { LOOM_PROTOCOL_VERSION } from './protocol';
 
 let socketCounter = 0;
 
@@ -471,6 +472,196 @@ describe('LoomSocketClient', () => {
     ]);
   });
 
+  test('terminalManagerOpen sends worktree_id/cwd/cols/rows/env/shell and resolves pane_handle+pid', async () => {
+    let sentParams: unknown;
+    const client = await withServer((request, socket) => {
+      const record = request as { id: string; method: string; params: unknown };
+      sentParams = record.params;
+      socket.end(
+        successLine(record.id, {
+          type: 'terminal_manager_opened',
+          pane_handle: 'pane-handle-1',
+          pid: 4242,
+          worktree_id: 'wt-a',
+        })
+      );
+    });
+
+    const opened = await client.terminalManagerOpen({
+      worktree_id: 'wt-a',
+      cwd: '/repo/worktrees/wt-a',
+      cols: 120,
+      rows: 30,
+      env: { FOO: 'bar' },
+      shell: '/bin/zsh',
+    });
+
+    assert.deepEqual(sentParams, {
+      worktree_id: 'wt-a',
+      cwd: '/repo/worktrees/wt-a',
+      cols: 120,
+      rows: 30,
+      env: { FOO: 'bar' },
+      shell: '/bin/zsh',
+    });
+    assert.equal(opened.pane_handle, 'pane-handle-1');
+    assert.equal(opened.pid, 4242);
+    assert.equal(opened.worktree_id, 'wt-a');
+  });
+
+  test('terminalManagerOpen rejects when the server answers with an unexpected result type', async () => {
+    const client = await withServer((request, socket) => {
+      socket.end(successLine(requestId(request), { type: 'ok' }));
+    });
+
+    await assert.rejects(
+      () => client.terminalManagerOpen({ worktree_id: 'wt-a', cwd: '/repo' }),
+      (err: unknown) => {
+        assert.ok(err instanceof LoomError);
+        assert.equal(err.code, 'unexpected_response');
+        return true;
+      }
+    );
+  });
+
+  test('terminalManagerStatus resolves alive/exit_code/pid/worktree_id for a pane handle', async () => {
+    let sentParams: unknown;
+    const client = await withServer((request, socket) => {
+      const record = request as { id: string; params: unknown };
+      sentParams = record.params;
+      socket.end(
+        successLine(record.id, {
+          type: 'terminal_manager_status',
+          pane_handle: 'pane-handle-1',
+          alive: false,
+          exit_code: 0,
+          pid: 4242,
+          worktree_id: 'wt-a',
+        })
+      );
+    });
+
+    const status = await client.terminalManagerStatus({ pane_handle: 'pane-handle-1' });
+
+    assert.deepEqual(sentParams, { pane_handle: 'pane-handle-1' });
+    assert.equal(status.alive, false);
+    assert.equal(status.exit_code, 0);
+    assert.equal(status.pid, 4242);
+  });
+
+  test('terminalManagerClose resolves on an ok ack', async () => {
+    let sentParams: unknown;
+    const client = await withServer((request, socket) => {
+      const record = request as { id: string; params: unknown };
+      sentParams = record.params;
+      socket.end(successLine(record.id, { type: 'ok' }));
+    });
+
+    await client.terminalManagerClose({ pane_handle: 'pane-handle-1' });
+    assert.deepEqual(sentParams, { pane_handle: 'pane-handle-1' });
+  });
+
+  test('terminalManagerWrite base64-encodes nothing extra — sends the caller-provided data_base64 verbatim and resolves on ok', async () => {
+    let sentParams: unknown;
+    const client = await withServer((request, socket) => {
+      const record = request as { id: string; params: unknown };
+      sentParams = record.params;
+      socket.end(successLine(record.id, { type: 'ok' }));
+    });
+
+    await client.terminalManagerWrite({
+      pane_handle: 'pane-handle-1',
+      data_base64: Buffer.from('ls\n', 'utf8').toString('base64'),
+    });
+    assert.deepEqual(sentParams, {
+      pane_handle: 'pane-handle-1',
+      data_base64: 'bHMK',
+    });
+  });
+
+  test('terminalManagerStream yields output/exited frames after its acknowledgement', async () => {
+    const client = await withServer((request, socket) => {
+      if (!('method' in (request as Record<string, unknown>))) return;
+      const id = requestId(request);
+      socket.write(successLine(id, { type: 'terminal_manager_stream_started', pane_handle: 'pane-handle-1' }));
+      socket.write(
+        `${JSON.stringify({
+          type: 'terminal_manager.output',
+          pane_handle: 'pane-handle-1',
+          data_base64: Buffer.from('hello\n', 'utf8').toString('base64'),
+        })}\n`
+      );
+      socket.write(
+        `${JSON.stringify({
+          type: 'terminal_manager.exited',
+          pane_handle: 'pane-handle-1',
+          exit_code: 0,
+        })}\n`
+      );
+    });
+
+    const stream = client.terminalManagerStream({ pane_handle: 'pane-handle-1' });
+    const iterator = stream[Symbol.asyncIterator]();
+    const first = await iterator.next();
+    const second = await iterator.next();
+    stream.close();
+
+    assert.equal(first.done, false);
+    assert.deepEqual(first.value, {
+      type: 'terminal_manager.output',
+      pane_handle: 'pane-handle-1',
+      data_base64: 'aGVsbG8K',
+    });
+    assert.equal(second.done, false);
+    assert.deepEqual(second.value, {
+      type: 'terminal_manager.exited',
+      pane_handle: 'pane-handle-1',
+      exit_code: 0,
+    });
+  });
+
+  test('terminalManagerStream writes a bare {data_base64} line on writeData/writeBase64 — no `type` wrapper (unlike pane.terminal.stream)', async () => {
+    const writes: unknown[] = [];
+    let resolveWrites: (() => void) | undefined;
+    const allWrites = new Promise<void>(resolve => {
+      resolveWrites = resolve;
+    });
+    const client = await withServer((message, socket) => {
+      const record = message as Record<string, unknown>;
+      if ('method' in record) {
+        socket.write(
+          successLine(requestId(message), {
+            type: 'terminal_manager_stream_started',
+            pane_handle: 'pane-handle-1',
+          })
+        );
+        socket.write(
+          `${JSON.stringify({
+            type: 'terminal_manager.output',
+            pane_handle: 'pane-handle-1',
+            data_base64: '',
+          })}\n`
+        );
+        return;
+      }
+      writes.push(message);
+      if (writes.length === 2) resolveWrites?.();
+    });
+
+    const stream = client.terminalManagerStream({ pane_handle: 'pane-handle-1' });
+    // Mirrors the existing `terminalStream serializes input, resize, and
+    // wheel controls` test: awaiting the first pushed frame guarantees the
+    // ack landed (and `acknowledged` flipped true) before writing, since
+    // `write()` silently drops anything sent before that.
+    await stream[Symbol.asyncIterator]().next();
+    stream.writeData('ls\n');
+    stream.writeBase64('cHdk');
+    await allWrites;
+    stream.close();
+
+    assert.deepEqual(writes, [{ data_base64: 'bHMK' }, { data_base64: 'cHdk' }]);
+  });
+
   test('agentQuery serializes the filter/sort/limit request and parses the agent list', async () => {
     let seenRequest: unknown = null;
     const client = await withServer((request, socket) => {
@@ -641,7 +832,7 @@ describe('LoomSocketClient', () => {
     );
   });
 
-  test('ping rejects when the protocol version is not 20', async () => {
+  test('ping rejects when the protocol version does not match LOOM_PROTOCOL_VERSION', async () => {
     const client = await withServer((request, socket) => {
       socket.end(
         successLine(requestId(request), {
@@ -668,13 +859,13 @@ describe('LoomSocketClient', () => {
         successLine(requestId(request), {
           type: 'pong',
           version: '0.8.0',
-          protocol: 20,
+          protocol: LOOM_PROTOCOL_VERSION,
         })
       );
     });
 
     const pong = await client.ping();
-    assert.equal(pong.protocol, 20);
+    assert.equal(pong.protocol, LOOM_PROTOCOL_VERSION);
     assert.equal(pong.version, '0.8.0');
   });
 

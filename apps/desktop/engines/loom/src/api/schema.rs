@@ -10,6 +10,7 @@ pub mod response;
 pub mod server;
 pub mod session;
 pub mod tabs;
+pub mod terminal_manager;
 pub mod workspaces;
 pub mod worktrees;
 
@@ -23,6 +24,7 @@ pub use response::*;
 pub use server::*;
 pub use session::*;
 pub use tabs::*;
+pub use terminal_manager::*;
 pub use workspaces::*;
 pub use worktrees::*;
 
@@ -220,6 +222,22 @@ pub enum Method {
     EventsWait(EventsWaitParams),
     #[serde(rename = "pane.wait_for_output")]
     PaneWaitForOutput(PaneWaitForOutputParams),
+    // Worktree-scoped raw-PTY seam for external callers (the forked t3
+    // server's terminal manager on macOS/Linux). See
+    // `docs/T3CODE-FORK.md` patch-queue item #1 and
+    // `src/terminal_manager.rs`. Deliberately independent of the `pane.*`
+    // methods above: these panes have no workspace/tab/layout and do not
+    // require a running interactive app.
+    #[serde(rename = "terminal_manager.open")]
+    TerminalManagerOpen(TerminalManagerOpenParams),
+    #[serde(rename = "terminal_manager.write")]
+    TerminalManagerWrite(TerminalManagerWriteParams),
+    #[serde(rename = "terminal_manager.status")]
+    TerminalManagerStatus(TerminalManagerPaneTarget),
+    #[serde(rename = "terminal_manager.close")]
+    TerminalManagerClose(TerminalManagerPaneTarget),
+    #[serde(rename = "terminal_manager.stream")]
+    TerminalManagerStream(TerminalManagerPaneTarget),
     #[serde(rename = "integration.install")]
     IntegrationInstall(IntegrationInstallParams),
     #[serde(rename = "integration.uninstall")]

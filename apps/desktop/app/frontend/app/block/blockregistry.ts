@@ -36,6 +36,7 @@ import { RecoderPlaybooksViewModel } from "@/app/view/recoder-playbooks/recoder-
 import { RecoderSiblingsViewModel } from "@/app/view/recoder-siblings/recoder-siblings-model";
 import { RecoderSwarmViewModel } from "@/app/view/recoder-swarm/recoder-swarm-model";
 import { RecoderRunsViewModel } from "@/app/view/recoder-runs/recoder-runs-model";
+import { RecoderSessionViewModel } from "@/app/view/recoder-session/recoder-session-model";
 import { RecoderSettingsViewModel } from "@/app/view/recoder-settings/recoder-settings-model";
 import { RecoderUsageViewModel } from "@/app/view/recoder-usage/recoder-usage-model";
 import { RecoderWorkflowsViewModel } from "@/app/view/recoder-workflows/recoder-workflows-model";
@@ -82,6 +83,12 @@ BlockRegistry.set("recoder-agents", RecoderAgentsViewModel);
 BlockRegistry.set("recoder-usage", RecoderUsageViewModel);
 BlockRegistry.set("recoder-runs", RecoderRunsViewModel);
 BlockRegistry.set("recoder-settings", RecoderSettingsViewModel);
+// docs/RECODER-T3CODE-COMPOSITION.md section 4's "apps/web" row, (a)+(b)
+// only: thread sidebar/composer/message-stream/Review-diff, talking to the
+// recoder environment server over packages/t3-session-bridge (wraps
+// @t3tools/contracts' WsRpcGroup). Board/approval/converge stay Wave-native;
+// the raw interactive terminal stays the Loom block, side by side.
+BlockRegistry.set("recoder-session", RecoderSessionViewModel);
 // Retired views (recoder-tools/-hands/-openfang/-connectors/-health/-launch, and
 // the standalone recoder-approvals tab whose approvals now surface inline on the
 // diff/session stream) were removed; an old saved layout referencing one falls

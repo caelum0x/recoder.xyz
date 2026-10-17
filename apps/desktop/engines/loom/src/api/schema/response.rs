@@ -291,6 +291,22 @@ pub enum ResponseResult {
         status: crate::config::ConfigReloadStatus,
         diagnostics: Vec<String>,
     },
+    TerminalManagerOpened {
+        pane_handle: String,
+        pid: u32,
+        worktree_id: String,
+    },
+    TerminalManagerStatus {
+        pane_handle: String,
+        alive: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        exit_code: Option<u32>,
+        pid: u32,
+        worktree_id: String,
+    },
+    TerminalManagerStreamStarted {
+        pane_handle: String,
+    },
     Ok {},
 }
 
