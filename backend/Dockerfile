@@ -46,6 +46,51 @@ RUN cd apps/desktop/server/engines/recoder-xds \
          && echo "substrate: recoder-xds built"; } \
     || echo "substrate: recoder-xds not built (Envoy keeps static bootstrap)"
 
+# ── Stage 0c: Loom engine binary (vendored Rust workspace runtime) ──
+# Loom (apps/desktop/engines/loom, vendored herdr, Apache-2.0) is wired as THE
+# DEFAULT Conductor workspace substrate (backend/src/bootstrap/index.ts) with NO
+# silent runtime fallback — today, a vanilla `docker compose up` fails loud on
+# workspace launch unless an operator manually sets CONDUCTOR_LOOM_DISABLED=1 or
+# mounts a self-built binary via CONDUCTOR_LOOM_BIN (docs/SELF-HOST.md "Known
+# gaps" #1). This stage bakes the binary into the image so neither escape hatch
+# is required for the common case.
+#
+# Toolchain pin (apps/desktop/engines/loom/RECODER-VENDOR.md, rust-toolchain.toml):
+# Rust 1.96.1 + Zig EXACTLY 0.15.2 — build.rs shells out to `zig build` to compile
+# the vendored libghostty-vt (Ghostty's VT parser, a Zig project), and its
+# requireZig() check rejects 0.16+ (breaking std.Io changes).
+#
+# Degrade-safe like the substrate stage above: a build failure here (missing
+# network, unsupported arch, upstream hiccup) must not break the image — it
+# leaves the binary absent and the runtime falls back to today's documented
+# workarounds instead of failing the whole deploy.
+FROM rust:1.96.1-bookworm AS loom
+ARG TARGETARCH
+WORKDIR /src
+RUN case "${TARGETARCH:-amd64}" in \
+         amd64) ZIG_ARCH=x86_64 ;; \
+         arm64) ZIG_ARCH=aarch64 ;; \
+         *) ZIG_ARCH="" ;; \
+       esac \
+    && if [ -n "$ZIG_ARCH" ]; then \
+         curl -fsSL "https://ziglang.org/download/0.15.2/zig-${ZIG_ARCH}-linux-0.15.2.tar.xz" \
+           | tar -xJ -C /opt \
+         && mv "/opt/zig-${ZIG_ARCH}-linux-0.15.2" /opt/zig-0.15.2; \
+       else \
+         echo "loom: unsupported TARGETARCH=${TARGETARCH}, skipping zig fetch"; \
+       fi
+# Only the inputs the loom build needs (keeps the layer cache tight; excludes
+# the repo-wide context noise the same way the substrate stage above does).
+COPY apps/desktop/engines/loom/ ./apps/desktop/engines/loom/
+RUN mkdir -p /out \
+    && { [ -x /opt/zig-0.15.2/zig ] \
+         && cd apps/desktop/engines/loom \
+         && ZIG=/opt/zig-0.15.2/zig cargo build --release --locked \
+         && cp target/release/loom /out/loom \
+         && echo "loom: binary built"; } \
+    || { touch /out/.keep; \
+         echo "loom: not built (zig 0.15.2 / toolchain unavailable — runtime needs CONDUCTOR_LOOM_DISABLED=1 or a manually mounted CONDUCTOR_LOOM_BIN)"; }
+
 # ── Stage 1: Build ──
 FROM node:20-slim AS builder
 
@@ -120,6 +165,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # file is really present — so a missing binary degrades to apt tmux / PATH bd
 # instead of pointing the runtime at a dead path.
 COPY --from=substrate /out/ /opt/recoder/substrate/
+# Pinned Loom binary from the loom stage above, same degrade-safe COPY guard
+# (the stage always emits /out, with the binary only when the build
+# succeeded). docker-substrate-entrypoint.sh exports CONDUCTOR_LOOM_BIN ONLY
+# when the file is really present (loom-path.ts: an explicit-but-missing
+# override must resolve to null, not silently fall through to PATH).
+COPY --from=loom /out/ /opt/recoder/substrate/
 COPY backend/docker-substrate-entrypoint.sh /usr/local/bin/docker-substrate-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-substrate-entrypoint.sh
 
@@ -176,8 +227,10 @@ ENV NODE_OPTIONS="--max-old-space-size=3072"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD curl -sf http://localhost:3100/health -o /dev/null || exit 1
 
-# Entrypoint pins the Conductor's tmux/bd to the vendored binaries when present,
-# then execs the real start command. Degrade-safe: absent binaries are simply
-# not exported, so the runtime falls back to system tmux/bd and reports it.
+# Entrypoint pins the Conductor's tmux/bd/loom to the vendored binaries when
+# present, then execs the real start command. Degrade-safe: absent binaries are
+# simply not exported, so the runtime falls back to system tmux/bd (or, for
+# loom, to the documented CONDUCTOR_LOOM_DISABLED=1 / CONDUCTOR_LOOM_BIN
+# workarounds) and reports it.
 ENTRYPOINT ["docker-substrate-entrypoint.sh"]
 CMD ["pnpm", "start"]
