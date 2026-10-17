@@ -66,6 +66,7 @@ describe("navigationCommands", () => {
             "Agents",
             "Inference Usage",
             "Open Settings",
+            "Open Session",
         ]);
     });
 
@@ -92,6 +93,7 @@ describe("navigationCommands", () => {
             "recoder-agents",
             "recoder-usage",
             "recoder-settings",
+            "recoder-session",
         ]);
     });
 
