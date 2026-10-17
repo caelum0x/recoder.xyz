@@ -112,11 +112,36 @@ RUN printf '\nonlyBuiltDependencies[]=duckdb\nonlyBuiltDependencies[]=better-sql
 COPY backend/package*.json ./backend/
 COPY shared/package.json ./shared/
 COPY packages/ ./packages/
+# packages/t3-session-bridge depends on "@t3tools/contracts": "workspace:*"
+# (pnpm-workspace.yaml members third_party/t3code/packages/contracts +
+# .../shared — the two pure-schema packages pulled out of the t3code subtree,
+# see docs/T3CODE-FORK.md §3/4). Without these, pnpm's workspace-wide manifest
+# scan fails the whole install with ERR_PNPM_WORKSPACE_PKG_NOT_FOUND even
+# though backend itself never depends on t3-session-bridge (verified
+# 2026-10-17). Both are small pure-TS source packages (no build step, no
+# vendored binaries) so copying them in full is cheap and reproducible.
+COPY third_party/t3code/packages/contracts/ ./third_party/t3code/packages/contracts/
+COPY third_party/t3code/packages/shared/ ./third_party/t3code/packages/shared/
 
 # Create stubs for workspace members we don't need
 RUN for dir in apps/mobile scripts; do \
       mkdir -p "$dir" && echo '{"name":"stub-'$(echo $dir | tr / -)'","version":"0.0.0","private":true}' > "$dir/package.json"; \
     done
+
+# Name-matching stub for apps/desktop/engines/dmux (pnpm-workspace.yaml member).
+# backend/package.json declares "@recoder/dmux": "workspace:*", but nothing in
+# backend/src actually imports it as a JS module — dmux-adapter.ts resolves the
+# dmux binary via a raw filesystem path lookup relative to the repo root
+# instead, with a documented degrade-safe fallback when it's absent ("dmux is
+# NEVER on the critical path"). Without a package here, pnpm fails the whole
+# install with ERR_PNPM_WORKSPACE_PKG_NOT_FOUND (verified 2026-10-17). COPYing
+# the real vendored package is not reproducible here either: its dist/ is
+# gitignored and only exists when someone has locally run its own build. This
+# stub satisfies pnpm's workspace resolution honestly — it does NOT claim the
+# dmux operator-console TUI is present in the image (it isn't); that remains a
+# known gap, same as the existing CONDUCTOR_LOOM_BIN-style escape hatches.
+RUN mkdir -p apps/desktop/engines/dmux && \
+    echo '{"name":"@recoder/dmux","version":"0.0.0","private":true}' > apps/desktop/engines/dmux/package.json
 
 RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" \
     pnpm install --filter ..../backend --no-frozen-lockfile || \

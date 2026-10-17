@@ -1,0 +1,59 @@
+.git
+.github
+.claude
+
+# Never send local dependency/build artifacts as Docker context.
+**/node_modules
+**/.next
+**/.turbo
+**/.cache
+**/.parcel-cache
+**/*.tsbuildinfo
+**/__pycache__
+**/*.pyc
+
+# Large top-level projects not used by most deploy images.
+# NOTE: recoder-agency and recoder-pm are excluded then re-included below
+# because they have their own Dockerfiles that build from root context.
+#
+# `backend` itself must NOT be excluded: backend/Dockerfile (the self-host
+# control-plane image, docker-compose.selfhost.yml) builds with the repo
+# ROOT as context and does `COPY backend/ ./backend/` — excluding the whole
+# directory here made that COPY fail with "/backend: not found" (verified
+# 2026-10-17). Only the huge vendored OSS engine subtrees are excluded below,
+# since they are optional sidecars with their own separate Dockerfiles/
+# compose files and are never COPY'd by backend/Dockerfile's own logic — the
+# backend TS code resolves them as degrade-safe local spawn seams (see
+# backend/src/domains/engines/colbert-daemon.ts, openfang-workflow.ts) that
+# no-op truthfully when the path is absent.
+backend/engines/py
+backend/engines/rust
+apps/mobile
+recoder-studio
+apps/ui.giselles.ai
+openclaw
+recoder-chat
+production-engine
+deployment
+
+# Large build artifacts not needed in Docker context.
+**/.vite
+**/coverage
+
+# Test and documentation files.
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/e2e
+**/playwright-report
+docs
+
+# Local archives/logs/media not needed in images.
+*.tar
+*.tar.gz
+*.zip
+*.mp4
+*.mov
+*.csv
+logs

@@ -534,7 +534,16 @@ generated/
 .generated/
 
 # Docker
-.dockerignore
+# NOTE: .dockerignore itself must stay TRACKED (removed from this list
+# 2026-10-17) — it is not a personal override file like
+# docker-compose.override.yml below. The self-host backend image
+# (backend/Dockerfile, docker-compose.selfhost.yml) builds with the repo
+# ROOT as context, and depends on this file to keep that context sane
+# (excluding node_modules, vendored OSS engine subtrees, etc.). A fresh
+# `git clone` was shipping with NO .dockerignore at all — every Docker build
+# would have sent the entire repo (.git, node_modules, hundreds of MB of
+# vendored engines) as build context. Verified end-to-end 2026-10-17 with
+# this file tracked and fixed (see docs/SELF-HOST.md "Known gaps" #1).
 docker-compose.override.yml
 
 # Terraform
