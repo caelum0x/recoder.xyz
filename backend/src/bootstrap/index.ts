@@ -207,6 +207,7 @@ import {
 import {
   createCloudModule,
   createDnsTlsVerifier,
+  createDockerContainerRuntime,
   type CloudModule,
 } from '../domains/cloud/index.js';
 import {
@@ -1790,10 +1791,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     TIGHTENS its preview quota through the Phase-9 EntitlementGate (a billing
   //     fault ⇒ null ⇒ the tenant quota stands alone), and every sandbox lifecycle
   //     transition streams onto the SAME agent-os RunEvent board conductor runs use
-  //     (`source:'engine'`; a bus rejection is warn-logged, never masked). ONE seam
-  //     stays intentionally unwired: `localRuntime` (no docker/podman runtime on
-  //     the box) — absent ⇒ local provider `down`, truthful, never faked. Config
-  //     folded from the `cloud` override slice — no env read. ---
+  //     (`source:'engine'`; a bus rejection is warn-logged, never masked). The
+  //     `localRuntime` seam (self-host sandbox on the OPERATOR'S OWN box — Linux
+  //     server, Mac mini, VM) is now wired over the Docker CLI (`@recoder/substrate`
+  //     exec primitives, no new SDK): `ping()`/`run()`/`inspect()`/`remove()`/`exec()`
+  //     degrade truthfully to `down` when `docker` is absent or unreachable — this
+  //     injection does NOT fake availability, it just stops forcing `down` always.
+  //     Config folded from the `cloud` override slice — no env read. ---
   const cloud = createCloudModule({
     config,
     logger: childLogger('cloud'),
@@ -1808,6 +1812,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       bus: agentOs.runEventBus(),
       logger: childLogger('cloud-run-events'),
     }),
+    // Self-host sandbox runtime: real `docker` CLI, truthfully `down` when Docker
+    // is not installed/reachable on this box (see local-container-runtime.docker.ts).
+    localRuntime: createDockerContainerRuntime({ logger: childLogger('cloud-local-runtime') }),
     // The REAL DNS TXT + TLS-cert ownership prober, so custom domains can actually
     // be ACTIVATED (node:dns + node:tls). Absent it, `verify` stays truthfully
     // pending; the prober itself degrades truthfully on a resolve/probe fault.
