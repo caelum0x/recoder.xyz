@@ -123,6 +123,11 @@ export {
   type LocalContainerRuntime,
 } from './adapters/local-container.adapter.js';
 export {
+  createDockerContainerRuntime,
+  type CreateDockerContainerRuntimeDeps,
+  DEFAULT_LOCAL_SANDBOX_IMAGE,
+} from './adapters/local-container-runtime.docker.js';
+export {
   type FetchLike,
   type HttpResponse,
   globalFetch,
