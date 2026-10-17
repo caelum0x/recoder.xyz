@@ -32,6 +32,7 @@ CHECK_FAIL_CLOSED="$ROOT_DIR/deploy/envoy/check-fail-closed.py"
 SCRIPTS=(
   "$ROOT_DIR/scripts/selfhost-up.sh"
   "$ROOT_DIR/scripts/selfhost-down.sh"
+  "$ROOT_DIR/scripts/install-selfhost.sh"
   "$ROOT_DIR/deploy/packer/provision.sh"
   "$ROOT_DIR/deploy/postgres/init-databases.sh"
   "$SCRIPT_DIR/validate-selfhost.sh"
