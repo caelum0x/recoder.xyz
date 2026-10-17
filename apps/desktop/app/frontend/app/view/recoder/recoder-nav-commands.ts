@@ -28,6 +28,7 @@ const RecoderNavTargets: RecoderNavTarget[] = [
     { id: "nav-agents", title: "Agents", view: "recoder-agents" },
     { id: "nav-usage", title: "Inference Usage", view: "recoder-usage" },
     { id: "nav-settings", title: "Open Settings", view: "recoder-settings" },
+    { id: "nav-session", title: "Open Session", view: "recoder-session" },
 ];
 
 // Build the palette navigation commands from the target table. `openView` is the
