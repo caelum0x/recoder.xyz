@@ -1,63 +1,36 @@
+import { auth } from "@/lib/auth-config";
+import { toNextJsHandler } from "better-auth/next-js";
 import { NextRequest, NextResponse } from "next/server";
 import { SURFACE_ORIGINS } from "@recoder/auth/edge";
 
 /**
- * /api/auth/[...all] — PROXY to the backend-owned Better Auth surface.
+ * /api/auth/[...all] — the live Better Auth surface for recoder.xyz.
  *
- * Phase A (RECODER-NEXT-PHASE, owner-locked): the Node backend hosts Better
- * Auth (`backend/src/domains/identity`, mounted at /api/auth) and is the ONE
- * identity authority; this website no longer constructs its own Better Auth
- * engine for the auth flows — it forwards them verbatim and relays the
- * responses (including every Set-Cookie) so sign-in/sign-up/social/magic-link/
- * sign-out are issued by the single backend config. Server-side session READS
- * elsewhere in the site (lib/auth-config) keep reading the same auth DB and are
- * unified in a follow-up slice.
+ * Serves the Better Auth instance built in lib/auth-config.ts directly.
+ * Every other auth-touching route in this app (2FA, API keys, CLI device
+ * flow, OAuth callbacks, session reads, billing/checkout guards — 30+
+ * files) already imports that same `auth` export and treats it as the
+ * source of truth. This is the ONE entry point the client SDK
+ * (lib/auth-client.ts) calls for sign-up, sign-in, sign-out, and
+ * get-session, so it has to use the identical instance or every browser
+ * session silently breaks.
  *
- * Preserved website behaviors:
- *  - CORS for the *.recoder.xyz surfaces (the browser talks to this origin).
- *  - GET /sign-in/social conversion: Better Auth only accepts POST and returns
- *    JSON {url}; cross-subdomain links arrive as GET, so we convert and issue a
- *    real HTTP redirect, forwarding the state cookies.
- *
- * Truthful degrade: an unreachable backend is a 503 with a clear error — never
- * a faked session. A `BACKEND_URL` that resolves back to this same process
- * (loopback host + our own port) is a distinct failure mode — fail fast via
- * `isSelfReferentialTarget` instead of ever issuing a self-fetch; see that
- * function's comment for why.
+ * HISTORY / WHY THIS CHANGED BACK: 2026-07-16 (811fe38a7e) switched this
+ * file to proxy to a planned backend-owned Better Auth
+ * (RECODER_BACKEND_URL or BACKEND_URL + /api/auth/*) as part of a "Phase A"
+ * identity-unification effort. That separate identity backend was never
+ * deployed — still true as of the 2026-10-16 follow-up guard (c631e09cb2),
+ * which only turned the failure mode into a clean 503 instead of an
+ * OOM-crashing self-fetch loop. Net effect: every sign-up, sign-in, and
+ * get-session call has returned `503 auth service misconfigured` in
+ * production, while the other 30+ routes kept reading the local instance —
+ * blocking 100% of new signups and all Pro/Team checkout (checkout starts
+ * from an authenticated dashboard). Reverting to the local instance matches
+ * AGENTS.md's own rule ("recoder.xyz is the auth source of truth") and what
+ * the rest of the codebase already does. If a real separate identity
+ * backend is ever actually deployed, reintroduce the proxy deliberately —
+ * with the backend running and verified first, not before.
  */
-
-/** The control-plane backend origin (prod: pm2 recoder-backend on :8000). */
-const BACKEND_URL = (
-  process.env.RECODER_BACKEND_URL ||
-  process.env.BACKEND_URL ||
-  "http://127.0.0.1:8000"
-).replace(/\/+$/, "");
-
-/** This Next.js process's own listening port, so we can detect a backend
- * target that resolves back to ourselves (see `isSelfReferentialTarget`). */
-const SELF_PORT = process.env.PORT || "3000";
-const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
-
-/**
- * Detect a `BACKEND_URL` that points at this very process (loopback host +
- * our own listening port). Without this guard, a misconfigured env var makes
- * every `/api/auth/*` request — including this handler's own proxy fetch —
- * recurse into itself: the self-fetch lands back on this same catch-all
- * route, which issues another self-fetch, forever. That is not a theoretical
- * risk: it was caught live on 2026-10-16 running the production box's single
- * `recoder-app` process up to 100% CPU / ~450MB RSS on a 956Mi box from a
- * SINGLE request, contributing to repeated OOM restarts. Fail fast and
- * truthfully instead of ever issuing that fetch.
- */
-function isSelfReferentialTarget(target: string, selfPort: string): boolean {
-  try {
-    const parsed = new URL(target);
-    const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
-    return LOOPBACK_HOSTNAMES.has(parsed.hostname) && port === selfPort;
-  } catch {
-    return false;
-  }
-}
 
 const getAllowedOrigins = () => [
   ...Object.values(SURFACE_ORIGINS),
@@ -87,144 +60,86 @@ export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsHeadersFor(origin) });
 }
 
-/** Headers that must not be forwarded either direction across the proxy hop. */
-const HOP_HEADERS = new Set([
-  "host",
-  "connection",
-  "content-length",
-  "content-encoding",
-  "transfer-encoding",
-  "keep-alive",
-]);
+const { GET: localGET, POST: localPOST } = toNextJsHandler(auth);
 
-/**
- * Forward the incoming auth request to the backend verbatim and relay the
- * response — status, headers (multi-value Set-Cookie included), and body.
- * `redirect: manual` so OAuth redirects pass through to the browser untouched.
- */
-async function proxyToBackend(
-  request: NextRequest,
-  init?: { method?: string; body?: BodyInit | null },
-): Promise<NextResponse> {
-  const origin = request.headers.get("origin") || "";
-
-  // Never issue the self-recursive fetch described above — fail fast and
-  // truthfully instead of letting this process call itself. Checked first,
-  // before any header/body work, so a misconfigured target costs nothing.
-  if (isSelfReferentialTarget(BACKEND_URL, SELF_PORT)) {
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          "auth service misconfigured: BACKEND_URL points at this app's own port; no separate identity backend is configured",
-      },
-      { status: 503, headers: corsHeadersFor(origin) },
-    );
-  }
-
-  const target = `${BACKEND_URL}${request.nextUrl.pathname}${request.nextUrl.search}`;
-
-  const headers = new Headers();
-  request.headers.forEach((value, key) => {
-    if (!HOP_HEADERS.has(key.toLowerCase())) headers.set(key, value);
-  });
-  // Let the backend's Better Auth build correct absolute URLs behind this hop.
-  headers.set("x-forwarded-host", request.nextUrl.host);
-  headers.set("x-forwarded-proto", request.nextUrl.protocol.replace(":", ""));
-
-  const method = init?.method ?? request.method;
-  let body: BodyInit | null | undefined = init?.body;
-  if (body === undefined && method !== "GET" && method !== "HEAD") {
-    body = Buffer.from(await request.arrayBuffer());
-  }
-  // When we synthesize a JSON body here (the GET->POST /sign-in/social
-  // conversion below), the originating request carries no Content-Type, so the
-  // backend's Better Auth can't parse {provider, callbackURL} and the sign-in
-  // silently breaks. Stamp application/json for caller-supplied JSON string
-  // bodies only; the verbatim catch-all path (body read from the request) keeps
-  // whatever Content-Type the client already sent.
-  if (typeof init?.body === "string") {
-    headers.set("content-type", "application/json");
-  }
-
-  let upstream: Response;
-  try {
-    upstream = await fetch(target, {
-      method,
-      headers,
-      body,
-      redirect: "manual",
-      // Bound worst-case hang time if BACKEND_URL points somewhere real but
-      // slow/hung — never let a client-facing auth request wait forever.
-      signal: AbortSignal.timeout(5000),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "auth backend unreachable";
-    return NextResponse.json(
-      { success: false, error: `auth service unavailable: ${message}` },
-      { status: 503, headers: corsHeadersFor(origin) },
-    );
-  }
-
-  const outHeaders = new Headers();
-  upstream.headers.forEach((value, key) => {
-    if (key.toLowerCase() === "set-cookie" || HOP_HEADERS.has(key.toLowerCase())) return;
-    outHeaders.set(key, value);
-  });
-  // Set-Cookie must be appended per-value — collapsing corrupts the session.
-  for (const cookie of upstream.headers.getSetCookie()) {
-    outHeaders.append("set-cookie", cookie);
-  }
+function withCors(response: Response, origin: string): Response {
+  const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(corsHeadersFor(origin))) {
-    outHeaders.set(key, value);
+    headers.set(key, value);
   }
-
-  const payload = Buffer.from(await upstream.arrayBuffer());
-  return new NextResponse(payload.length > 0 ? payload : null, {
-    status: upstream.status,
-    headers: outHeaders,
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
   });
 }
 
+function unavailable(origin: string, message: string): NextResponse {
+  return NextResponse.json(
+    { success: false, error: message },
+    { status: 503, headers: corsHeadersFor(origin) },
+  );
+}
+
 export async function GET(request: NextRequest) {
+  const origin = request.headers.get("origin") || "";
   const pathname = request.nextUrl.pathname;
 
-  // Better Auth social sign-in only supports POST and returns JSON {url}.
-  // Cross-subdomain redirects (e.g. from agency.recoder.xyz) arrive as GET —
-  // convert to a proxied POST and issue a REAL redirect, forwarding the state
-  // cookies the backend set.
+  // Better Auth's social sign-in only accepts POST and replies with JSON
+  // {url}. Cross-subdomain links (e.g. from agency.recoder.xyz) arrive as a
+  // GET — convert to POST, then issue a real HTTP redirect, forwarding any
+  // state cookie Better Auth set on the synthesized call.
   if (pathname.includes("/sign-in/social")) {
     const provider = request.nextUrl.searchParams.get("provider");
     const callbackURL = request.nextUrl.searchParams.get("callbackURL");
     if (provider && callbackURL) {
-      const proxied = await proxyToBackend(request, {
-        method: "POST",
-        body: JSON.stringify({ provider, callbackURL }),
-      });
-      const bodyText = await proxied.text();
-      let url: string | undefined;
       try {
-        url = (JSON.parse(bodyText) as { url?: string }).url;
-      } catch {
-        /* non-JSON upstream reply — fall through to the raw response */
-      }
-      if (proxied.ok && url) {
-        const redirect = NextResponse.redirect(url, 302);
-        for (const cookie of proxied.headers.getSetCookie()) {
-          redirect.headers.append("set-cookie", cookie);
+        const postRequest = new NextRequest(request.url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ provider, callbackURL }),
+        });
+        const response = await localPOST(postRequest);
+        const body = await response
+          .clone()
+          .json()
+          .catch(() => null);
+        if (body?.url) {
+          const redirect = NextResponse.redirect(body.url, 302);
+          const setCookie = response.headers.get("set-cookie");
+          if (setCookie) redirect.headers.set("set-cookie", setCookie);
+          return redirect;
         }
-        return redirect;
+        return withCors(response, origin);
+      } catch (error) {
+        return unavailable(
+          origin,
+          error instanceof Error ? error.message : "social sign-in failed",
+        );
       }
-      return new NextResponse(bodyText || null, {
-        status: proxied.status,
-        headers: proxied.headers,
-      });
     }
   }
 
-  return proxyToBackend(request);
+  try {
+    const response = await localGET(request);
+    return withCors(response, origin);
+  } catch (error) {
+    return unavailable(
+      origin,
+      error instanceof Error ? error.message : "authentication service error",
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {
-  return proxyToBackend(request);
+  const origin = request.headers.get("origin") || "";
+  try {
+    const response = await localPOST(request);
+    return withCors(response, origin);
+  } catch (error) {
+    return unavailable(
+      origin,
+      error instanceof Error ? error.message : "authentication service error",
+    );
+  }
 }

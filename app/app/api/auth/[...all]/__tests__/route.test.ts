@@ -7,40 +7,43 @@ vi.mock("@recoder/auth/edge", () => ({
   SURFACE_ORIGINS: { app: "https://recoder.xyz" },
 }));
 
-/** Capture what the proxy forwards to the backend so we can assert on headers. */
-type FetchCall = { url: string; init: RequestInit & { headers: Headers } };
+// The route must call the LOCAL Better Auth instance (lib/auth-config.ts) —
+// the same one every other route in the app already depends on — instead of
+// proxying to a separate backend that production has never actually run.
+// Stub `auth` itself (not exercised directly, just needs to be a stable
+// reference `toNextJsHandler` can be mocked against) and control what
+// `toNextJsHandler` hands back per test.
+vi.mock("@/lib/auth-config", () => ({ auth: { $Infer: {} } }));
 
-function installFetchMock(response: Response): FetchCall[] {
-  const calls: FetchCall[] = [];
-  vi.stubGlobal("fetch", vi.fn(async (url: any, init: any) => {
-    calls.push({ url: String(url), init: { ...init, headers: init.headers as Headers } });
-    return response;
+type Handlers = { GET: (req: NextRequest) => Promise<Response>; POST: (req: NextRequest) => Promise<Response> };
+
+function mockLocalHandlers(handlers: Partial<Handlers>) {
+  const GET = handlers.GET ?? vi.fn(async () => new Response(null, { status: 200 }));
+  const POST = handlers.POST ?? vi.fn(async () => new Response(null, { status: 200 }));
+  vi.doMock("better-auth/next-js", () => ({
+    toNextJsHandler: () => ({ GET, POST }),
   }));
-  return calls;
+  return { GET, POST };
 }
 
-describe("/api/auth/[...all] proxy — social sign-in Content-Type fix", () => {
+describe("/api/auth/[...all] — serves the local Better Auth instance directly", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    // BACKEND_URL / PORT are read once at module load into module-level
-    // consts (matches the route's own pattern) — force a fresh import per
-    // test so env overrides below actually take effect.
     vi.resetModules();
+    vi.clearAllMocks();
   });
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete process.env.BACKEND_URL;
-    delete process.env.RECODER_BACKEND_URL;
-    delete process.env.PORT;
+    vi.doUnmock("better-auth/next-js");
   });
 
-  it("stamps Content-Type: application/json on the GET->POST social conversion", async () => {
-    const calls = installFetchMock(
+  it("converts GET /sign-in/social into a POST against the local handler and redirects to the returned url", async () => {
+    const POST = vi.fn(async () =>
       new Response(JSON.stringify({ url: "https://github.com/login/oauth" }), {
         status: 200,
         headers: { "content-type": "application/json" },
       }),
     );
+    mockLocalHandlers({ POST });
 
     const { GET } = await import("../route");
     const res = await GET(
@@ -50,78 +53,22 @@ describe("/api/auth/[...all] proxy — social sign-in Content-Type fix", () => {
       ) as any,
     );
 
-    // The synthesized upstream POST must carry the JSON Content-Type so Better
-    // Auth can read {provider, callbackURL}. This is the correctness fix.
-    expect(calls).toHaveLength(1);
-    expect(calls[0].init.method).toBe("POST");
-    expect((calls[0].init.headers as Headers).get("content-type")).toBe("application/json");
-
-    // And it should issue a real redirect to the provider URL.
+    expect(POST).toHaveBeenCalledTimes(1);
+    const calledWith = POST.mock.calls[0][0] as NextRequest;
+    expect(calledWith.method).toBe("POST");
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("https://github.com/login/oauth");
   });
 
-  it("forwards the catch-all POST body verbatim, preserving the client Content-Type", async () => {
-    const calls = installFetchMock(
-      new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
+  it("forwards the catch-all GET (e.g. get-session) to the local handler and attaches CORS headers", async () => {
+    const GET_impl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ user: { id: "1" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
     );
-
-    const { POST } = await import("../route");
-    await POST(
-      new NextRequest("https://recoder.xyz/api/auth/sign-in/email", {
-        method: "POST",
-        headers: {
-          origin: "https://recoder.xyz",
-          "content-type": "application/x-www-form-urlencoded",
-        },
-        body: "email=a@b.com&password=secret",
-      }) as any,
-    );
-
-    // The verbatim path must NOT be rewritten to application/json — the client's
-    // own Content-Type flows through untouched.
-    expect(calls).toHaveLength(1);
-    expect(calls[0].init.method).toBe("POST");
-    expect((calls[0].init.headers as Headers).get("content-type")).toBe(
-      "application/x-www-form-urlencoded",
-    );
-  });
-
-  it("does not inject a Content-Type on a plain GET catch-all", async () => {
-    const calls = installFetchMock(new Response(null, { status: 200 }));
-
-    const { GET } = await import("../route");
-    await GET(
-      new NextRequest("https://recoder.xyz/api/auth/get-session", {
-        headers: { origin: "https://recoder.xyz" },
-      }) as any,
-    );
-
-    expect(calls).toHaveLength(1);
-    expect(calls[0].init.method).toBe("GET");
-    expect((calls[0].init.headers as Headers).get("content-type")).toBeNull();
-  });
-});
-
-describe("/api/auth/[...all] proxy — self-referential BACKEND_URL guard", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.resetModules();
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    delete process.env.BACKEND_URL;
-    delete process.env.RECODER_BACKEND_URL;
-    delete process.env.PORT;
-  });
-
-  it("fails fast with a clear 503 and never calls fetch when BACKEND_URL resolves to this same process", async () => {
-    process.env.PORT = "3001";
-    process.env.BACKEND_URL = "http://localhost:3001";
-    const calls = installFetchMock(new Response(null, { status: 200 }));
+    mockLocalHandlers({ GET: GET_impl });
 
     const { GET } = await import("../route");
     const res = await GET(
@@ -130,41 +77,38 @@ describe("/api/auth/[...all] proxy — self-referential BACKEND_URL guard", () =
       }) as any,
     );
 
-    // The whole point of the guard: zero outbound fetches, not a failed one.
-    expect(calls).toHaveLength(0);
-    expect(res.status).toBe(503);
-    const body = (await res.json()) as { success: boolean; error: string };
-    expect(body.success).toBe(false);
-    expect(body.error).toMatch(/misconfigured/i);
+    expect(GET_impl).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBe("https://recoder.xyz");
   });
 
-  it("also guards the POST path (e.g. sign-in/sign-out), not just GET", async () => {
-    process.env.PORT = "3001";
-    process.env.BACKEND_URL = "http://127.0.0.1:3001";
-    const calls = installFetchMock(new Response(null, { status: 200 }));
+  it("forwards the catch-all POST (e.g. sign-in/sign-up) to the local handler", async () => {
+    const POST_impl = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    mockLocalHandlers({ POST: POST_impl });
 
     const { POST } = await import("../route");
     const res = await POST(
-      new NextRequest("https://recoder.xyz/api/auth/sign-in/email", {
+      new NextRequest("https://recoder.xyz/api/auth/sign-up/social", {
         method: "POST",
         headers: { origin: "https://recoder.xyz", "content-type": "application/json" },
-        body: JSON.stringify({ email: "a@b.com", password: "secret" }),
+        body: JSON.stringify({ provider: "google", callbackURL: "/dashboard" }),
       }) as any,
     );
 
-    expect(calls).toHaveLength(0);
-    expect(res.status).toBe(503);
+    expect(POST_impl).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(200);
   });
 
-  it("does NOT trip the guard when BACKEND_URL points at a different port (the normal/intended case)", async () => {
-    process.env.PORT = "3001";
-    process.env.BACKEND_URL = "http://127.0.0.1:8000";
-    const calls = installFetchMock(
-      new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+  it("degrades truthfully to 503 instead of a faked session when the local handler throws", async () => {
+    const GET_impl = vi.fn(async () => {
+      throw new Error("db unreachable");
+    });
+    mockLocalHandlers({ GET: GET_impl });
 
     const { GET } = await import("../route");
     const res = await GET(
@@ -173,23 +117,22 @@ describe("/api/auth/[...all] proxy — self-referential BACKEND_URL guard", () =
       }) as any,
     );
 
-    expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe("http://127.0.0.1:8000/api/auth/get-session");
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { success: boolean; error: string };
+    expect(body.success).toBe(false);
+    expect(body.error).toMatch(/db unreachable/i);
   });
 
-  it("does NOT trip the guard for a same-port but non-loopback hostname", async () => {
-    process.env.PORT = "3001";
-    process.env.BACKEND_URL = "http://identity.internal:3001";
-    const calls = installFetchMock(new Response(null, { status: 200 }));
+  it("does not set Access-Control-Allow-Origin for an untrusted origin", async () => {
+    mockLocalHandlers({});
 
     const { GET } = await import("../route");
-    await GET(
+    const res = await GET(
       new NextRequest("https://recoder.xyz/api/auth/get-session", {
-        headers: { origin: "https://recoder.xyz" },
+        headers: { origin: "https://evil.example.com" },
       }) as any,
     );
 
-    expect(calls).toHaveLength(1);
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
   });
 });
