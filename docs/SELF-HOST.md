@@ -381,7 +381,43 @@ is now Loom, not tmux.
 
 These were confirmed against the source and the build, not assumed:
 
-1. ~~The backend image does not bake the `loom` binary.~~ **Fixed.**
+1. ~~`docker build -f backend/Dockerfile .` did not complete at all.~~
+   **Fixed 2026-10-17.** Three independent breaks, all confirmed by actually
+   running the build (not assumed):
+   - `apps/desktop/server/engines/recoder-xds` (the Go xDS source this very
+     Dockerfile's substrate stage compiles) had been silently deleted by an
+     unrelated commit (`f2b815d9`, "feat: SEO — 15 /compare pages..."). The
+     `COPY` of that path failed outright. Restored the module from git
+     history (`git checkout <pre-deletion commit> -- apps/.../recoder-xds`,
+     minus the stale prebuilt `bin/` binary, which the build re-compiles
+     anyway) — the Go source still compiles clean.
+   - The root `.dockerignore` unconditionally excluded `backend/`, so this
+     Dockerfile's own `COPY backend/ ./backend/` (needed because the image is
+     built with the **repo root** as context) failed with
+     `"/backend": not found`. Narrowed the exclusion to the two huge vendored
+     OSS engine subtrees that are never `COPY`'d by this Dockerfile anyway
+     (`backend/engines/py`, `backend/engines/rust` — optional sidecars with
+     their own separate Dockerfiles/compose files; the backend TS code
+     resolves them as degrade-safe local spawn seams that no-op truthfully
+     when absent, e.g. `backend/src/domains/engines/colbert-daemon.ts`).
+   - `pnpm install --filter ..../backend` failed workspace resolution twice:
+     `backend/package.json` depends on `"@recoder/dmux": "workspace:*"` but
+     `apps/desktop/engines/dmux` was never copied or stubbed (added a
+     name-matching stub — nothing in `backend/src` actually imports `@recoder/
+     dmux` as a module; `dmux-adapter.ts` resolves the real binary via a raw
+     filesystem path with its own degrade-safe fallback, so the stub doesn't
+     claim the operator-console TUI is present — see gap 3 below); and
+     `packages/t3-session-bridge` depends on `"@t3tools/contracts":
+     "workspace:*"`, which lives in `third_party/t3code/packages/contracts`
+     (+ `.../shared`) and was never copied in (added both — small pure-TS
+     source packages, no build step).
+
+   Verified end-to-end: `docker build -f backend/Dockerfile .` now completes
+   and produces a runnable image with `tmux`, `bd`, `loom`, and `recoder-xds`
+   all present and executable under `/opt/recoder/substrate/` and
+   `/opt/recoder/bin/`.
+
+2. ~~The backend image does not bake the `loom` binary.~~ **Fixed.**
    `backend/Dockerfile` now has a dedicated `loom` build stage (Rust 1.96.1 +
    Zig exactly 0.15.2, mirroring the existing `tmux`/`bd`/`recoder-xds`
    substrate stage) that builds `apps/desktop/engines/loom` and bakes the
@@ -400,13 +436,28 @@ These were confirmed against the source and the build, not assumed:
      see `apps/desktop/engines/loom/RECODER-VENDOR.md`) and mount it into the
      backend container with `CONDUCTOR_LOOM_BIN=/path/to/loom`.
 
-2. **No coding-agent CLI is installed in the backend image.** The
+3. **No coding-agent CLI is installed in the backend image.** The
    "bring your own AI subscription" story is real for the *API key*
    (BYOK, above), but the image does not install Claude Code, Codex,
    opencode, or any other agent CLI for you — you add one yourself inside the
    container (a custom image layer, or a volume mount onto `PATH`) today.
 
-3. **True machine-to-machine remote Loom transport isn't solved.** Loom's
+4. **The `dmux` operator-console TUI binary is never baked into the image.**
+   `backend/package.json` declares `"@recoder/dmux": "workspace:*"` and
+   `apps/desktop/engines/dmux` is a real, buildable pnpm workspace member, but
+   `backend/Dockerfile`'s builder stage only ships a name-matching stub
+   package (just enough to satisfy pnpm's workspace resolution — see gap 1
+   above) so the real vendored package (and its gitignored, locally-built
+   `dist/`) is not copied in. This is honestly degrade-safe, not a silent
+   failure: nothing in `backend/src` imports `@recoder/dmux` as a module,
+   `dmux-adapter.ts` resolves the binary via a filesystem path lookup with its
+   own truthful "unavailable" result, and dmux itself is documented as
+   "NEVER on the critical path — if dmux is absent, the Conductor substrate is
+   fully functional via tmux alone." Today that means the self-hosted
+   container has no operator-console TUI; it would need its own build/COPY
+   stage (mirroring the `loom` stage above) to change that.
+
+5. **True machine-to-machine remote Loom transport isn't solved.** Loom's
    control socket is Unix-domain only — there is no TCP path. The designed
    transport for a second host is an OpenZiti bridge
    ([`docs/LOOM-REMOTE-ATTACH-ZITI.md`](./LOOM-REMOTE-ATTACH-ZITI.md)),
@@ -416,16 +467,16 @@ These were confirmed against the source and the build, not assumed:
    server" today means "backend + Loom live together on that one box," not
    yet "Loom on box A, client on box B" without a tunnel you build yourself.
 
-4. **No first-party headless CLI for full workspace lifecycle management.**
+6. **No first-party headless CLI for full workspace lifecycle management.**
    The Node backend's REST surface (`/api/conductor/*`) is self-sufficient in
    principle for headless use, but the one shipped CLI
    (`packages/herd`/`recoder-herd`) is read-and-attach only and
    `tmux`-specific, not Loom-aware.
 
-5. **No native boot-time service wrapper for macOS or Windows.** The systemd
+7. **No native boot-time service wrapper for macOS or Windows.** The systemd
    unit (above) covers Linux. A Mac mini or Windows box runs the stack fine
    via Docker Desktop, but auto-restart-on-boot is not wired up there yet.
 
 None of these block trying Recoder self-hosted today — they define exactly
-where the edges of "self-host on your own infra" currently are, and (1) and
-(5) now each have a documented, real workaround above.
+where the edges of "self-host on your own infra" currently are, and (2) and
+(7) now each have a documented, real workaround above.
