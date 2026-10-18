@@ -82,7 +82,19 @@ try {
     run('pnpm', ['run', 'build'], authPackageRoot);
   }
   stageAuthClient();
-  run('next', ['build'], appRoot);
+  // --webpack: Turbopack (the Next 16 default bundler) emits a synthetic
+  // externalized module id for the generated Prisma client in standalone
+  // output tracing (observed as `@prisma/client-<contenthash>`, e.g.
+  // `@prisma/client-9afada067027e79c`) that is never actually written to
+  // disk anywhere — not in node_modules, not in the lockfile. The compiled
+  // server chunk still does `require('@prisma/client-<hash>')` at runtime,
+  // so every request that touches Prisma (including auth's get-session)
+  // throws `Cannot find module '@prisma/client-<hash>'` once deployed.
+  // Falling back to webpack for this one build avoids the bug entirely:
+  // the compiled output requires the real `@prisma/client` package name
+  // and resolves correctly in the standalone bundle. See
+  // GROWTH-BLOCKERS-2026-10-18.md for the full investigation.
+  run('next', ['build', '--webpack'], appRoot);
 } finally {
   restoreTrackedFiles();
   fs.rmSync(authClientDest, { recursive: true, force: true });
