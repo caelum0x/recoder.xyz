@@ -645,6 +645,10 @@ const FAQ: QA[] = [
     q: "How do I get started?",
     a: "Pick a plan on the pricing page — Free to run locally, or Pro and Team for more headroom, seats, and governance. You create your account, subscribe, and connect the coding agents you already pay for; Recoder is the console that runs them in parallel. The desktop app is macOS-first (Apple Silicon), with Windows and Linux on the way.",
   },
+  {
+    q: "Do I need my own Postgres database to self-host the backend?",
+    a: "If you're self-hosting the control plane, yes — it connects to a standard postgresql:// connection string for auth and app data. If you don't want to run Postgres yourself, a flat-priced managed option like Scribase works as a drop-in connection string with no extra setup.",
+  },
 ];
 
 const FAQ_JSON_LD = {
