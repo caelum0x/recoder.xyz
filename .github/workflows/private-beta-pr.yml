@@ -39,7 +39,7 @@ env:
 jobs:
   workspace-checks:
     name: Backend + Desktop Checks
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout
@@ -68,7 +68,7 @@ jobs:
 
   desktop-packaging-config:
     name: Desktop Packaging Config
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout
@@ -92,7 +92,7 @@ jobs:
 
   site-release-gate:
     name: Site Invite-Only Gate
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout
