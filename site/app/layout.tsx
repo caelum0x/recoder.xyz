@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Analytics } from "@/components/analytics";
+import { XPixel } from "@/components/x-pixel";
 import "./globals.css";
 
 const TITLE = "Recoder — Run AI Coding Agents in Parallel · Free Download";
@@ -84,6 +85,7 @@ export default function RootLayout({
             __html: JSON.stringify(JSON_LD).replace(/</g, "\\u003c"),
           }}
         />
+        <XPixel />
         {children}
         <Analytics />
       </body>
