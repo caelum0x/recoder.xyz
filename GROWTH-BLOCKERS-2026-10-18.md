@@ -286,3 +286,28 @@ Also found in the same files: a Neon `PGPASSWORD` (covered by item 6) and auth s
 Separately, low-severity, not part of the PR #34 compromise window: a weak Grafana admin password (`RecoderAdmin123!`) is base64'd into `monitoring/comprehensive-dashboard.yaml` in history — internal monitoring only, not customer-facing, rotate opportunistically whenever convenient (no urgency).
 
 Suggested order: do #7 (auth secrets) and #2/#3 (OAuth) together since #2/#3 already need real values entered for the unrelated signup blocker — one combined `pm2 restart --update-env` covers both. Then #1, #5, #6, #8, #4 in any order as time allows.
+
+## 2026-10-18 (6th pass): FAQ content fix ready but can't deploy — no working SSH credential to the site box
+
+Added a genuine FAQ entry to `site/app/page.tsx` (the real, JSON-LD-indexed homepage FAQ —
+not `app/app/[locale]/faq/page.tsx`, which exists but isn't part of the deployed marketing
+site) answering "do I need my own Postgres database to self-host the backend", honestly
+naming Scribase as a managed option. Type-checked clean, `npm run build` succeeds, committed
+and pushed to `main` (`e63a4f45cc`) — **not live yet**.
+
+`site/` deploys via `deploy/deploy-site.sh`, which requires `RECODER_SERVER` (the box at
+`92.5.156.133`) and `RECODER_SSH_KEY` env vars, and MUST build with `SITE_ASSET_PREFIX=/__site`
+or its assets collide with the main app's. I have a key file (`~/.ssh/recoder_deploy`) but it
+does not authenticate against `92.5.156.133` under `ubuntu`/`deploy`/`root`/`opc` — stopped
+trying usernames after 4 attempts rather than risk a fail2ban-style lockout like the one that
+hit `box` earlier today. The domain itself (`recoder.xyz:22`) gives "No route to host" (expected,
+it's behind Cloudflare).
+
+**To finish (~2 minutes once you have working SSH access):**
+```sh
+export RECODER_SERVER=ubuntu@92.5.156.133   # confirm the real user first
+export RECODER_SSH_KEY=~/.ssh/<the-real-key>
+cd ~/products/recoder.xyz && git pull
+bash deploy/deploy-site.sh
+curl -s https://recoder.xyz/ | grep -c "Do I need my own Postgres database"   # expect 1
+```
