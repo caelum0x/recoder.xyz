@@ -272,4 +272,17 @@ Git history containing these secrets was separately purged, but **purging histor
 7. **Auth secrets** (`AUTH_SECRET`, `BETTER_AUTH_SECRET`, `NEXTAUTH_SECRET`, `UNIFIED_AUTH_SECRET`) — generate fresh random 32+ byte secrets (`openssl rand -base64 32`) for each; rotating these invalidates all existing sessions/tokens signed with the old secret, so expect every logged-in user to need to sign in again — low-impact right now since there are effectively 0 real signups yet, so this is the cheapest time to do it.
 8. **LLM keys** (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` + `OPENROUTER_API_KEY_1/2/3`, `PLATFORM_OPENROUTER_KEY_1/2/3`) — rotate at each provider's dashboard (Anthropic Console, OpenAI Platform, OpenRouter) by creating a new key and revoking the old one. Check usage logs at each provider first for any anomalous spend during the compromise window (around 2026-06-30) as a sign the old key was actually abused, not just theoretically exposed.
 
+### UPDATE 2026-10-18 (5th pass, independent corroboration via full-history `gitleaks` scan — part of an OSS-readiness audit for a separate open-sourcing decision, see `oss-readiness-audit-4repos-2026-10-18.md` in memory)
+
+Ran `gitleaks git --log-opts="--all"` across this repo's entire history (not just HEAD) — 1933 raw hits, independently hand-verified. This **confirms item 8 above is undercounted**: the actual exposure found in `recoder-desktop/app-bundles/chat/standalone/.env.production` (commit `3fe93e0608`, 2025-10-06) and in `FIXES_APPLIED.md`/`VERCEL_DEPLOYMENT_GUIDE.md` also includes real-format keys for providers not listed in item 8:
+
+- `GROQ_API_KEY`, `MISTRAL_API_KEY`, `TOGETHER_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, `FIREWORKS_API_KEY`, `CEREBRAS_API_KEY`
+- 3× Google/GCP API keys (`AIzaSy...` format — likely `GOOGLE_GENERATIVE_AI_API_KEY`/Gemini, check `.env.example` for the exact var names these map to)
+
+None of these files exist in current HEAD (already removed from the working tree), but remain fully recoverable from history via `git show <commit>:<path>` — purging alone doesn't help, same caveat as the rest of this runbook. **Add these 9 keys to the rotation pass in item 8** when the owner does it — same provider-dashboard pattern (Groq Console, Mistral Console, Together AI, DeepSeek Platform, xAI Console, Fireworks AI, Cerebras Cloud, Google AI Studio/Cloud Console).
+
+Also found in the same files: a Neon `PGPASSWORD` (covered by item 6) and auth secrets (covered by item 7) — no new rotation categories, just further confirmation these were really committed, not hypothetical.
+
+Separately, low-severity, not part of the PR #34 compromise window: a weak Grafana admin password (`RecoderAdmin123!`) is base64'd into `monitoring/comprehensive-dashboard.yaml` in history — internal monitoring only, not customer-facing, rotate opportunistically whenever convenient (no urgency).
+
 Suggested order: do #7 (auth secrets) and #2/#3 (OAuth) together since #2/#3 already need real values entered for the unrelated signup blocker — one combined `pm2 restart --update-env` covers both. Then #1, #5, #6, #8, #4 in any order as time allows.
