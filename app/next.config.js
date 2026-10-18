@@ -21,7 +21,15 @@ const nextConfig = {
   // stall/fail the product build. Exclude those optional platform packages from
   // every server trace; the runtime app does not execute them.
   outputFileTracingExcludes: {
-    '/*': ['../node_modules/.pnpm/@esbuild+*/node_modules/@esbuild/*'],
+    '/*': [
+      '../node_modules/.pnpm/@esbuild+*/node_modules/@esbuild/*',
+      // apps/desktop vendors multi-platform native engine binaries (tree-sitter
+      // prebuilds for every OS/arch) that the Next.js server never executes;
+      // tracing was copying them into the standalone output and exhausting
+      // disk on constrained build hosts. Same rationale as the esbuild
+      // exclude above.
+      '../apps/desktop/engines/**',
+    ],
   },
   typescript: {
     ignoreBuildErrors: true, // Pre-existing TS errors in doc pages (template literals in JSX)

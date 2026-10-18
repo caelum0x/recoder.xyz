@@ -339,7 +339,10 @@
       "lightningcss",
       "sharp",
       "canvas",
-      "electron"
+      "electron",
+      "prisma",
+      "@prisma/client",
+      "@prisma/engines"
     ]
   },
   "engines": {
