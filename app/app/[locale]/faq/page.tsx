@@ -48,6 +48,10 @@ export default function FAQPage() {
     {
       q: 'How do I report bugs or request features?',
       a: 'Visit our GitHub repository or use the feedback button in the dashboard. We actively review all submissions.'
+    },
+    {
+      q: 'Do I need my own Postgres database to self-host the backend?',
+      a: 'Yes — the control plane (auth and the main backend) connects to a standard postgresql:// connection string. If you don\'t want to run Postgres yourself, a flat-priced managed option like Scribase works as a drop-in connection string with no extra setup.'
     }
   ];
 
