@@ -14,7 +14,7 @@ Everything here lives in `deploy/`, `scripts/`, and the top-level
 | Service   | Image                          | Port (host) | Purpose                                   |
 |-----------|--------------------------------|-------------|-------------------------------------------|
 | backend   | built from `backend/Dockerfile` | `3100`      | Recoder control plane (the product)       |
-| postgres  | `postgres:17`                  | internal    | `recoder_main` + `recoder_backend` + `recoder_pm` |
+| postgres  | `pgvector/pgvector:pg17`        | internal    | `recoder_main` + `recoder_backend` + `recoder_pm` (pgvector) |
 | redis     | `redis:7`                      | internal    | sessions + A2A bus                        |
 | qdrant    | `qdrant/qdrant`                | internal    | vector store (mem0 / embeddings)          |
 | recoder-xds | reuses `recoder/backend:selfhost` | internal (18000/18001) | Envoy **xDS (ADS)** control plane — dynamic LDS/CDS/RDS |
@@ -282,7 +282,7 @@ packer build -only='null.recoder' \
 6. Pre-builds **both** images into the local Docker cache:
    `recoder/backend:selfhost` (backend + `recoder-xds` reuse this tag) and
    `recoder/governance-daemon:selfhost`.
-7. **Pre-pulls the pinned third-party images** (`postgres:17`, `redis:7`,
+7. **Pre-pulls the pinned third-party images** (`pgvector/pgvector:pg17`, `redis:7`,
    `qdrant/qdrant:latest`, `envoyproxy/envoy:v1.31-latest`) so a machine booted in
    a locked-down VPC with no Docker Hub egress still comes up. A pull miss is
    non-fatal (logged) so a builder without egress still produces a usable image.

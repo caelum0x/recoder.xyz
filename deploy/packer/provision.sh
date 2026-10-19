@@ -152,7 +152,7 @@ $SUDO docker build -f deploy/governance-daemon.Dockerfile -t recoder/governance-
 # docker-compose.selfhost.yml. A pull failure is non-fatal (logged) so a builder
 # without egress still produces a working AMI for environments that DO have egress.
 log "pre-pulling pinned third-party images"
-for img in postgres:17 redis:7 qdrant/qdrant:latest envoyproxy/envoy:v1.31-latest; do
+for img in pgvector/pgvector:pg17 redis:7 qdrant/qdrant:latest envoyproxy/envoy:v1.31-latest; do
   $SUDO docker pull "$img" || log "WARNING could not pre-pull $img (first boot will pull it)"
 done
 

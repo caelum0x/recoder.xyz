@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Postgres init for the Recoder self-host stack.
 #
-# The official postgres:17 image runs every executable *.sh / *.sql in
+# The pgvector/pgvector:pg17 image (official postgres:17 + the pgvector
+# extension pre-built — see docker-compose.selfhost.yml's postgres service)
+# runs every executable *.sh / *.sql in
 # /docker-entrypoint-initdb.d ONCE, on first boot of an empty data directory,
 # as the superuser. We use it to create the three databases the Recoder control
 # plane expects:
@@ -46,5 +48,53 @@ echo "init-databases: ensuring pgvector extension in recoder_pm (best-effort)"
 psql -v ON_ERROR_STOP=0 --username "$OWNER" --dbname recoder_pm \
   -c "CREATE EXTENSION IF NOT EXISTS vector;" \
   || echo "init-databases: WARNING pgvector not available in this image; recoder_pm vector features degrade until pgvector is installed"
+
+# Apply backend/migrations/*.sql into recoder_backend (mounted read-only at
+# /docker-entrypoint-initdb.d/backend-migrations by docker-compose.selfhost.yml).
+#
+# Without this, the backend crashes fatally on every fresh volume the moment
+# it queries a table that doesn't exist yet (e.g. "relation core.kv_store does
+# not exist" from its skill-publisher bootstrap) — verified 2026-10-19. The
+# backend itself only exposes a POST /internal/persistence/migrate route to
+# apply its own migrations (backend/src/domains/persistence/migrations/
+# migration-runner.ts), but that route requires the backend to already be up,
+# which it can never be against an unmigrated database on first boot. So this
+# runs the same migrations here instead, replicating the runner's own ledger
+# table (`core._recoder_migrations`, filename + sha256 checksum) exactly so
+# the backend's runner sees them as already-applied (not drifted, not
+# re-applied) the first time anything calls that route later.
+#
+# Migration files are documented as idempotent (CREATE ... IF NOT EXISTS
+# throughout), so this is safe to run even if a future image version changes
+# what ships here — new files just get appended to the ledger on next init of
+# a FRESH volume; an EXISTING volume already has its ledger and tables, and
+# docker-entrypoint-initdb.d only runs on an empty data directory, so this
+# whole block is a no-op after the very first boot.
+MIGRATIONS_DIR="/docker-entrypoint-initdb.d/backend-migrations"
+if [ -d "$MIGRATIONS_DIR" ]; then
+  echo "init-databases: applying backend migrations into recoder_backend"
+  for file in "$MIGRATIONS_DIR"/*.sql; do
+    [ -e "$file" ] || continue
+    name="$(basename "$file")"
+    checksum="$(sha256sum "$file" | cut -d' ' -f1)"
+    echo "init-databases: applying migration ${name}"
+    psql -v ON_ERROR_STOP=1 --username "$OWNER" --dbname recoder_backend -f "$file"
+    # Ledger insert happens AFTER 0000 creates core._recoder_migrations, so
+    # it always exists by the time any file (including 0000 itself, which
+    # creates it earlier in its own body) finishes applying.
+    #
+    # NOTE: piped via stdin, NOT `-c`. psql only performs `:'var'` variable
+    # interpolation when reading a script (stdin/-f); a `-c "...:'var'..."`
+    # string is sent to the server mostly as-is and fails with "syntax error
+    # at or near ':'" (verified 2026-10-19) — the colon is never substituted.
+    psql -v ON_ERROR_STOP=1 --username "$OWNER" --dbname recoder_backend \
+      -v name="$name" -v sum="$checksum" <<'SQL'
+insert into core._recoder_migrations (filename, checksum) values (:'name', :'sum') on conflict (filename) do nothing;
+SQL
+  done
+  echo "init-databases: backend migrations applied"
+else
+  echo "init-databases: WARNING ${MIGRATIONS_DIR} not mounted; backend will boot against an unmigrated database"
+fi
 
 echo "init-databases: done"

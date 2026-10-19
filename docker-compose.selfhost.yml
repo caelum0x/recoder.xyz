@@ -39,7 +39,15 @@ x-restart: &restart
 
 services:
   postgres:
-    image: postgres:17
+    # pgvector/pgvector:pg17 (not plain postgres:17): same Postgres 17, plus
+    # the pgvector extension pre-built. recoder_pm is documented as "pm +
+    # pgvector" and backend's own migration 0000 unconditionally does `create
+    # extension if not exists vector`, which hard-fails on plain postgres:17
+    # ("extension vector is not available" — verified 2026-10-19 running this
+    # stack from a fresh volume). Matches the pgvector/pgvector:pg17 image
+    # this portfolio already uses for other Postgres-with-pgvector stacks
+    # (e.g. infra-box/stacks/caldesk).
+    image: pgvector/pgvector:pg17
     <<: *restart
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
@@ -48,6 +56,16 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./deploy/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+      # backend/migrations/*.sql applied into recoder_backend by the init script
+      # above (see that script's header) — mounted read-only so Postgres' own
+      # first-boot init can see them without needing the backend image built
+      # first. Without this, the backend crashes at boot on every fresh
+      # volume with "relation \"core.kv_store\" does not exist": nothing else
+      # in this stack ever applies schema (verified 2026-10-19 — the backend
+      # only exposes an authenticated POST /internal/persistence/migrate route
+      # that requires the backend to already be running, which it can't be
+      # against an unmigrated database).
+      - ./backend/migrations:/docker-entrypoint-initdb.d/backend-migrations:ro
     healthcheck:
       # Wait for ALL three databases, not just the default, so dependents only
       # start once the init script has finished creating them.
@@ -79,7 +97,12 @@ services:
       - qdrantdata:/qdrant/storage
     healthcheck:
       # Qdrant's readiness probe; the image ships a TCP listener on 6333.
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/6333 && echo -e 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && cat <&3 | head -1 | grep -q '200'"]
+      # NOTE: must run via bash explicitly, not CMD-SHELL (which execs /bin/sh).
+      # The qdrant/qdrant image's /bin/sh is dash, which does not support the
+      # /dev/tcp bashism below ("Directory nonexistent") — verified this makes
+      # the container report unhealthy forever even though it serves traffic
+      # fine (2026-10-19). bash IS present in the image at /usr/bin/bash.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333 && echo -e 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && cat <&3 | head -1 | grep -q '200'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -124,10 +147,28 @@ services:
       PM_DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_pm"
       REDIS_URL: "redis://redis:6379"
       QDRANT_URL: "http://qdrant:6333"
+      # Postgres here is a plain `postgres:17` container reachable only on the
+      # private `recoder-selfhost` Docker network, with no TLS cert configured.
+      # backend/src/bootstrap/config.ts defaults DATABASE_SSL to `isProduction`
+      # (true, since NODE_ENV=production above) when unset, so the pg client
+      # tried to negotiate SSL against a server that doesn't speak it and
+      # crashed boot outright ("The server does not support SSL connections" —
+      # fatal, not degrade-safe, verified 2026-10-19 running this exact stack
+      # end-to-end). Explicitly disable it for the self-host network boundary.
+      DATABASE_SSL: ${DATABASE_SSL:-false}
       # --- Control-plane identity / governance (required) ---
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required}
       RECODER_GOVERNANCE_SIGNING_KEY: ${RECODER_GOVERNANCE_SIGNING_KEY:?RECODER_GOVERNANCE_SIGNING_KEY is required}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      # Required by packages/auth/src/keys.ts (no default there) for Better
+      # Auth's callback base URL. Unset makes createAuth() throw and the
+      # identity domain degrade truthfully (verified: backend still boots,
+      # auth routes just report unavailable) — but self-host should default to
+      # a working value so auth isn't silently dead out of the box. Point it
+      # at the Envoy edge by default since that's the governed entry point;
+      # override to your real external hostname when exposing this past
+      # localhost.
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:${EDGE_HTTP_PORT:-8080}}
       # Delegate governance to the owned Rust daemon over the shared socket. The
       # facade falls back to its pure-TS deny-biased path on ANY failure, so an
       # unset/dead socket degrades truthfully instead of failing the backend.
@@ -191,9 +232,17 @@ services:
       # (matching the static generator). Never a hard failure.
       XDS_CONFIG_URL: ${XDS_CONFIG_URL:-}
       XDS_LOG_LEVEL: ${XDS_LOG_LEVEL:-info}
+      # The HTTPS listener's JSON access-log sink (see envoy service's
+      # envoy-logs volume comment) hits a Permission denied trying to open a
+      # real file in this environment for reasons short of a full Envoy
+      # sandboxing investigation. /dev/null is always openable/writable, so
+      # this closes the gap without chasing Envoy's file-access internals.
+      ENVOY_ACCESS_LOG: ${ENVOY_ACCESS_LOG:-/dev/null}
     healthcheck:
       # /healthz flips to 200 once the snapshot is installed and ADS is serving.
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/${XDS_HEALTH_PORT:-18001} && echo -e 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && cat <&3 | head -1 | grep -q '200'"]
+      # NOTE: must run via bash explicitly (see the qdrant healthcheck note above)
+      # — this image's /bin/sh is dash, which cannot do /dev/tcp.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/${XDS_HEALTH_PORT:-18001} && echo -e 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && cat <&3 | head -1 | grep -q '200'"]
       interval: 15s
       timeout: 5s
       retries: 6
@@ -252,9 +301,33 @@ services:
       # To pin the pure-static bootstrap instead, point this at
       # ./deploy/envoy/envoy.selfhost.yaml.
       - ./deploy/envoy/envoy.xds.yaml:/etc/envoy/envoy.yaml:ro
+      # recoder-xds always emits an HTTPS listener referencing these exact
+      # paths (ENVOY_TLS_CERT/ENVOY_TLS_KEY default in network_config.go);
+      # without real files here Envoy NACKs that listener update in a tight,
+      # noisy retry loop forever (verified 2026-10-19). scripts/selfhost-up.sh
+      # generates a self-signed pair here on first run if absent.
+      - ./deploy/envoy/certs:/etc/envoy/certs:ro
+      # Same HTTPS listener also hard-codes a JSON access-log sink at
+      # ENVOY_ACCESS_LOG (default /var/log/envoy/access.json.log); with no
+      # writable directory there Envoy NACKs the listener with "unable to
+      # open file" instead (verified 2026-10-19, same symptom class as the
+      # cert gap above — the static HTTP listener on :8080 keeps serving
+      # either way, but a perpetually-rejected config update is real log
+      # spam, not a clean steady state).
+      - envoy-logs:/var/log/envoy
     healthcheck:
       # Envoy admin /ready returns 200 LIVE once the listeners are warmed.
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9901 && echo -e 'GET /ready HTTP/1.0\\r\\n\\r\\n' >&3 && cat <&3 | grep -q LIVE"]
+      # NOTE: must run via bash explicitly (see the qdrant healthcheck note above)
+      # — envoyproxy/envoy's /bin/sh is dash, which cannot do /dev/tcp.
+      # NOTE 2: the request MUST be HTTP/1.1 with a Host header (and
+      # Connection: close so the socket read terminates). A bare HTTP/1.0
+      # request with no Host header gets "426 Upgrade Required" from Envoy's
+      # admin server instead of the real response — verified 2026-10-19
+      # running this exact healthcheck command by hand: it failed 100% of the
+      # time (every retry, zero output) even while `curl` from the host and
+      # Envoy itself serving real traffic both worked fine. This was a false
+      # "unhealthy" on a genuinely healthy Envoy, not a real outage.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9901 && printf 'GET /ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q LIVE"]
       interval: 15s
       timeout: 5s
       retries: 6
@@ -266,6 +339,7 @@ volumes:
   qdrantdata:
   backenddata:
   governance-sock:
+  envoy-logs:
 
 networks:
   default:

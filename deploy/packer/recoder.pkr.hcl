@@ -149,7 +149,7 @@ build {
   provisioner "shell" {
     inline = [
       "set -e",
-      "sudo docker image inspect recoder/docker-backend:selfhost >/dev/null",
+      "sudo docker image inspect recoder/backend:selfhost >/dev/null",
       "sudo docker image inspect recoder/governance-daemon:selfhost >/dev/null",
       "test -f /etc/systemd/system/recoder-selfhost.service",
       "test -f /opt/recoder/docker-compose.selfhost.yml",

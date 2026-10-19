@@ -35,7 +35,7 @@ The self-host stack (`docker-compose.selfhost.yml`, project name
 | Service | Image / build | Host port | Role |
 |---|---|---|---|
 | `backend` | built from [`backend/Dockerfile`](../backend/Dockerfile) → `recoder/backend:selfhost` | `${BACKEND_PORT:-3100}` | The Recoder control plane (the product) |
-| `postgres` | `postgres:17` | internal | `recoder_main` / `recoder_backend` / `recoder_pm` |
+| `postgres` | `pgvector/pgvector:pg17` | internal | `recoder_main` / `recoder_backend` / `recoder_pm` (pgvector) |
 | `redis` | `redis:7` | internal | sessions, A2A bus |
 | `qdrant` | `qdrant/qdrant` | internal | vector store (mem0 / embeddings, the shared brain) |
 | `recoder-xds` | reuses `recoder/backend:selfhost` | internal (`18000`/`18001`) | Envoy **xDS (ADS)** control plane — dynamic LDS/CDS/RDS |
@@ -480,3 +480,19 @@ These were confirmed against the source and the build, not assumed:
 None of these block trying Recoder self-hosted today — they define exactly
 where the edges of "self-host on your own infra" currently are, and (2) and
 (7) now each have a documented, real workaround above.
+
+### Fixed 2026-10-19 (running the whole stack end-to-end, not assumed)
+
+`recoder-xds` always emits an HTTPS listener (`recoder_https_listener`,
+`apps/desktop/server/engines/recoder-xds/internal/config/network_config.go`)
+referencing a TLS cert/key pair and a JSON access-log file, none of which
+existed in this stack. Envoy NACKed that one listener update in a tight,
+noisy retry loop forever — degrade-safe (the static HTTP listener on `:8080`
+kept serving throughout) but not a clean steady state. Fixed by:
+`scripts/selfhost-up.sh` generating a self-signed cert into
+`deploy/envoy/certs/` (gitignored, mounted read-only into the `envoy`
+service), and `ENVOY_ACCESS_LOG=/dev/null` for `recoder-xds` (a mounted
+`envoy-logs` volume alone still hit "Permission denied" opening a real file
+there, not worth a deeper Envoy sandboxing investigation for an access log).
+Verified: zero NACKs in `recoder-xds` logs after a clean `docker compose down
+-v` + `scripts/selfhost-up.sh`.

@@ -111,6 +111,13 @@ RUN printf '\nonlyBuiltDependencies[]=duckdb\nonlyBuiltDependencies[]=better-sql
 
 COPY backend/package*.json ./backend/
 COPY shared/package.json ./shared/
+# app/package.json (NOT the rest of the Next.js site — just the manifest) is
+# copied here even though backend/Dockerfile never runs or ships app/: the
+# pnpm-workspace.yaml comment on `app` explains it is a workspace member
+# specifically so @recoder/auth's workspace:* deps resolve "from the root
+# store". It is cheap (one small JSON file) and keeps the workspace manifest
+# scan consistent with what the committed pnpm-lock.yaml expects.
+COPY app/package.json ./app/
 COPY packages/ ./packages/
 # packages/t3-session-bridge depends on "@t3tools/contracts": "workspace:*"
 # (pnpm-workspace.yaml members third_party/t3code/packages/contracts +
@@ -143,10 +150,32 @@ RUN for dir in apps/mobile scripts; do \
 RUN mkdir -p apps/desktop/engines/dmux && \
     echo '{"name":"@recoder/dmux","version":"0.0.0","private":true}' > apps/desktop/engines/dmux/package.json
 
+# FILTER SELECTOR BUG (found + fixed 2026-10-19, running the self-host stack
+# end-to-end): this used to say `--filter ..../backend`. That string is NOT a
+# valid pnpm "include dependencies" selector for this workspace/pnpm version
+# (10.30.3). Empirically verified by direct testing (both `pnpm ... list` and
+# `pnpm ... exec -- pwd` against the selector) because the two plausible
+# "correct" forms both turned out wrong in practice:
+#   `..../backend`        -> selects ONLY the literal `backend` project (1
+#                            project), no dependency expansion at all.
+#   `...recoder-backend`  -> ALSO selects only `backend` (1 project) — the
+#                            dots-BEFORE-name form does not expand deps here.
+#   `recoder-backend...`  -> selects backend's FULL transitive workspace
+#                            dependency closure (49 projects, confirmed by
+#                            listing them), which is what every comment in
+#                            this Dockerfile has always intended.
+# The practical effect of the two broken forms: every workspace package
+# backend depends on ONLY through another workspace package (not
+# backend/package.json directly) never got its OWN dependencies linked — e.g.
+# `packages/auth`'s `better-auth`/`jose`/`prisma`, and `packages/governance`'s
+# `@recoder/agent-policy` — so the backend crashed at startup the moment it
+# loaded either ("Cannot find module 'better-auth/adapters/prisma'", then
+# "Cannot find module '@recoder/agent-policy'"). Use the real package NAME
+# (backend/package.json "name") with the dots AFTER it.
 RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" \
-    pnpm install --filter ..../backend --no-frozen-lockfile || \
+    pnpm install --filter "recoder-backend..." --no-frozen-lockfile || \
     AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" \
-    pnpm install --filter ..../backend --no-frozen-lockfile
+    pnpm install --filter "recoder-backend..." --no-frozen-lockfile
 
 COPY backend/ ./backend/
 COPY shared/ ./shared/
@@ -163,9 +192,11 @@ RUN node -e "const fs=require('fs'); \
 # Verify prebuilt dist exists
 RUN test -f backend/dist/server.js
 
-# Prune to production dependencies only
+# Prune to production dependencies only. Same `recoder-backend...` selector
+# fix as above applies here too — the prune pass needs the full transitive
+# scope to correctly keep (not drop) workspace packages' own prod deps.
 RUN CI=true AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" \
-    pnpm install --filter ..../backend --prod --no-frozen-lockfile
+    pnpm install --filter "recoder-backend..." --prod --no-frozen-lockfile
 
 # ── Stage 2: Runtime ──
 FROM node:20-slim

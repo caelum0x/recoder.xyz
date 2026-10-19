@@ -26,8 +26,17 @@
 # backend TS code resolves them as degrade-safe local spawn seams (see
 # backend/src/domains/engines/colbert-daemon.ts, openfang-workflow.ts) that
 # no-op truthfully when the path is absent.
+#
+# backend/engines/rust/recoder-governance is DELIBERATELY NOT excluded here:
+# deploy/governance-daemon.Dockerfile (docker-compose.selfhost.yml's
+# recoder-governance service) builds with repo-root context and does
+# `COPY backend/engines/rust/recoder-governance/ ...` directly. Excluding the
+# whole `backend/engines/rust` directory broke that COPY with "not found"
+# (verified 2026-10-19 running `scripts/selfhost-up.sh` end-to-end). Only the
+# two actually-unused heavy sidecar crates are excluded individually.
 backend/engines/py
-backend/engines/rust
+backend/engines/rust/openfang
+backend/engines/rust/tensorzero
 apps/mobile
 recoder-studio
 apps/ui.giselles.ai

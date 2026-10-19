@@ -87,6 +87,34 @@ for key in INTERNAL_SERVICE_KEY RECODER_GOVERNANCE_SIGNING_KEY BETTER_AUTH_SECRE
   fi
 done
 
+# --- Envoy TLS material (self-signed, generated once) ---
+# recoder-xds (apps/desktop/server/engines/recoder-xds/internal/config/
+# network_config.go) always emits an HTTPS listener (`recoder_https_listener`)
+# pointing at ENVOY_TLS_CERT/ENVOY_TLS_KEY (default /etc/envoy/certs/
+# server.crt / server.key) — there is no "disable TLS listener" env flag.
+# Without real files there, Envoy NACKs that one listener update in a tight,
+# noisy retry loop ("Failed to load incomplete private key from path:
+# /etc/envoy/certs/server.key") — verified 2026-10-19 running this exact
+# stack end-to-end; the static HTTP listener keeps serving regardless
+# (degrade-safe), but the log spam and rejected-config churn are a real,
+# fixable gap, not an acceptable steady state. Generate a local self-signed
+# pair once so the HTTPS listener actually binds; replace with a real
+# cert/key for anything beyond local/LAN use.
+CERT_DIR="$ROOT_DIR/deploy/envoy/certs"
+if [ ! -f "$CERT_DIR/server.crt" ] || [ ! -f "$CERT_DIR/server.key" ]; then
+  info "generating self-signed Envoy TLS cert (deploy/envoy/certs/)"
+  mkdir -p "$CERT_DIR"
+  if command -v openssl >/dev/null 2>&1; then
+    openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
+      -keyout "$CERT_DIR/server.key" -out "$CERT_DIR/server.crt" \
+      -subj "/CN=recoder-selfhost" \
+      -addext "subjectAltName=DNS:localhost,DNS:envoy,DNS:recoder-selfhost" \
+      >/dev/null 2>&1
+  else
+    die "openssl not found on PATH; cannot generate the self-signed Envoy TLS cert"
+  fi
+fi
+
 # --- Fail fast on required values we must NOT generate ---
 missing=()
 for key in POSTGRES_USER POSTGRES_PASSWORD; do
