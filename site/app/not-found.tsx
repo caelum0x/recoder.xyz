@@ -7,6 +7,10 @@ export const metadata: Metadata = {
   description:
     "The page you were looking for doesn't exist or has moved. Head back to Recoder or pick up one of the links below.",
   robots: { index: false, follow: true },
+  // Without this, Next.js inherits the root layout's canonical (the
+  // homepage), so every 404 told crawlers "the real URL is /" — a
+  // noindex page should not also claim a canonical elsewhere.
+  alternates: { canonical: null },
 };
 
 const LINKS = [

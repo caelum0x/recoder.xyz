@@ -17,13 +17,16 @@ const nextConfig: NextConfig = {
   // ESLint config in site/ is not set up for next-lint; skip during build.
   eslint: { ignoreDuringBuilds: true },
   assetPrefix,
-  // Retired comparison / alternatives / directory pages (no competitor pages,
-  // owner rule 2026-09-25). `permanent: true` emits a 308 so link equity lands
-  // on the product.
+  // Retired alternatives/directory pages. `/compare` was in this list too
+  // (owner rule 2026-09-25, "no competitor pages") but app/compare/* is real,
+  // actively maintained content now (fact-checked vs named competitors,
+  // dated verification comments, its own test suite) — leaving the redirect
+  // active would 308 every comparison page straight to "/", silently
+  // nullifying it. Removed 2026-10-19 so /compare and /compare/:slug* serve
+  // their real pages; /alternatives and /tools remain retired.
+  // `permanent: true` emits a 308 so link equity lands on the product.
   async redirects() {
     return [
-      "/compare",
-      "/compare/:slug*",
       "/alternatives",
       "/alternatives/:slug*",
       "/tools",

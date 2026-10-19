@@ -3,11 +3,19 @@ import Image from "next/image";
 import { releasesArePublic } from "@/lib/releases";
 
 /**
- * Public GitHub URL, only rendered when explicitly configured. The source repo
- * is private today, so we never ship a link that lands a public visitor on a
- * 404. Set NEXT_PUBLIC_GITHUB_URL once the repo (or a public mirror) is open.
+ * Public GitHub URL. The main desktop-app source repo is private today, so
+ * this defaults to the public recoder-code CLI companion repo (verified live
+ * at github.com/recoderxyz/recoder-code) rather than a repo that would 404.
+ * Override with NEXT_PUBLIC_GITHUB_URL once the main repo (or a fuller public
+ * mirror) opens.
  */
-export const PUBLIC_GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL?.trim();
+export const PUBLIC_GITHUB_URL =
+  process.env.NEXT_PUBLIC_GITHUB_URL?.trim() ||
+  "https://github.com/recoderxyz/recoder-code";
+
+/** Public X/Twitter profile — verified live at x.com/recoderxyz. */
+export const PUBLIC_X_URL =
+  process.env.NEXT_PUBLIC_X_URL?.trim() || "https://x.com/recoderxyz";
 
 /**
  * The single primary action on every page. One CTA discipline (Cursor).
@@ -178,6 +186,7 @@ export function Footer() {
     ...(PUBLIC_GITHUB_URL
       ? [{ href: PUBLIC_GITHUB_URL, label: "GitHub" }]
       : []),
+    ...(PUBLIC_X_URL ? [{ href: PUBLIC_X_URL, label: "X" }] : []),
   ];
   return (
     <footer className="border-t border-border">

@@ -55,6 +55,8 @@ const JSON_LD = {
       slogan: "The control plane for coding agents.",
       sameAs: [
         "https://github.com/recoderxyz",
+        "https://github.com/recoderxyz/recoder-code",
+        "https://x.com/recoderxyz",
         "https://www.npmjs.com/~recoder.xyz",
         "https://marketplace.visualstudio.com/items?itemName=recoder.recoder-code-vscode-companion",
       ],

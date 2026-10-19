@@ -78,6 +78,16 @@ const CURSOR: ToolRef = {
   kind: "AI code editor + cloud agent platform",
   license: "Proprietary",
 };
+const VIBE_KANBAN: ToolRef = {
+  name: "Vibe Kanban",
+  kind: "Kanban planning + multi-agent workspace tool (npx, sunsetting to OSS)",
+  license: "Apache-2.0 · open source; hosted product is sunsetting",
+};
+const CLAUDE_SQUAD: ToolRef = {
+  name: "Claude Squad",
+  kind: "Terminal multi-agent manager (tmux-based)",
+  license: "AGPL-3.0 · free, open source",
+};
 
 export const COMPARISONS: Comparison[] = [
   {
@@ -250,7 +260,181 @@ export const COMPARISONS: Comparison[] = [
         a: "No. Recoder is bring-your-own-keys on the Free and Pro tiers: your agents use your own provider keys, and you pay providers directly for inference. Recoder charges for orchestration, not tokens.",
       },
     ],
-    related: ["recoder-vs-conductor"],
+    related: ["recoder-vs-conductor", "recoder-vs-vibe-kanban"],
+  },
+
+  {
+    // Verified live 2026-10-19 against vibekanban.com, vibekanban.com/pricing, and
+    // github.com/BloopAI/vibe-kanban (28.4k stars at verification time).
+    slug: "recoder-vs-vibe-kanban",
+    a: RECODER,
+    b: VIBE_KANBAN,
+    title: "Recoder vs Vibe Kanban",
+    metaTitle: "Recoder vs Vibe Kanban: multi-agent orchestrator compared",
+    description:
+      "Recoder vs Vibe Kanban: Vibe Kanban plans work on a kanban board with 10+ agents via npx; Recoder runs agents in parallel with a governed, audited merge.",
+    keywords: [
+      "vibe kanban alternative",
+      "recoder vs vibe kanban",
+      "vibe kanban vs recoder",
+      "bloopai vibe kanban alternative",
+      "multi-agent coding orchestrator",
+    ],
+    tagline: "A kanban-first workspace tool with 10+ agents, versus a governed parallel-and-converge console.",
+    intro: [
+      "Vibe Kanban (BloopAI) is a kanban board for planning work, where each card becomes a workspace that hands a branch, terminal, and dev server to a coding agent. Its own site and README list 10+ supported agents — Claude Code, Codex, Gemini CLI, GitHub Copilot, Amp, Cursor, OpenCode, Droid, CCR, and Qwen Code — more than any other tool on this page, started with a single `npx vibe-kanban` command and self-hostable via Docker. As of this writing, BloopAI has announced Vibe Kanban is sunsetting as a company product and will continue as open source, community-maintained software.",
+      "Recoder runs a narrower list of agents — Claude Code, Codex, Cursor, and opencode — but its core workflow is different: the same task goes to every agent at once, each in its own isolated git worktree, and Recoder's job is comparing what they produced and converging on one governed merge, with a fail-closed approval gate and a tamper-evident audit trail. Vibe Kanban's workflow is plan-then-dispatch across many issues; Recoder's is one task, several agents, one audited merge.",
+    ],
+    table: {
+      head: ["Dimension", "Recoder", "Vibe Kanban"],
+      rows: [
+        ["Agents named on the product's own site", "Claude Code, Codex, Cursor, opencode", "Claude Code, Codex, Gemini CLI, Copilot, Amp, Cursor, OpenCode, Droid, CCR, Qwen Code"],
+        ["Core workflow", "One task → N agents in parallel → converge to one merge", "Kanban board → per-issue agent workspace → review → PR"],
+        ["Isolation model", "Git worktree per agent, same task", "Workspace (branch + terminal + dev server) per card"],
+        ["Convergence of parallel runs on one task", "Pick or synthesize diffs into one branch", "Not its model — one agent per card, not several on the same task"],
+        ["Approval gate / audit trail", "Fail-closed approvals; SHA-256 Merkle-chained audit trail", "Inline diff comments and PR review; no approval-gate/audit-trail primitive described"],
+        ["Self-hosting", "Enterprise: run the control plane on your own infra", "Yes — a documented self-hosting guide (Docker) for its own product today"],
+        ["Install", "Native desktop app (macOS)", "`npx vibe-kanban`, runs anywhere Node does"],
+        ["Platform today", "macOS (Apple Silicon); Windows & Linux planned", "Cross-platform (Node-based, browser UI)"],
+        ["Pricing", "Free, local use, forever; Pro $29/mo; Team $99/mo", "Free (1 user); Pro $30/user/mo (2-49 users); Enterprise custom"],
+        ["Project status", "Actively developed", "Company product sunsetting; continuing as community open source"],
+      ],
+    },
+    prosA: [
+      "Converges several agents' attempts at the same task into one governed merge — not Vibe Kanban's model.",
+      "A fail-closed approval gate and a SHA-256 Merkle-chained audit trail over governed decisions.",
+      "BYOK and local-first: agents run on your machine with your own keys.",
+      "Actively developed, not a sunsetting product.",
+    ],
+    consA: [
+      "Runs 4 named agents to Vibe Kanban's 10+ — no Gemini CLI, Copilot, Amp, Droid, or Qwen Code support today.",
+      "Native desktop app, macOS (Apple Silicon) only today; Vibe Kanban runs via npx on any OS Node supports.",
+      "No kanban-style multi-issue planning board — Recoder is scoped to one task at a time across agents, not a backlog.",
+    ],
+    prosB: [
+      "Supports more agents than any other tool on this page, per its own README (10+, including Gemini CLI, Copilot, and Amp).",
+      "Cross-platform today via `npx vibe-kanban` — no macOS-only limitation.",
+      "A documented self-hosting guide (Docker) for its current product, available now.",
+      "Kanban board model fits planning and dispatching many separate issues, not just one task at a time.",
+    ],
+    consB: [
+      "BloopAI has announced the hosted product is sunsetting; its future is community-maintained open source, which carries normal open-source-maintenance uncertainty.",
+      "No built-in primitive for running several agents on the same task and converging their diffs — one agent per workspace/card is the model.",
+      "No fail-closed approval gate or tamper-evident audit trail described on its site.",
+    ],
+    whenA:
+      "Choose Recoder when the question is \"which agent does this one task best,\" and you want several agents to race it in parallel with a governed, audited merge at the end.",
+    whenB:
+      "Choose Vibe Kanban when you want to plan and dispatch many separate issues across a wide range of agents from a kanban board, cross-platform, with self-hosting available today.",
+    recoderFit: [
+      "These tools answer different questions. Vibe Kanban is strongest as a planning-and-dispatch board across a backlog of issues and the widest agent list of any tool compared here. Recoder is strongest when you already know the task and want to see several agents' different attempts at it side by side, then land one governed merge.",
+      "Vibe Kanban's sunset announcement is a real, stated fact worth weighing if ongoing vendor support matters to your choice — its stated path forward is community-maintained open source, not a company product.",
+    ],
+    faq: [
+      {
+        q: "Is Vibe Kanban shutting down?",
+        a: "BloopAI has announced Vibe Kanban is sunsetting as a company product; per its own GitHub README and site, it will continue as open source, community-maintained software.",
+      },
+      {
+        q: "Does Vibe Kanban support more agents than Recoder?",
+        a: "Yes, by name count — its README lists 10+ supported agents (Claude Code, Codex, Gemini CLI, GitHub Copilot, Amp, Cursor, OpenCode, Droid, CCR, Qwen Code). Recoder runs Claude Code, Codex, Cursor, and opencode.",
+      },
+      {
+        q: "Can Vibe Kanban run several agents on the same task and merge the best result?",
+        a: "Its documented model is one agent per kanban card/workspace, for planning and dispatching across a backlog — not running multiple agents on one task and converging their diffs, which is Recoder's core workflow.",
+      },
+      {
+        q: "Is Vibe Kanban free?",
+        a: "Per its pricing page: free for 1 user; Pro is $30/user/month for teams of 2-49; Enterprise is custom pricing for 50+ users with SSO/SAML.",
+      },
+    ],
+    related: ["recoder-vs-conductor", "recoder-vs-claude-squad"],
+  },
+
+  {
+    // Verified live 2026-10-19 against github.com/smtg-ai/claude-squad and
+    // smtg-ai.github.io/claude-squad (8.6k stars at verification time).
+    slug: "recoder-vs-claude-squad",
+    a: RECODER,
+    b: CLAUDE_SQUAD,
+    title: "Recoder vs Claude Squad",
+    metaTitle: "Recoder vs Claude Squad: desktop app vs terminal multi-agent manager",
+    description:
+      "Recoder vs Claude Squad: a free open-source terminal tool (tmux) for isolated agent workspaces, versus a desktop app that converges parallel runs with an audit trail.",
+    keywords: [
+      "claude squad alternative",
+      "recoder vs claude squad",
+      "claude squad vs recoder",
+      "tmux ai agent manager alternative",
+      "parallel claude code terminal",
+    ],
+    tagline: "A free terminal tool for running agents side by side, versus a desktop app that converges and audits the merge.",
+    intro: [
+      "Claude Squad is a free, open-source (AGPL-3.0) terminal app: install it with Homebrew or a shell script, and it manages multiple instances of Claude Code, Codex, Gemini, Aider, and other local agents, each in its own isolated git workspace, supervised through tmux sessions. Its own README describes reviewing changes before applying them and checking them out before pushing — real review, inside the terminal.",
+      "Recoder covers similar ground — Claude Code, Codex, Cursor, and opencode, each in its own isolated git worktree — but as a native desktop app rather than a tmux-based terminal tool, and with two things Claude Squad's README doesn't describe: a side-by-side convergence step for picking or synthesizing the best diff across agents that worked the same task, and a fail-closed approval gate backed by a SHA-256 Merkle-chained audit trail.",
+    ],
+    table: {
+      head: ["Dimension", "Recoder", "Claude Squad"],
+      rows: [
+        ["Agents named on the product's own site", "Claude Code, Codex, Cursor, opencode", "Claude Code, Codex, Gemini, Aider, and other local agents"],
+        ["Interface", "Native desktop app", "Terminal app (tmux-based, binary name `cs`)"],
+        ["Isolation model", "Git worktree per agent", "Isolated git workspace per task/instance"],
+        ["Convergence of parallel runs on one task", "Pick or synthesize diffs into one branch", "Not described — review and checkout per instance, not a cross-agent diff comparison"],
+        ["Approval gate / audit trail", "Fail-closed approvals; SHA-256 Merkle-chained audit trail", "Not described on its site"],
+        ["Auto-accept mode", "Not the default workflow — approvals are fail-closed", "Experimental `--autoyes` flag auto-accepts agent prompts"],
+        ["Self-hosting", "Enterprise: run the control plane on your own infra", "N/A — it's a local CLI you already run yourself"],
+        ["Platform today", "macOS (Apple Silicon); Windows & Linux planned", "macOS/Linux (tmux + gh required); no native Windows"],
+        ["Price", "Free, local use, forever; Pro $29/mo; Team $99/mo", "Free — fully open source (AGPL-3.0)"],
+      ],
+    },
+    prosA: [
+      "Converges several agents' attempts at the same task into one governed merge — Claude Squad reviews per instance, not across agents on one task.",
+      "A fail-closed approval gate and a SHA-256 Merkle-chained audit trail over governed decisions.",
+      "A graphical desktop app — no tmux/terminal-session management required.",
+    ],
+    consA: [
+      "Not free in the way fully open-source software is — Recoder's base tier is free to use locally, but it's proprietary, while Claude Squad is AGPL-3.0 open source end to end.",
+      "macOS (Apple Silicon) only today; Claude Squad also runs on Linux.",
+      "More moving parts (approvals, audit trail, convergence UI) than a workflow that just wants agents in tmux panes.",
+    ],
+    prosB: [
+      "Fully free and open source (AGPL-3.0) — no paid tier, no proprietary core.",
+      "Lightweight terminal tool: install via Homebrew or a one-line script, no separate desktop app.",
+      "Runs on Linux as well as macOS (tmux-based, not a native-GUI app tied to one platform's app ecosystem).",
+      "An experimental auto-accept mode for people who want agents to run unattended.",
+    ],
+    consB: [
+      "No cross-agent convergence step — it manages instances in parallel, but comparing and merging the best of several agents' attempts at one task isn't a described workflow.",
+      "No approval-gate or audit-trail primitive described on its site — review happens in the terminal, per instance, without a sealed record.",
+      "Requires tmux and the GitHub CLI (`gh`) as prerequisites, and no native Windows support.",
+    ],
+    whenA:
+      "Choose Recoder when you want a graphical desktop app that runs several agents on one task and converges their diffs into a single governed, audited merge.",
+    whenB:
+      "Choose Claude Squad when you want a free, fully open-source terminal tool to supervise multiple agent instances in tmux panes, on macOS or Linux, with no cost and no desktop app.",
+    recoderFit: [
+      "Both tools isolate each agent in its own git workspace so parallel runs don't clobber each other — that part is genuinely similar. The real differences are interface (terminal + tmux vs. native desktop app), licensing (AGPL-3.0 open source vs. proprietary with a free tier), and what happens after the agents finish: Claude Squad hands you per-instance review in the terminal; Recoder adds a convergence step across agents on the same task plus a fail-closed, audited approval gate.",
+      "If cost and license matter most and a terminal workflow is fine, Claude Squad's AGPL-3.0, zero-cost model is hard to beat. If you want a governed, auditable merge across multiple agents' attempts at the same task in a graphical app, that's what Recoder is built for.",
+    ],
+    faq: [
+      {
+        q: "Is Claude Squad free?",
+        a: "Yes — Claude Squad is fully open source under AGPL-3.0, with no paid tier described on its site or README.",
+      },
+      {
+        q: "Does Claude Squad run on Windows?",
+        a: "Not natively, as of this writing — its installation methods (Homebrew, a shell install script) and tmux dependency point to macOS/Linux; no native Windows build is described.",
+      },
+      {
+        q: "Can Claude Squad converge or merge the best of several agents' attempts at the same task?",
+        a: "Its README describes reviewing and checking out changes per instance, not a built-in step for comparing several agents' diffs on the same task and merging the best one — which is Recoder's core workflow.",
+      },
+      {
+        q: "Does Claude Squad have an approval gate or audit trail like Recoder's?",
+        a: "Not based on its own site or README. It does have an experimental `--autoyes` flag that auto-accepts agent prompts, which is close to the opposite of a fail-closed approval gate.",
+      },
+    ],
+    related: ["recoder-vs-vibe-kanban", "recoder-vs-conductor"],
   },
 ];
 
