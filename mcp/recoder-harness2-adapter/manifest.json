@@ -1,0 +1,10 @@
+{
+  "id": "recoder-harness2-probe",
+  "kind": "capability-probe",
+  "runtime": "harness2",
+  "entrypoint": "../recoder-harness2-adapter.js",
+  "instructionSources": [],
+  "ownsCanonicalState": false,
+  "isConductorRuntime": false,
+  "notes": "Not registered as a ConductorRuntime/RuntimeDriver. Harness² (google-research/harness2) cannot be dispatched an arbitrary Recoder task/repo as released -- see docs/engines/HARNESS2.md. This manifest documents a read-only, additive capability probe only."
+}

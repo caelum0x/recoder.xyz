@@ -421,3 +421,10 @@ one integration test proving a caller uses the module end-to-end + degrade-safe 
 6. **ops-recorder LICENSE** → **added** (MIT, Recoder-authored — matches root `package.json` license).
 7. **networking (ziti/xds)** → **stays cloud-tier-deferred**. Registered + diagnostics only; no live data
    plane until the cloud/teams launch.
+8. **Harness² (google-research/harness2) evaluated, NOT wired as a `ConductorRuntime`** (2026-10-19) —
+   its released API only runs 3 fixed benchmarks (`--bench jb|lab|wb`); `Substrate.execute()` requires a
+   benchmark-supplied launcher + task_ref, not an arbitrary Recoder repo/prompt. Registering it in the
+   COMMUNICATION module's runtime registry (`backend/src/domains/interop-wire/runtimes/`) or
+   `packages/runtime`'s driver registry would be a permanently-nonfunctional entry, so it isn't there.
+   What ships instead: a read-only, additive capability probe (`mcp/recoder-harness2-adapter.js`,
+   never registered as a selectable engine). Full evidence: `docs/engines/HARNESS2.md`.
