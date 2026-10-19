@@ -32,6 +32,7 @@ import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { BuilderFocusManager } from "@/builder/store/builder-focusmanager";
 import { getWebServerEndpoint } from "@/util/endpoints";
 import { base64ToArrayBuffer } from "@/util/util";
+import { formatRemoteUri } from "@/util/waveutil";
 import { ChatStatus } from "ai";
 import * as jotai from "jotai";
 import type React from "react";
@@ -44,6 +45,7 @@ import {
     resizeImage,
     validateFileSizeFromInfo,
 } from "./ai-utils";
+import { AIMentionController } from "./aimention-controller";
 import type { AIPanelInputRef } from "./aipanelinput";
 import { fetchWorkspaceDiffFiles, fetchWorkspaceRecord, gatherWorkspaceContext } from "./waveai-workspace-context";
 
@@ -125,11 +127,20 @@ export class WaveAIModel {
     // The last chatId a context refresh ran for (refresh-once-per-chat gate).
     workspaceContextRefreshChatId: string = null;
     workspaceContextRefreshing: boolean = false;
+    mentionController!: AIMentionController;
 
     private constructor(orefContext: ORef, inBuilder: boolean) {
         this.orefContext = orefContext;
         this.inBuilder = inBuilder;
         this.chatId = jotai.atom(null) as jotai.PrimitiveAtom<string>;
+        this.mentionController = new AIMentionController((entry, connection) =>
+            this.addFileFromRemoteUri({
+                uri: formatRemoteUri(entry.absPath, connection),
+                absParent: entry.dirPath,
+                relName: entry.relPath,
+                isDir: false,
+            })
+        );
         if (inBuilder) {
             this.aiModeConfigs = jotai.atom(BuilderAIModeConfigs) as jotai.Atom<Record<string, AIModeConfigType>>;
         } else {

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatFileSizeError, isAcceptableFile, validateFileSize } from "@/app/aipanel/ai-utils";
+import type { MentionFileEntry } from "@/app/aipanel/aimention";
+import { AIMentionPopup } from "@/app/aipanel/aimentionpopup";
 import { waveAIHasFocusWithin } from "@/app/aipanel/waveai-focus-utils";
 import { type WaveAIModel } from "@/app/aipanel/waveai-model";
 import { Tooltip } from "@/element/tooltip";
@@ -25,9 +27,23 @@ export const AIPanelInput = memo(({ onSubmit, status, model }: AIPanelInputProps
     const [input, setInput] = useAtom(model.inputAtom);
     const isFocused = useAtomValue(model.isWaveAIFocusedAtom);
     const isChatEmpty = useAtomValue(model.isChatEmptyAtom);
+    const mentionState = useAtomValue(model.mentionController.stateAtom);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isPanelOpen = useAtomValue(model.getPanelVisibleAtom());
+
+    const applyMentionSelection = useCallback(
+        (entry: MentionFileEntry) => {
+            const current = textareaRef.current;
+            const { text, cursorPos } = model.mentionController.applySelection(input, entry);
+            setInput(text);
+            requestAnimationFrame(() => {
+                current?.focus();
+                current?.setSelectionRange(cursorPos, cursorPos);
+            });
+        },
+        [input, model, setInput]
+    );
 
     let placeholder: string;
     if (!isChatEmpty) {
@@ -66,8 +82,40 @@ export const AIPanelInput = memo(({ onSubmit, status, model }: AIPanelInputProps
         model.registerInputRef(inputRefObject);
     }, [model, resizeTextarea]);
 
+    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setInput(e.target.value);
+        model.mentionController.onInputChanged(e.target.value, e.target.selectionStart ?? e.target.value.length);
+    };
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         const isComposing = e.nativeEvent?.isComposing || e.keyCode == 229;
+
+        if (mentionState.active) {
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                model.mentionController.moveSelection(1);
+                return;
+            }
+            if (e.key === "ArrowUp") {
+                e.preventDefault();
+                model.mentionController.moveSelection(-1);
+                return;
+            }
+            if (e.key === "Escape") {
+                e.preventDefault();
+                model.mentionController.close();
+                return;
+            }
+            if ((e.key === "Enter" || e.key === "Tab") && !isComposing) {
+                const entry = model.mentionController.getSelectedEntry();
+                if (entry != null) {
+                    e.preventDefault();
+                    applyMentionSelection(entry);
+                    return;
+                }
+            }
+        }
+
         if (e.key === "Enter" && !e.shiftKey && !isComposing) {
             e.preventDefault();
             onSubmit(e as any);
@@ -144,10 +192,15 @@ export const AIPanelInput = memo(({ onSubmit, status, model }: AIPanelInputProps
             />
             <form onSubmit={onSubmit}>
                 <div className="relative">
+                    <AIMentionPopup
+                        state={mentionState}
+                        onHover={(idx) => model.mentionController.setSelectionIndex(idx)}
+                        onSelect={applyMentionSelection}
+                    />
                     <textarea
                         ref={textareaRef}
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        onChange={handleInputChange}
                         onKeyDown={handleKeyDown}
                         onFocus={handleFocus}
                         onBlur={handleBlur}
@@ -183,7 +236,11 @@ export const AIPanelInput = memo(({ onSubmit, status, model }: AIPanelInputProps
                             </button>
                         </Tooltip>
                     ) : (
-                        <Tooltip content="Send message (Enter)" placement="top" divClassName="absolute bottom-1.5 right-1">
+                        <Tooltip
+                            content="Send message (Enter)"
+                            placement="top"
+                            divClassName="absolute bottom-1.5 right-1"
+                        >
                             <button
                                 type="submit"
                                 disabled={status !== "ready" || !input.trim()}
