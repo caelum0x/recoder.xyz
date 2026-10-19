@@ -67,6 +67,57 @@ function get(base: string, path: string): Promise<{ status: number; body: () => 
   });
 }
 
+/** Raw `http` POST with a JSON body (the vitest setup mocks global fetch). */
+function post(
+  base: string,
+  path: string,
+  payload: unknown,
+): Promise<{ status: number; body: () => unknown }> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(`${base}${path}`);
+    const data = Buffer.from(JSON.stringify(payload));
+    const req = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': data.length },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8');
+          resolve({ status: res.statusCode ?? 0, body: () => (text ? JSON.parse(text) : null) });
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end(data);
+  });
+}
+
+function app(router: express.Router): express.Express {
+  const instance = express();
+  instance.use(express.json());
+  instance.use('/api/agent-os', router);
+  return instance;
+}
+
+function serveApp(instance: express.Express): Promise<Harness> {
+  return new Promise((resolve) => {
+    const server = http.createServer(instance);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address() as AddressInfo;
+      resolve({
+        base: `http://127.0.0.1:${port}`,
+        close: () => new Promise<void>((r) => server.close(() => r())),
+      });
+    });
+  });
+}
+
 describe('GET /api/agent-os/squads/board', () => {
   it('reports the squads feature truthfully disabled', async () => {
     const harness = await serve(buildSquadBoardRouter({ squads: null, autopilot: null, middleware }));
@@ -149,6 +200,108 @@ describe('GET /api/agent-os/squads/board', () => {
       expect(data.autopilot.staleIssues).toEqual([
         { id: 'bd-7', title: 'Stuck migration', status: 'in_progress' },
       ]);
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
+describe('POST /api/agent-os/squads/board/control', () => {
+  it('rejects an unknown action', async () => {
+    const harness = await serveApp(app(buildSquadBoardRouter({ squads: null, autopilot: null, middleware })));
+    try {
+      const res = await post(harness.base, '/api/agent-os/squads/board/control', { action: 'launch' });
+      expect(res.status).toBe(400);
+      expect((res.body() as { success: boolean }).success).toBe(false);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('reports the background-agent control surface unavailable when squads are disabled', async () => {
+    const harness = await serveApp(app(buildSquadBoardRouter({ squads: null, autopilot: null, middleware })));
+    try {
+      const res = await post(harness.base, '/api/agent-os/squads/board/control', { action: 'start' });
+      expect(res.status).toBe(503);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('refuses to start without a chosen repository/agent launch profile', async () => {
+    const squads = new SquadService({ store: new InMemorySquadStore() });
+    const autopilot = new SquadAutopilotService({ logger: silentLogger, intervalMs: 60_000, maxDispatchesPerTick: 3 });
+    const harness = await serveApp(app(buildSquadBoardRouter({ squads, autopilot, middleware })));
+    try {
+      const res = await post(harness.base, '/api/agent-os/squads/board/control', { action: 'start' });
+      expect(res.status).toBe(400);
+      expect((res.body() as { error: { message: string } }).error.message).toContain(
+        'choose a repository and agent',
+      );
+    } finally {
+      await harness.close();
+    }
+  });
+
+  // This is the control-plane edge the desktop "Start background agents" button calls.
+  // It must work with NO `RECODER_SQUAD_AUTOPILOT` env var involved at all — that var only
+  // gates auto-start at process boot, never this in-app runtime toggle (see
+  // backend/.env.example's "Squad Autopilot" section). Constructing the service here with
+  // no env dependency at all is the proof.
+  it('starts the autopilot at runtime from a launch profile, independent of any boot-time env var', async () => {
+    const squads = new SquadService({ store: new InMemorySquadStore() });
+    const autopilot = new SquadAutopilotService({ logger: silentLogger, intervalMs: 60_000, maxDispatchesPerTick: 3 });
+    const harness = await serveApp(app(buildSquadBoardRouter({ squads, autopilot, middleware })));
+    try {
+      const res = await post(harness.base, '/api/agent-os/squads/board/control', {
+        action: 'start',
+        profile: { repoPath: '/repos/acme', spaceId: 'sp-1', projectId: 'acme', runtimeId: 'codex' },
+      });
+      expect(res.status).toBe(200);
+      const data = (res.body() as { data: { action: string; autopilot: Record<string, unknown> } }).data;
+      expect(data.action).toBe('start');
+      expect(data.autopilot.running).toBe(true);
+      expect(data.autopilot.launchProfile).toMatchObject({ repoPath: '/repos/acme', runtimeId: 'codex' });
+
+      const board = await get(harness.base, '/api/agent-os/squads/board');
+      expect((board.body() as { data: { autopilot: { running: boolean } } }).data.autopilot.running).toBe(true);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('pauses a running autopilot without clearing its launch profile', async () => {
+    const squads = new SquadService({ store: new InMemorySquadStore() });
+    const autopilot = new SquadAutopilotService({ logger: silentLogger, intervalMs: 60_000, maxDispatchesPerTick: 3 });
+    const harness = await serveApp(app(buildSquadBoardRouter({ squads, autopilot, middleware })));
+    try {
+      await post(harness.base, '/api/agent-os/squads/board/control', {
+        action: 'start',
+        profile: { repoPath: '/repos/acme', spaceId: 'sp-1', projectId: 'acme', runtimeId: 'codex' },
+      });
+      const res = await post(harness.base, '/api/agent-os/squads/board/control', { action: 'pause' });
+      expect(res.status).toBe(200);
+      const data = (res.body() as { data: { autopilot: Record<string, unknown> } }).data;
+      expect(data.autopilot.running).toBe(false);
+      expect(data.autopilot.launchProfile).toMatchObject({ repoPath: '/repos/acme' });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('runs an on-demand scan tick without flipping the running posture', async () => {
+    const squads = new SquadService({ store: new InMemorySquadStore() });
+    const autopilot = new SquadAutopilotService({ logger: silentLogger, intervalMs: 60_000, maxDispatchesPerTick: 3 });
+    const harness = await serveApp(app(buildSquadBoardRouter({ squads, autopilot, middleware })));
+    try {
+      const res = await post(harness.base, '/api/agent-os/squads/board/control', {
+        action: 'scan',
+        profile: { repoPath: '/repos/acme', spaceId: 'sp-1', projectId: 'acme', runtimeId: 'codex' },
+      });
+      expect(res.status).toBe(200);
+      const data = (res.body() as { data: { tick: { status: string }; autopilot: Record<string, unknown> } }).data;
+      expect(data.tick).toBeDefined();
+      expect(data.autopilot.running).toBe(false);
     } finally {
       await harness.close();
     }
