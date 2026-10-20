@@ -28,6 +28,7 @@ import {
   resolveAppleClientSecret,
   appleMapProfileToUser,
 } from "./auth/apple-secret";
+import { isRealCredential } from "./auth/is-real-credential";
 
 // Determine baseURL based on environment
 const getBaseURL = () => {
@@ -70,10 +71,6 @@ const githubClientId = process.env.GITHUB_CLIENT_ID || process.env.GITHUB_ID || 
 const githubClientSecret = process.env.GITHUB_CLIENT_SECRET || process.env.GITHUB_SECRET || '';
 const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
-
-function isRealCredential(val: string): boolean {
-  return val.length > 0 && !val.startsWith('placeholder');
-}
 
 const skipAuthConfigValidation =
   process.env.SKIP_ENV_VALIDATION === 'true' ||
