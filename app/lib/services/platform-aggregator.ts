@@ -24,6 +24,11 @@ export interface AppActivity {
   error?: string;
 }
 
+// Note: `web` (web.recoder.xyz) was intentionally dropped here on 2026-08-31 —
+// it is a legacy, redirect-only host now (see lib/session-sync.ts and
+// lib/config/__tests__/platforms.test.ts, which asserts it's excluded from
+// production origins). Keep this list at 3 real ecosystem apps unless a new
+// app genuinely ships its own `/api/platform/activity` endpoint.
 export const APP_ENDPOINTS = [
   { app: "agents", url: "https://agents.recoder.xyz/api/platform/activity" },
   { app: "agency", url: "https://agency.recoder.xyz/api/platform/activity" },

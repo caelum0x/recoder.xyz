@@ -35,7 +35,7 @@ describe("fetchAllAppActivity", () => {
     });
 
     const results = await fetchAllAppActivity();
-    expect(results).toHaveLength(4);
+    expect(results).toHaveLength(3);
     expect(results[0].stats.totalItems).toBe(5);
   });
 
@@ -43,7 +43,7 @@ describe("fetchAllAppActivity", () => {
     mockFetch.mockRejectedValue(new Error("timeout"));
 
     const results = await fetchAllAppActivity();
-    expect(results).toHaveLength(4);
+    expect(results).toHaveLength(3);
     expect(results[0].error).toBe("unavailable");
     expect(results[0].stats.totalItems).toBe(0);
   });
@@ -55,7 +55,7 @@ describe("fetchAllAppActivity", () => {
     });
 
     const results = await fetchAllAppActivity();
-    expect(results).toHaveLength(4);
+    expect(results).toHaveLength(3);
     for (const r of results) {
       expect(r.error).toBe("unavailable");
       expect(r.stats.activeItems).toBe(0);
@@ -76,7 +76,7 @@ describe("fetchAllAppActivity", () => {
 
     await fetchAllAppActivity();
 
-    expect(mockFetch).toHaveBeenCalledTimes(4);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
     for (const call of mockFetch.mock.calls) {
       expect(call[1].headers["x-internal-service-key"]).toBe(
         "test-key-1234567890",
@@ -84,7 +84,7 @@ describe("fetchAllAppActivity", () => {
     }
   });
 
-  it("returns results for all 4 apps even when some fail", async () => {
+  it("returns results for all 3 apps even when some fail", async () => {
     let callIndex = 0;
     mockFetch.mockImplementation(() => {
       callIndex++;
@@ -103,11 +103,11 @@ describe("fetchAllAppActivity", () => {
     });
 
     const results = await fetchAllAppActivity();
-    expect(results).toHaveLength(4);
+    expect(results).toHaveLength(3);
 
     const ok = results.filter((r) => !r.error);
     const failed = results.filter((r) => r.error);
     expect(ok).toHaveLength(2);
-    expect(failed).toHaveLength(2);
+    expect(failed).toHaveLength(1);
   });
 });

@@ -46,13 +46,16 @@ describe('lib/entitlements', () => {
       });
     });
 
-    it('pro tier unlocks synthesis and longer retention', () => {
+    it('pro tier unlocks synthesis and longer retention, but stays solo', () => {
       const features = getEntitlementFeatures('pro');
       expect(features.parallel_agents).toBe(8);
       expect(features.assisted_synthesize).toBe(true);
       expect(features.evidence_retention_days).toBe(90);
       expect(features.shared_team_memory).toBe(true);
-      expect(features.team_members).toBe(10);
+      // Pro is sold as a solo plan ("For solo devs running many agents" —
+      // see lib/pricing-config.ts's `pro`/`pro-annual` limits.teamMembers).
+      // Team collaboration only starts with the Team plan (25 seats).
+      expect(features.team_members).toBe(1);
     });
 
     it('enterprise tier is unlimited on numeric limits', () => {
