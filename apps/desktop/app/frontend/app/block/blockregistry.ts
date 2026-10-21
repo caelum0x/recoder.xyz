@@ -23,6 +23,7 @@ import { RecoderLoomTerminalViewModel } from "@/app/view/recoder/recoder-loom-te
 import { RecoderDiffViewModel } from "@/app/view/recoder-diff/recoder-diff-model";
 import { RecoderAgentsViewModel } from "@/app/view/recoder-agents/recoder-agents-model";
 import { RecoderAuditViewModel } from "@/app/view/recoder-audit/recoder-audit-model";
+import { RecoderCoworkerViewModel } from "@/app/view/recoder-coworker/recoder-coworker-model";
 import { RecoderBoardViewModel } from "@/app/view/recoder-board/recoder-board-model";
 import { RecoderCapabilitiesViewModel } from "@/app/view/recoder-capabilities/recoder-capabilities-model";
 import { RecoderCodebaseViewModel } from "@/app/view/recoder-codebase/recoder-codebase-model";
@@ -80,6 +81,7 @@ BlockRegistry.set("recoder-locks", RecoderLocksViewModel);
 BlockRegistry.set("recoder-audit", RecoderAuditViewModel);
 BlockRegistry.set("recoder-workflows", RecoderWorkflowsViewModel);
 BlockRegistry.set("recoder-agents", RecoderAgentsViewModel);
+BlockRegistry.set("recoder-coworker", RecoderCoworkerViewModel);
 BlockRegistry.set("recoder-usage", RecoderUsageViewModel);
 BlockRegistry.set("recoder-runs", RecoderRunsViewModel);
 BlockRegistry.set("recoder-settings", RecoderSettingsViewModel);

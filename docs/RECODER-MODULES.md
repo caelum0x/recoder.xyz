@@ -383,6 +383,30 @@ over the existing launch path; (b) autopilot = a cron trigger that creates a bea
 conductor run; (c) surface squads/autopilots in the desktop board. Port the logic (Go → TS conductor)
 rather than supervise the Go binary, since it overlaps our own control plane.
 
+## 13. COWORKER module — `backend/src/domains/agent-os/services/coworker.service.ts` (shipped, inside the AGENT-OS domain)
+**Domain:** an in-app AI teammate with its own sandbox — the Recoder-native shape of the reuse target
+CopilotKit/OpenBot ("a computer of its own... every action decided before it happens and recorded
+after"). **No parallel plumbing:** it is built entirely on EXISTING primitives — `governance/services/
+approval.service.ts` (one-click approve/deny, unchanged), `governance/services/audit-chain.service.ts`
+(the same Merkle chain the diff/session inline approval card and `recoder-audit` view read), the guarded
+`@recoder/agent-browser` engine `engines/browser-use-engine.ts` already composes (SSRF egress guard +
+domain allowlist, reused via `agent-os/adapters/coworker-browser.adapter.ts`), and the ONE
+`InferenceGatewayPort` delivery ladder (no new model/API-key dependency).
+**Shipped:** `CoworkerService` proposes ONE action per turn (`shell` / `write_file` / `read_file` /
+`browser_navigate` / `finish`) confined to a per-task sandbox directory (`DATA_DIR/coworker-sandboxes/
+<taskId>`, path-traversal-guarded), opens a governance approval for it, and — only once a human approves
+— executes it for real and seals a SECOND audit entry carrying the actual outcome (stdout/exit code, file
+written, page title/text). A denial stops the task cold; a missing/unrouted inference provider degrades
+to a truthful `blocked` status, never a fabricated action. Routes: `POST/GET /api/agent-os/coworker/
+tasks`, `GET /api/agent-os/coworker/tasks/:id`, `POST /api/agent-os/coworker/tasks/:id/actions/:actionId/
+decide`, `POST /api/agent-os/coworker/tasks/:id/cancel` (same IDOR-safe owner scoping as the approvals
+edges, reusing `governance/routes/governance-access.ts`). Desktop surface: the **Coworker** view
+(`apps/desktop/app/frontend/app/view/recoder-coworker/`, ⌘P → "Coworker") — a goal box, the task list,
+and a live action feed with one-click Approve/Deny per proposed action.
+**Build note:** task/action state is process-memory (the durable state — approvals + audit — already
+persists through the governance domain); a later pass can back it with the agent-os repository if
+cross-restart task resumption becomes a requirement.
+
 ## Module build order
 
 > **All 12 are now shipped** (see each section's status). The order below is **historical** — the

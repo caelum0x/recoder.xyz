@@ -26,6 +26,7 @@ const RecoderNavTargets: RecoderNavTarget[] = [
     { id: "nav-audit", title: "Audit Trail", view: "recoder-audit" },
     { id: "nav-workflows", title: "Workflows", view: "recoder-workflows" },
     { id: "nav-agents", title: "Agents", view: "recoder-agents" },
+    { id: "nav-coworker", title: "Coworker", view: "recoder-coworker" },
     { id: "nav-usage", title: "Inference Usage", view: "recoder-usage" },
     { id: "nav-settings", title: "Open Settings", view: "recoder-settings" },
     { id: "nav-session", title: "Open Session", view: "recoder-session" },

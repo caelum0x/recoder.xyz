@@ -54,6 +54,9 @@ import type { Principal } from '../domains/identity/types.js';
 import { createGovernanceModule } from '../domains/governance/index.js';
 import { createInteropModule } from '../domains/interop/index.js';
 import { createAgentOsModule } from '../domains/agent-os/index.js';
+import { CoworkerService } from '../domains/agent-os/services/coworker.service.js';
+import { buildCoworkerRouter } from '../domains/agent-os/routes/coworker.routes.js';
+import { createCoworkerBrowserEngine } from '../domains/agent-os/adapters/coworker-browser.adapter.js';
 import { createConductorModule } from '../domains/conductor/index.js';
 import { createGovernedSkillModel } from '../domains/conductor/skill/skill-bootstrap.js';
 import { parseMergeTrustGateMode } from '../domains/conductor/evidence/merge-trust-gate.js';
@@ -762,6 +765,23 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // persists in-process engine RunEvents onto THE state-of-record bus
   // (`source:'engine'`) — no more silent drop for non-conductor callers.
   openfangEngineRunSink.attach(agentOs.runEventBus());
+
+  // --- Recoder Coworker: an in-app AI teammate (the reuse target for
+  //     CopilotKit/OpenBot's "a computer of its own, every action decided before
+  //     it happens and recorded after") built on Recoder's OWN governance
+  //     primitives instead of parallel plumbing — the SAME `ApprovalService` +
+  //     `AuditChainService` the inline approval card / audit trail already use,
+  //     the SAME guarded `@recoder/agent-browser` engine `browser-use-engine.ts`
+  //     composes, and the SAME `InferenceGatewayPort` ladder (no new model/API
+  //     key dependency). See `docs/RECODER-MODULES.md` Coworker entry. ---
+  const coworker = new CoworkerService({
+    approvals: governance.approvals(),
+    audit: governance.audit(),
+    gateway: inference.gateway(),
+    browser: createCoworkerBrowserEngine(),
+    logger: childLogger('coworker'),
+    sandboxRoot: joinPath(bootEnv.DATA_DIR?.trim() || joinPath(process.cwd(), 'data'), 'coworker-sandboxes'),
+  });
 
   // --- Phase 5a: policy-update hook → (c) reloadPolicies. When a forbidden/secret-
   //     path or approval policy artifact changes on the control plane (a space
@@ -2234,6 +2254,16 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       'agent-os',
       DOMAIN_REGISTRY['agent-os'].mountBase,
       agentOs.routes()
+    ),
+    // Recoder Coworker edges: propose → one-click approve/deny → execute → audit.
+    routerProvider(
+      'agent-os-coworker',
+      DOMAIN_REGISTRY['agent-os'].mountBase,
+      buildCoworkerRouter({
+        coworker,
+        middleware: identity.middleware(),
+        soloMode: governance.soloMode,
+      })
     ),
     // Internal agent-os ingest edges (INTERNAL_SERVICE_KEY-gated internally).
     routerProvider(
