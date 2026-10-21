@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Check, Loader2 } from 'lucide-react';
 import { PLANS, type PlanId } from '@/lib/pricing-config';
 import { useBillingData, planDisplayName, isPaidPlan } from './useBillingData';
@@ -50,6 +51,11 @@ function checkoutFallbackMailto(planId: PlanId): string {
 
 export function UpgradePlans() {
   const { data, loading, error, reload } = useBillingData();
+  const searchParams = useSearchParams();
+  // Guards the auto-checkout effect below to a single attempt per page load
+  // — without this, a re-render after a failed checkout (actionError set)
+  // would re-fire the same request in a loop.
+  const autoCheckoutAttempted = useRef(false);
   const [selected, setSelected] = useState<PlanId | null>(null);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -143,6 +149,27 @@ export function UpgradePlans() {
       void handleConfirm(planId);
     }
   };
+
+  // Funnel continuation: a visitor who clicked "Get Pro"/"Get Team" on the
+  // public pricing page signs up via /auth/signup?plan=<id>, which forwards
+  // that intent as the post-OAuth redirect to /billing/upgrade?plan=<id>
+  // (see app/[locale]/auth/signup/page.tsx). Without this, the forwarded
+  // plan was a dead end — the user landed here and had to notice and click
+  // the plan again themselves. Auto-start checkout once, for a real
+  // purchasable plan, only for a free user who isn't already on it.
+  useEffect(() => {
+    if (autoCheckoutAttempted.current) return;
+    if (loading || error || !data) return;
+    const planParam = searchParams.get('plan');
+    if (!planParam || !OFFERED_PLANS.includes(planParam as PlanId)) return;
+    if (hasActivePaidPlan || planParam === currentPlan) return;
+    autoCheckoutAttempted.current = true;
+    setSelected(planParam as PlanId);
+    onPlanAction(planParam as PlanId);
+    // onPlanAction/currentPlan/hasActivePaidPlan are recreated every render;
+    // the ref guard above (not this dep list) is what prevents re-firing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loading, error, data]);
 
   const contactFallback = contactFallbackPlan ? (
     <p className="mt-1 text-sm text-gray-400">

@@ -17,12 +17,26 @@ import {
 import { signIn } from '@/lib/auth-client';
 import { SiteHeader } from '@/components/SiteHeader';
 
+// Plan ids the public pricing page's "Get Pro"/"Get Team" CTAs actually send
+// (site/app/pricing/page.tsx: /auth/signup?plan=pro|team). Keep in sync with
+// UpgradePlans.tsx's OFFERED_PLANS — these are the only ids /billing/upgrade
+// knows how to start checkout for.
+const CHECKOUT_PLAN_IDS = new Set(['pro', 'team']);
+
 function SignUpForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const searchParams = useSearchParams();
   const router = useRouter();
-  const rawReturn = searchParams.get('redirect') || searchParams.get('return') || '/dashboard';
+  const explicitReturn = searchParams.get('redirect') || searchParams.get('return');
+  const plan = searchParams.get('plan');
+  // A visitor who clicked "Get Pro"/"Get Team" on the pricing page carries
+  // that intent as ?plan=; previously this was silently dropped and every
+  // such signup landed on the plain /dashboard with no way back to checkout.
+  // Forward it to /billing/upgrade, which auto-starts checkout for a
+  // recognized plan id once the session exists.
+  const planReturn = plan && CHECKOUT_PLAN_IDS.has(plan) ? `/billing/upgrade?plan=${plan}` : null;
+  const rawReturn = explicitReturn || planReturn || '/dashboard';
   const returnUrl = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/dashboard';
 
   const handleGitHubSignIn = async () => {
