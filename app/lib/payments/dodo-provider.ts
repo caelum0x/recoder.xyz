@@ -9,9 +9,19 @@
  *   take internal ids — that is the real, existing call contract.
  * - getSubscription -> direct Dodo API GET by provider-side subscription id
  *   (the service has no read path; this mirrors its direct-fetch style).
- * - verifyWebhook -> the HMAC-SHA256 hex check extracted from
- *   app/api/webhooks/dodo (header `x-dodo-signature`, DODO_WEBHOOK_SECRET),
- *   hardened so a length-mismatched signature rejects instead of throwing.
+ * - verifyWebhook -> real Dodo webhooks are signed per the Standard Webhooks
+ *   spec (same scheme as Polar): headers `webhook-id` / `webhook-timestamp` /
+ *   `webhook-signature`, signed message `${id}.${timestamp}.${rawBody}`,
+ *   HMAC-SHA256 digested as BASE64 (not hex), secret is a `whsec_`-prefixed
+ *   base64 value, `webhook-signature` is a space-delimited list of
+ *   `v1,<base64sig>` entries (any match passes — key rotation), and a stale
+ *   timestamp is rejected before the HMAC compare (replay defense). This
+ *   mirrors `backend/src/domains/billing/adapters/shared.ts`'s
+ *   `verifyStandardWebhook`, which already gets this right for Agent OS
+ *   billing — this file previously reinvented an incorrect scheme (a single
+ *   custom `x-dodo-signature` header, hex digest, raw-body-only message) that
+ *   no real Dodo webhook ever satisfies, silently dropping every production
+ *   billing event.
  *
  * Env: DODO_PAYMENTS_API_KEY/DODO_API_KEY (via resolveDodoApiKey),
  * DODO_WEBHOOK_SECRET, DODO_PRODUCT_<PLAN> product mapping. Missing keys
@@ -35,7 +45,12 @@ import {
 } from './provider';
 
 export const DODO_NOT_CONFIGURED = 'dodo_not_configured';
-export const DODO_SIGNATURE_HEADER = 'x-dodo-signature';
+// Standard Webhooks headers (Dodo's real scheme — same as Polar).
+export const DODO_SIGNATURE_HEADER = 'webhook-signature';
+export const DODO_ID_HEADER = 'webhook-id';
+export const DODO_TIMESTAMP_HEADER = 'webhook-timestamp';
+/** Replay-defense tolerance for `webhook-timestamp`, per the Standard Webhooks spec. */
+const DODO_WEBHOOK_TIMESTAMP_TOLERANCE_MS = 300_000;
 
 const DODO_API_URL = 'https://api.dodopayments.com';
 
@@ -101,7 +116,18 @@ export function normalizeDodoEvent(payload: unknown): NormalizedWebhookEvent | n
     typeof envelope.data === 'object' && envelope.data !== null ? envelope.data : {}
   ) as Record<string, unknown>;
 
-  const userId = asString(data.user_id);
+  // Real Dodo payloads have NO top-level `user_id` — subscriptions/payments
+  // carry `customer: { customer_id, email, name }` and a `metadata` object
+  // (see `DodoPaymentsService.createCheckoutSession`, which stamps
+  // `metadata.userId` at checkout time so it round-trips here, matching the
+  // same `metadata.userId` convention as the Creem normalizer). `data.user_id`
+  // is kept as a harmless legacy fallback only.
+  const metadata = (
+    typeof data.metadata === 'object' && data.metadata !== null
+      ? (data.metadata as Record<string, unknown>)
+      : {}
+  );
+  const userId = asString(metadata.userId) ?? asString(data.user_id);
   let subscriptionId = asString(data.subscription_id);
   if (!subscriptionId) {
     if (type === 'payment.succeeded' || type === 'payment.failed') {
@@ -121,21 +147,69 @@ export function normalizeDodoEvent(payload: unknown): NormalizedWebhookEvent | n
     userId,
     planId: asString(data.plan) ?? asString(data.plan_id) ?? asString(data.product_id),
     status: rawType === 'subscription.on_hold' ? 'on_hold' : asString(data.status),
-    metadata: { ...data },
+    // Explicit checkout metadata wins (matches the Creem normalizer's shape,
+    // which `metadataOf()` callers read amount/currency/interval from), but
+    // the full envelope stays accessible for any other field.
+    metadata: { ...data, ...metadata },
     raw: payload,
   };
 }
 
+function timingSafeEqualStrings(a: string, b: string): boolean {
+  const ab = Buffer.from(a, 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
+
+/**
+ * `DODO_WEBHOOK_SECRET` is issued as a `whsec_`-prefixed base64 value (the
+ * Standard Webhooks convention) — the signing key is the DECODED bytes, not
+ * the literal string. Falls back to raw UTF-8 bytes if it doesn't actually
+ * round-trip as base64, so a plain test secret still works.
+ */
+function decodeDodoWebhookSecret(secret: string): Buffer {
+  const stripped = secret.startsWith('whsec_') ? secret.slice('whsec_'.length) : secret;
+  const decoded = Buffer.from(stripped, 'base64');
+  const roundTrips =
+    decoded.length > 0 && decoded.toString('base64').replace(/=+$/, '') === stripped.replace(/=+$/, '');
+  return roundTrips ? decoded : Buffer.from(secret, 'utf8');
+}
+
+function isFreshDodoWebhookTimestamp(timestamp: string | null | undefined, nowMs: number = Date.now()): boolean {
+  if (!timestamp) return false;
+  const seconds = Number(timestamp);
+  if (!Number.isFinite(seconds)) return false;
+  return Math.abs(nowMs - seconds * 1000) <= DODO_WEBHOOK_TIMESTAMP_TOLERANCE_MS;
+}
+
+/**
+ * Standard Webhooks signature verification (Dodo's real scheme, same as
+ * Polar). The signed content is `${id}.${timestamp}.${rawBody}`; the
+ * `webhook-signature` header is a space-delimited list of `v1,<base64sig>`
+ * entries — a match on ANY entry passes (key rotation). Rejects a stale
+ * timestamp (replay defense) before the HMAC compare. Never throws on a
+ * malformed/missing header.
+ */
 export function verifyDodoSignature(
   rawBody: string,
   signatureHeader: string | null,
-  secret: string
+  secret: string,
+  id?: string | null,
+  timestamp?: string | null
 ): boolean {
-  if (!signatureHeader) return false;
-  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-  const provided = Buffer.from(signatureHeader);
-  const wanted = Buffer.from(expected);
-  return provided.length === wanted.length && crypto.timingSafeEqual(provided, wanted);
+  if (!signatureHeader || !id || !timestamp) return false;
+  if (!isFreshDodoWebhookTimestamp(timestamp)) return false;
+
+  const key = decodeDodoWebhookSecret(secret);
+  const signedContent = `${id}.${timestamp}.${rawBody}`;
+  const expected = crypto.createHmac('sha256', key).update(signedContent).digest('base64');
+
+  for (const part of signatureHeader.split(' ')) {
+    const [, sig] = part.split(',', 2);
+    if (sig && timingSafeEqualStrings(sig, expected)) return true;
+  }
+  return false;
 }
 
 interface DodoProviderConfig {
@@ -263,11 +337,17 @@ export class DodoProvider implements PaymentProvider {
     }
   }
 
-  verifyWebhook(rawBody: string, signatureHeader: string | null): WebhookVerifyResult {
+  verifyWebhook(
+    rawBody: string,
+    signatureHeader: string | null,
+    extra?: { id?: string | null; timestamp?: string | null }
+  ): WebhookVerifyResult {
     if (!this.webhookSecret) {
       return { ok: false, reason: DODO_NOT_CONFIGURED };
     }
-    if (!verifyDodoSignature(rawBody, signatureHeader, this.webhookSecret)) {
+    if (
+      !verifyDodoSignature(rawBody, signatureHeader, this.webhookSecret, extra?.id, extra?.timestamp)
+    ) {
       return { ok: false, reason: 'dodo_invalid_signature' };
     }
 

@@ -53,6 +53,14 @@ export class DodoPaymentsService {
           name: user.name,
         },
         return_url: resolveSafeCheckoutReturnUrl(returnUrl),
+        // Round-tripped back to us on every subscription/payment webhook for
+        // this checkout (same `metadata.userId` convention as the Creem
+        // provider). Real Dodo webhook payloads carry no top-level `user_id`
+        // field — without this, the webhook handler has no way to attach the
+        // event to a user (see `lib/payments/dodo-provider.ts`'s
+        // `normalizeDodoEvent` and `app/api/webhooks/dodo/route.ts`'s
+        // `resolveDodoUserId`).
+        metadata: { userId },
       });
 
       return {

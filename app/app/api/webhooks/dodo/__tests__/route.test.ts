@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import crypto from 'node:crypto';
 
 // --- Mocks for the route's side-effect dependencies -------------------------
@@ -60,14 +60,32 @@ vi.mock('@/lib/analytics', () => ({ emitSubscriptionCreated }));
 // --- Helpers ----------------------------------------------------------------
 
 const SECRET = 'test-dodo-secret';
+const FIXED_NOW_MS = 1_700_000_000_000;
+const FIXED_TIMESTAMP = String(Math.floor(FIXED_NOW_MS / 1000));
+const WEBHOOK_ID = 'msg_1';
 
-function sign(payload: string, secret: string): string {
-  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+/** Standard Webhooks signing: HMAC-SHA256(secret, `${id}.${timestamp}.${body}`), base64, `v1,` prefixed. */
+function sign(payload: string, secret: string, id: string = WEBHOOK_ID, timestamp: string = FIXED_TIMESTAMP): string {
+  const digest = crypto
+    .createHmac('sha256', secret)
+    .update(`${id}.${timestamp}.${payload}`)
+    .digest('base64');
+  return `v1,${digest}`;
 }
 
-function makeRequest(payload: string, signature: string) {
+function makeRequest(
+  payload: string,
+  signature: string,
+  id: string = WEBHOOK_ID,
+  timestamp: string = FIXED_TIMESTAMP
+) {
+  const headers: Record<string, string> = {
+    'webhook-signature': signature,
+    'webhook-id': id,
+    'webhook-timestamp': timestamp,
+  };
   return {
-    headers: { get: (k: string) => (k === 'x-dodo-signature' ? signature : null) },
+    headers: { get: (k: string) => headers[k.toLowerCase()] ?? null },
     text: async () => payload,
   } as any;
 }
@@ -81,8 +99,14 @@ async function loadRoute() {
 describe('POST /api/webhooks/dodo — SUBSCRIPTION_CREATED conversion wire', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW_MS);
     subscriptionsStore.clear();
     process.env.DODO_WEBHOOK_SECRET = SECRET;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('fires SUBSCRIPTION_CREATED with real payload fields on a verified subscription.created', async () => {
@@ -90,7 +114,8 @@ describe('POST /api/webhooks/dodo — SUBSCRIPTION_CREATED conversion wire', () 
     const body = JSON.stringify({
       type: 'subscription.created',
       data: {
-        user_id: 'user_abc',
+        metadata: { userId: 'user_abc' },
+        customer: { customer_id: 'cus_1', email: 'u@example.com' },
         plan: 'monthly',
         subscription_id: 'sub_1',
         status: 'active',
@@ -118,7 +143,8 @@ describe('POST /api/webhooks/dodo — SUBSCRIPTION_CREATED conversion wire', () 
     const body = JSON.stringify({
       type: 'subscription.created',
       data: {
-        user_id: 'user_abc',
+        metadata: { userId: 'user_abc' },
+        customer: { customer_id: 'cus_1', email: 'u@example.com' },
         plan: 'monthly',
         subscription_id: 'sub_1',
         status: 'active',
@@ -151,7 +177,7 @@ describe('POST /api/webhooks/dodo — SUBSCRIPTION_CREATED conversion wire', () 
     const { POST } = await loadRoute();
     const body = JSON.stringify({
       type: 'subscription.created',
-      data: { user_id: 'user_abc', plan: 'monthly', subscription_id: 'sub_1' },
+      data: { metadata: { userId: 'user_abc' }, plan: 'monthly', subscription_id: 'sub_1' },
     });
 
     // Signed with the WRONG secret → same length, verification fails.
@@ -167,7 +193,7 @@ describe('POST /api/webhooks/dodo — SUBSCRIPTION_CREATED conversion wire', () 
     const { POST } = await loadRoute();
     const body = JSON.stringify({
       type: 'payment.succeeded',
-      data: { user_id: 'user_abc', amount: 20, currency: 'USD', transaction_id: 't1' },
+      data: { metadata: { userId: 'user_abc' }, amount: 20, currency: 'USD', transaction_id: 't1' },
     });
 
     const res = await POST(makeRequest(body, sign(body, SECRET)));

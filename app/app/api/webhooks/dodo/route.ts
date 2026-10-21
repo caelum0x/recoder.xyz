@@ -15,7 +15,12 @@ import { sendPaymentFailedEmail, sendSubscriptionCancelledEmail } from '@/lib/em
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { emitSubscriptionCreated } from '@/lib/analytics';
 import { getProvider } from '@/lib/payments/registry';
-import { DODO_NOT_CONFIGURED, DODO_SIGNATURE_HEADER } from '@/lib/payments/dodo-provider';
+import {
+  DODO_ID_HEADER,
+  DODO_NOT_CONFIGURED,
+  DODO_SIGNATURE_HEADER,
+  DODO_TIMESTAMP_HEADER,
+} from '@/lib/payments/dodo-provider';
 import {
   cancelSubscriptionFromEvent,
   updateSubscriptionFromEvent,
@@ -26,15 +31,36 @@ const webhookRateLimiter = rateLimit(rateLimitConfigs.webhook);
 
 const CTX = { provider: 'dodo', route: 'api/webhooks/dodo' };
 
+/**
+ * Resolve our internal users.id from a raw Dodo webhook `data` object.
+ * Real Dodo payloads carry no top-level `user_id` — it round-trips only
+ * through `data.metadata.userId`, which `DodoPaymentsService.createCheckoutSession`
+ * stamps at checkout time. `data.user_id` is kept as a harmless legacy
+ * fallback only (never actually sent by Dodo).
+ */
+function resolveDodoUserId(data: Record<string, unknown>): string | undefined {
+  const metadata =
+    typeof data.metadata === 'object' && data.metadata !== null
+      ? (data.metadata as Record<string, unknown>)
+      : {};
+  const userId = metadata.userId ?? data.user_id;
+  return typeof userId === 'string' && userId.length > 0 ? userId : undefined;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const rateLimitResponse = await webhookRateLimiter(request);
     if (rateLimitResponse) return rateLimitResponse;
 
     const signature = request.headers.get(DODO_SIGNATURE_HEADER);
+    const webhookId = request.headers.get(DODO_ID_HEADER);
+    const webhookTimestamp = request.headers.get(DODO_TIMESTAMP_HEADER);
     const payload = await request.text();
 
-    const verified = getProvider('dodo').verifyWebhook(payload, signature);
+    const verified = getProvider('dodo').verifyWebhook(payload, signature, {
+      id: webhookId,
+      timestamp: webhookTimestamp,
+    });
     // `=== false` (not `!verified.ok`): this tsconfig is non-strict, where
     // truthiness checks do not narrow discriminated unions.
     if (verified.ok === false) {
@@ -133,7 +159,16 @@ export async function POST(request: NextRequest) {
 }
 
 async function handlePaymentSucceeded(data: any) {
-  const { user_id, amount, currency, transaction_id, subscription_id } = data;
+  const { amount, currency, transaction_id, subscription_id } = data;
+  const user_id = resolveDodoUserId(data);
+  if (!user_id) {
+    logger.warn('payment.succeeded with no resolvable userId (missing checkout metadata)', {
+      route: 'api/webhooks/dodo',
+      transaction_id,
+      subscription_id,
+    });
+    return;
+  }
 
   await prisma.users.update({
     where: { id: user_id },
@@ -159,7 +194,15 @@ async function handlePaymentSucceeded(data: any) {
 }
 
 async function handlePaymentFailed(data: any) {
-  const { user_id, amount, reason, subscription_id, next_retry_date } = data;
+  const { amount, reason, subscription_id, next_retry_date } = data;
+  const user_id = resolveDodoUserId(data);
+  if (!user_id) {
+    logger.warn('payment.failed with no resolvable userId (missing checkout metadata)', {
+      route: 'api/webhooks/dodo',
+      subscription_id,
+    });
+    return;
+  }
 
   await prisma.users.update({
     where: { id: user_id },
@@ -204,7 +247,15 @@ async function handlePaymentFailed(data: any) {
 }
 
 async function handleSubscriptionCreated(data: any) {
-  const { user_id, plan, subscription_id, status, current_period_end } = data;
+  const { plan, subscription_id, status, current_period_end } = data;
+  const user_id = resolveDodoUserId(data);
+  if (!user_id) {
+    logger.warn('subscription.created with no resolvable userId (missing checkout metadata)', {
+      route: 'api/webhooks/dodo',
+      subscription_id,
+    });
+    return;
+  }
 
   await prisma.users.update({
     where: { id: user_id },
@@ -242,7 +293,15 @@ async function handleSubscriptionCreated(data: any) {
 }
 
 async function handleSubscriptionUpdated(data: any) {
-  const { user_id, plan, subscription_id, status, current_period_end } = data;
+  const { plan, subscription_id, status, current_period_end } = data;
+  const user_id = resolveDodoUserId(data);
+  if (!user_id) {
+    logger.warn('subscription.updated with no resolvable userId (missing checkout metadata)', {
+      route: 'api/webhooks/dodo',
+      subscription_id,
+    });
+    return;
+  }
 
   await prisma.users.update({
     where: { id: user_id },
@@ -268,7 +327,15 @@ async function handleSubscriptionUpdated(data: any) {
 }
 
 async function handleSubscriptionCancelled(data: any) {
-  const { user_id, subscription_id, cancellation_date, current_period_end } = data;
+  const { subscription_id, cancellation_date, current_period_end } = data;
+  const user_id = resolveDodoUserId(data);
+  if (!user_id) {
+    logger.warn('subscription.cancelled with no resolvable userId (missing checkout metadata)', {
+      route: 'api/webhooks/dodo',
+      subscription_id,
+    });
+    return;
+  }
 
   await prisma.users.update({
     where: { id: user_id },
@@ -313,7 +380,15 @@ async function handleSubscriptionCancelled(data: any) {
 }
 
 async function handleSubscriptionRenewed(data: any) {
-  const { user_id, subscription_id, current_period_end, amount } = data;
+  const { subscription_id, current_period_end, amount } = data;
+  const user_id = resolveDodoUserId(data);
+  if (!user_id) {
+    logger.warn('subscription.renewed with no resolvable userId (missing checkout metadata)', {
+      route: 'api/webhooks/dodo',
+      subscription_id,
+    });
+    return;
+  }
 
   await prisma.users.update({
     where: { id: user_id },
@@ -339,7 +414,8 @@ async function handleSubscriptionRenewed(data: any) {
 }
 
 async function handleRefundCreated(data: any) {
-  const { user_id, amount, transaction_id, reason } = data;
+  const { amount, transaction_id, reason } = data;
+  const user_id = resolveDodoUserId(data);
 
   await prisma.audit_logs.create({
     data: {

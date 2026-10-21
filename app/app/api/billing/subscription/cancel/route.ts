@@ -6,12 +6,16 @@ import { logger } from '@/lib/logger';
 import { getProvider } from '@/lib/payments/registry';
 
 /**
- * The active merchant-of-record. Cancellation MUST reach this provider before we
- * mark the DB cancelled — otherwise the card keeps being charged while the UI
- * reports success (the bug this route previously shipped: the old `paddle_`/`dodo_`
- * prefix branches were dead because ids are never stored with those prefixes, so
- * NO provider was ever called and failures were swallowed). Defaults to `creem`
- * (the active MoR); `PAYMENT_PROVIDER` overrides it.
+ * Fallback merchant-of-record when a user has no subscriptions row (or it has
+ * no provider recorded) to resolve from. Cancellation MUST reach the REAL
+ * provider before we mark the DB cancelled — otherwise the card keeps being
+ * charged while the UI reports success (the bug this route previously
+ * shipped: the old `paddle_`/`dodo_` prefix branches were dead because ids
+ * are never stored with those prefixes, so NO provider was ever called and
+ * failures were swallowed). This function is only the LAST resort — see
+ * `subscription?.provider` below, which mirrors change-plan/reactivate and
+ * is what actually routes a real Dodo or Paddle subscriber correctly.
+ * Defaults to `creem`; `PAYMENT_PROVIDER` overrides it.
  */
 function activeProviderName(): string {
   const explicit = (process.env.PAYMENT_PROVIDER || '').toLowerCase().trim();
@@ -43,11 +47,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No active subscription' }, { status: 400 });
     }
 
+    // userId is unique on subscriptions, so this is the user's single row.
+    const subscription = await prisma.subscriptions.findFirst({ where: { userId: user.id } });
+
     // Cancel at the PROVIDER first and gate success on it. A provider that is not
     // configured, or a failed/denied cancel, MUST fail loud — we never mark the DB
     // cancelled (which would stop the user seeing the charge) while the card keeps
     // being billed.
-    const providerName = activeProviderName();
+    //
+    // Resolve from the SUBSCRIPTION'S OWN provider first, falling back to the
+    // global default only when no row/provider is on record — mirrors
+    // change-plan and reactivate. A static global default alone is wrong the
+    // moment more than one provider has ever been live: a real Dodo
+    // subscriber's cancel would silently be sent to Creem's API (whatever
+    // `PAYMENT_PROVIDER` happens to default to) and fail, even though their
+    // subscription is perfectly valid — just checked against the wrong
+    // provider.
+    const providerName = (subscription?.provider || activeProviderName()).toLowerCase();
     const provider = getProvider(providerName);
     if (!provider.configured) {
       logger.error('Cannot cancel — payment provider not configured', {
@@ -60,7 +76,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cancelResult = await provider.cancelSubscription(user.subscriptionId);
+    // Provider id semantics differ per adapter: the Dodo wrapper resolves our
+    // internal subscriptions.id itself, while Creem/Paddle use the
+    // provider-side id (mirrors change-plan / reactivate's `idForProvider`).
+    const providerSubscriptionId = subscription?.providerId || user.subscriptionId;
+    const idForProvider = providerName === 'dodo' ? subscription?.id : providerSubscriptionId;
+    if (!idForProvider) {
+      return NextResponse.json(
+        { error: 'No subscription reference available for the billing provider.' },
+        { status: 409 }
+      );
+    }
+
+    const cancelResult = await provider.cancelSubscription(idForProvider);
     // `=== false` (not `!cancelResult.ok`): this tsconfig is non-strict, where
     // truthiness checks do not narrow discriminated unions (see checkout/creem).
     if (cancelResult.ok === false) {

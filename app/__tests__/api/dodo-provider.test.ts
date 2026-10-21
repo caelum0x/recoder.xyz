@@ -26,23 +26,43 @@ import {
 } from '@/lib/payments/dodo-provider';
 
 const SECRET = 'test-dodo-webhook-secret';
+const FIXED_NOW_MS = 1_700_000_000_000;
+const FIXED_TIMESTAMP = String(Math.floor(FIXED_NOW_MS / 1000));
+const WEBHOOK_ID = 'msg_1';
 
-function sign(payload: string, secret: string): string {
-  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+/** Standard Webhooks signing: HMAC-SHA256(secret, `${id}.${timestamp}.${body}`), base64, `v1,` prefixed. */
+function sign(
+  payload: string,
+  secret: string,
+  id: string = WEBHOOK_ID,
+  timestamp: string = FIXED_TIMESTAMP
+): string {
+  const digest = crypto
+    .createHmac('sha256', secret)
+    .update(`${id}.${timestamp}.${payload}`)
+    .digest('base64');
+  return `v1,${digest}`;
 }
 
 function provider() {
   return new DodoProvider({ apiKey: 'test_dodo_key', webhookSecret: SECRET });
 }
 
+function verify(p: DodoProvider, body: string, signature: string | null, id = WEBHOOK_ID, timestamp = FIXED_TIMESTAMP) {
+  return p.verifyWebhook(body, signature, { id, timestamp });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers();
+  vi.setSystemTime(FIXED_NOW_MS);
   vi.stubEnv('DODO_API_KEY', 'test_dodo_key');
   vi.stubEnv('DODO_WEBHOOK_SECRET', SECRET);
   vi.stubEnv('DODO_PRODUCT_MONTHLY', 'prod_monthly_env');
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -84,7 +104,7 @@ describe('getDodoProvider — degraded when env is missing', () => {
     const body = JSON.stringify({ type: 'subscription.created', data: { subscription_id: 's1' } });
 
     expect(p.configured).toBe(false);
-    expect(p.verifyWebhook(body, sign(body, SECRET)).ok).toBe(true);
+    expect(verify(p, body, sign(body, SECRET)).ok).toBe(true);
     await expect(p.getSubscription('sub_1')).resolves.toEqual({
       ok: false,
       reason: DODO_NOT_CONFIGURED,
@@ -255,14 +275,22 @@ describe('DodoProvider.cancelSubscription / changePlan — wrap the real service
   });
 });
 
-describe('DodoProvider.verifyWebhook', () => {
+describe('DodoProvider.verifyWebhook — real Standard Webhooks scheme', () => {
+  // Real Dodo payloads: userId round-trips through checkout `metadata`, never
+  // a top-level `user_id` (see `normalizeDodoEvent`'s doc comment).
   const body = JSON.stringify({
     type: 'subscription.created',
-    data: { user_id: 'user_1', plan: 'monthly', subscription_id: 'sub_1', status: 'active' },
+    data: {
+      plan: 'monthly',
+      subscription_id: 'sub_1',
+      status: 'active',
+      customer: { customer_id: 'cus_1', email: 'u@example.com' },
+      metadata: { userId: 'user_1' },
+    },
   });
 
-  it('accepts a valid HMAC-SHA256 hex signature and returns the normalized event', () => {
-    const result = provider().verifyWebhook(body, sign(body, SECRET));
+  it('accepts a valid base64 v1 signature over id.timestamp.body and returns the normalized event', () => {
+    const result = verify(provider(), body, sign(body, SECRET));
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.event).toMatchObject({
@@ -275,25 +303,51 @@ describe('DodoProvider.verifyWebhook', () => {
     }
   });
 
-  it('rejects wrong-secret, missing, and length-mismatched signatures without throwing', () => {
-    expect(provider().verifyWebhook(body, sign(body, 'wrong-secret'))).toEqual({
+  it('rejects wrong-secret, missing, and garbage signatures without throwing', () => {
+    expect(verify(provider(), body, sign(body, 'wrong-secret'))).toEqual({
       ok: false,
       reason: 'dodo_invalid_signature',
     });
-    expect(provider().verifyWebhook(body, null)).toEqual({
+    expect(verify(provider(), body, null)).toEqual({
       ok: false,
       reason: 'dodo_invalid_signature',
     });
-    // Truncated signature used to throw in the inline route check.
-    expect(provider().verifyWebhook(body, 'abc')).toEqual({
+    // Truncated/garbage signature must reject, not throw.
+    expect(verify(provider(), body, 'v1,abc')).toEqual({
       ok: false,
       reason: 'dodo_invalid_signature',
     });
   });
 
+  it('rejects when webhook-id or webhook-timestamp is missing, even with a correctly-signed-looking value', () => {
+    expect(provider().verifyWebhook(body, sign(body, SECRET))).toEqual({
+      ok: false,
+      reason: 'dodo_invalid_signature',
+    });
+    expect(provider().verifyWebhook(body, sign(body, SECRET), { id: WEBHOOK_ID })).toEqual({
+      ok: false,
+      reason: 'dodo_invalid_signature',
+    });
+  });
+
+  it('rejects a stale webhook-timestamp outside the 5-minute replay window', () => {
+    const staleTimestamp = String(Math.floor(FIXED_NOW_MS / 1000) - 600);
+    const signature = sign(body, SECRET, WEBHOOK_ID, staleTimestamp);
+    expect(verify(provider(), body, signature, WEBHOOK_ID, staleTimestamp)).toEqual({
+      ok: false,
+      reason: 'dodo_invalid_signature',
+    });
+  });
+
+  it('accepts ANY matching entry in a space-delimited multi-signature header (key rotation)', () => {
+    const real = sign(body, SECRET);
+    const header = `v1,bogus-other-key-sig ${real}`;
+    expect(verify(provider(), body, header).ok).toBe(true);
+  });
+
   it('degrades truthfully when the webhook secret is missing', () => {
     const p = new DodoProvider({ apiKey: 'test_dodo_key' });
-    expect(p.verifyWebhook(body, sign(body, SECRET))).toEqual({
+    expect(verify(p, body, sign(body, SECRET))).toEqual({
       ok: false,
       reason: DODO_NOT_CONFIGURED,
     });
@@ -301,13 +355,13 @@ describe('DodoProvider.verifyWebhook', () => {
 
   it('rejects unparseable JSON and flags unhandled event types', () => {
     const junk = 'not-json';
-    expect(provider().verifyWebhook(junk, sign(junk, SECRET))).toEqual({
+    expect(verify(provider(), junk, sign(junk, SECRET))).toEqual({
       ok: false,
       reason: 'dodo_invalid_payload',
     });
 
-    const refund = JSON.stringify({ type: 'refund.created', data: { user_id: 'u1' } });
-    expect(provider().verifyWebhook(refund, sign(refund, SECRET))).toEqual({
+    const refund = JSON.stringify({ type: 'refund.created', data: { metadata: { userId: 'u1' } } });
+    expect(verify(provider(), refund, sign(refund, SECRET))).toEqual({
       ok: false,
       reason: 'dodo_unhandled_event',
     });
@@ -338,10 +392,31 @@ describe('normalizeDodoEvent — fixture per payload shape', () => {
     expect(event).toMatchObject({ type: 'subscription.updated', status: 'on_hold' });
   });
 
+  it('resolves userId from checkout metadata (the real Dodo shape — no top-level user_id)', () => {
+    const event = normalizeDodoEvent({
+      type: 'subscription.created',
+      data: {
+        subscription_id: 's1',
+        plan: 'monthly',
+        customer: { customer_id: 'cus_1', email: 'u@example.com' },
+        metadata: { userId: 'user_1' },
+      },
+    });
+    expect(event).toMatchObject({ userId: 'user_1', subscriptionId: 's1' });
+  });
+
+  it('falls back to legacy data.user_id when metadata.userId is absent', () => {
+    const event = normalizeDodoEvent({
+      type: 'subscription.created',
+      data: { subscription_id: 's1', user_id: 'user_legacy' },
+    });
+    expect(event).toMatchObject({ userId: 'user_legacy' });
+  });
+
   it('lets payment events without a subscription id through when a userId is present', () => {
     const event = normalizeDodoEvent({
       type: 'payment.succeeded',
-      data: { user_id: 'user_1', transaction_id: 't1', amount: 20 },
+      data: { metadata: { userId: 'user_1' }, transaction_id: 't1', amount: 20 },
     });
     expect(event).toMatchObject({
       type: 'payment.succeeded',

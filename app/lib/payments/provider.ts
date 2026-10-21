@@ -101,8 +101,18 @@ export interface PaymentProvider {
   /**
    * Verify the raw webhook body against the provider signature and normalize
    * the event. Sync because verification is pure HMAC + parse.
+   *
+   * `extra` carries additional provider-specific headers a given scheme
+   * needs beyond a single signature value (e.g. Standard Webhooks' `id` +
+   * `timestamp`, which the signed message is built from). Providers that
+   * only need the one signature header ignore it; it is optional so existing
+   * single-header providers (Paddle, Creem) are unaffected.
    */
-  verifyWebhook(rawBody: string, signatureHeader: string | null): WebhookVerifyResult;
+  verifyWebhook(
+    rawBody: string,
+    signatureHeader: string | null,
+    extra?: { id?: string | null; timestamp?: string | null }
+  ): WebhookVerifyResult;
 }
 
 /**

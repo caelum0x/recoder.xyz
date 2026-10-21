@@ -18,6 +18,9 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    subscriptions: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     audit_logs: {
       create: vi.fn(),
     },
@@ -71,6 +74,9 @@ describe('POST /api/billing/subscription/cancel', () => {
       configured: true,
       cancelSubscription: mockCancelSubscription,
     } as any);
+    // No subscriptions row by default — routes fall back to user.subscriptionId
+    // / the global default provider, matching the existing tests below.
+    mockPrisma.subscriptions.findFirst.mockResolvedValue(null);
   });
 
   it('returns 401 when user is not authenticated', async () => {
@@ -238,6 +244,65 @@ describe('POST /api/billing/subscription/cancel', () => {
     // Critical: the DB was NOT marked cancelled while the card is still active.
     expect(mockPrisma.users.update).not.toHaveBeenCalled();
     expect(mockPrisma.audit_logs.create).not.toHaveBeenCalled();
+  });
+
+  // --- per-subscription provider routing: a real Dodo subscriber must be
+  // cancelled against Dodo, not whatever PAYMENT_PROVIDER happens to default
+  // to (previously hardcoded to a single global `activeProviderName()`,
+  // unlike change-plan/reactivate which already read `subscription.provider`) ---
+
+  it('routes cancellation to the SUBSCRIPTION\'s own provider (dodo), not the global default', async () => {
+    mockRequireAuth.mockResolvedValue({
+      error: false,
+      user: { id: 'user-1', email: 'test@example.com' },
+    } as any);
+    mockPrisma.users.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'test@example.com',
+      subscriptionId: 'sub_dodo_provider_id',
+      subscriptionEndDate: new Date('2026-04-01'),
+      plan: 'pro',
+    } as any);
+    // Dodo's own subscriptions row: internal id differs from the provider id
+    // mirrored onto users.subscriptionId.
+    mockPrisma.subscriptions.findFirst.mockResolvedValue({
+      id: 'internal_sub_1',
+      providerId: 'sub_dodo_provider_id',
+      provider: 'dodo',
+    } as any);
+    mockPrisma.users.update.mockResolvedValue({} as any);
+    mockPrisma.audit_logs.create.mockResolvedValue({} as any);
+
+    const res = await POST(buildRequest({ reason: 'switching provider' }));
+
+    expect(res.status).toBe(200);
+    // getProvider must have been asked for 'dodo', never the 'creem' default.
+    expect(mockGetProvider).toHaveBeenCalledWith('dodo');
+    // Dodo's adapter resolves providerId itself — it takes OUR internal
+    // subscriptions.id, not the provider-side id mirrored on users.subscriptionId.
+    expect(mockCancelSubscription).toHaveBeenCalledWith('internal_sub_1');
+  });
+
+  it('falls back to the global default provider and providerId when no subscriptions row exists', async () => {
+    mockRequireAuth.mockResolvedValue({
+      error: false,
+      user: { id: 'user-1', email: 'test@example.com' },
+    } as any);
+    mockPrisma.users.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'test@example.com',
+      subscriptionId: 'sub_legacy',
+      subscriptionEndDate: new Date('2026-04-01'),
+      plan: 'pro',
+    } as any);
+    mockPrisma.users.update.mockResolvedValue({} as any);
+    mockPrisma.audit_logs.create.mockResolvedValue({} as any);
+
+    const res = await POST(buildRequest({ reason: 'x' }));
+
+    expect(res.status).toBe(200);
+    expect(mockGetProvider).toHaveBeenCalledWith('creem');
+    expect(mockCancelSubscription).toHaveBeenCalledWith('sub_legacy');
   });
 
   it('FAILS LOUD (503) when the provider is not configured — no DB change, no success', async () => {
