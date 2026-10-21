@@ -311,3 +311,62 @@ cd ~/products/recoder.xyz && git pull
 bash deploy/deploy-site.sh
 curl -s https://recoder.xyz/ | grep -c "Do I need my own Postgres database"   # expect 1
 ```
+
+## UPDATE 2026-10-21: real Dodo billing cutover went live + a real missing-table bug fixed in prod
+
+**Dodo billing (`recoder-t24j`, C6) — LIVE.** `recoder.xyz`'s own `.env`/`app.env.local`
+`DODO_API_KEY_LIVE` was a literal `your_live_api_key_here` placeholder — the real live
+Dodo key lives on the shared `bus_EKm0SScXc8Tpc3ZDoTbnn` business (reused from
+`bidstage-tenders/.env.local`'s `DODO_PAYMENTS_API_KEY`). Via that key's API:
+created 5 real live Dodo products for Recoder (weekly/monthly/pro/pro-annual/team,
+priced from `app/lib/pricing-config.ts`: `pdt_0NqE9bKkKflhwYZas6yF2`,
+`pdt_0NqE9bNmRK4ZuRpisLv4o`, `pdt_0NqE9bQAVuGZRLWbtlEdW`, `pdt_0NqE9bSm9u9tBLOI5xIMY`,
+`pdt_0NqE9bXishCljektXbJQn`), registered a real live webhook endpoint
+(`ep_3L0eElSCHnxNsth2aIBRdObJJzT` → `https://recoder.xyz/api/webhooks/dodo`) and
+pulled its real `whsec_` secret. Wired `DODO_PAYMENTS_API_KEY`/`DODO_WEBHOOK_SECRET`/
+`DODO_PRODUCT_*` into `/opt/recoder/app.env.local` on `recoder-micro` and restarted
+`pm2` with the env actually re-sourced (`pm2 restart --update-env` alone does **not**
+re-read the env file — it only reapplies PM2's cached snapshot from the original
+`pm2 start`; had to `source app.env.local` in the same shell before restarting).
+Verified live: `/api/health` → `billing.dodo.configured/webhookConfigured/
+checkoutConfigured: true`, `activeProvider: "dodo"`; unauth checkout → `401`; webhook
+with a bogus signature → `401 Invalid signature`. `pm2 save`d.
+
+**Separately confirmed real:** the Dodo webhook signature fix from earlier today
+(commit `979cfbe99b`) is genuinely real — read the full implementation
+(`app/lib/payments/dodo-provider.ts`, `app/app/api/webhooks/dodo/route.ts`), it's a
+correct Standard Webhooks HMAC-SHA256(base64) verification with timing-safe compare
+and a 5-minute replay window, not a no-op. Ran the real test suite: 38/38 passed
+(`dodo-provider.test.ts`, `billing-cancel-route.test.ts`, `webhooks/dodo/route.test.ts`).
+
+**New real bug found + fixed: onboarding/winback emails were silently dead in prod.**
+Production logs showed `"scheduled_emails table unavailable; skipping scheduled email
+processor run"` firing every 15 minutes. Root cause: production's `_prisma_migrations`
+table only had **2 of the repo's 10 migrations** recorded as applied
+(`20251130083308_init`, `20251202021006_update_mcp_server_config`) — 8 migrations,
+including `20260306024500_ensure_scheduled_emails.sql` (which creates the
+`scheduled_emails` table the day-1/3/7 onboarding drip and winback cron both depend
+on), were never run against the live Neon DB. Applied that one migration directly
+(idempotent `CREATE TABLE IF NOT EXISTS` / `IF NOT EXISTS` constraint / `CREATE INDEX
+IF NOT EXISTS` — safe), recorded it in `_prisma_migrations`, restarted `pm2`. Verified
+live: the 15:30 UTC cron tick completed with zero "table unavailable" warnings (every
+tick for hours before that had the warning).
+
+**NOT fixed, flagged for a careful follow-up pass (did not blast through blind):** the
+other 7 untracked migrations (`20260224_phase12_growth_foundation.sql`,
+`20260308000000_add_ecosystem_tags`, `20260309000000_add_onboarding_profile`,
+`20260718000000_backfill_singular_identity.sql`, `20260804000000_add_devicecode_
+devicename`, `20260823000000_add_pilot_evidence`, `fix_chat_sessions_fk.sql`) are
+*also* unapplied to prod per `_prisma_migrations`, yet the app runs fine — meaning some
+of that schema may already exist via an out-of-band `prisma db push` or manual SQL
+that never wrote migration-history rows. Each needs its own targeted diff-against-
+live-schema check before applying (unlike `ensure_scheduled_emails.sql`, several of
+these are NOT obviously idempotent ALTER TABLEs) to avoid a destructive mismatch.
+Worth a dedicated pass; not safe to batch-apply blindly.
+
+**Separately confirmed already-done (re-verified, no changes needed):** license
+boundary enforcement (`recoder-rxn0`) already fail-closes packaging + scans the final
+artifact for both `recodergit` and `multica` restricted sources
+(`apps/desktop/app/build/assert-license-boundary.cjs`, wired into
+`electron-builder.config.cjs`); ran its real tests, 18/18 passed. The `billing/checkout/
+{dodo,paddle}` routes already got the `410 Gone` hygiene treatment this doc asked for.
