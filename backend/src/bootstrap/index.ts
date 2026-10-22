@@ -266,6 +266,19 @@ export interface StartOptions {
  * router that already guards itself (conflict-free: exactly one mount, one auth).
  */
 /**
+ * Parse an optional positive-integer env var (e.g. an unattended-run
+ * kill-switch cap). Unset, blank, non-numeric, zero, negative, or
+ * non-integer input ⇒ `null` (the feature's degrade-safe "unbounded"
+ * default) — never throws, never aborts boot on a typo'd env value.
+ */
+function parsePositiveIntEnv(raw: string | undefined): number | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+/**
  * Parse the OPT-IN governed-skill-model config from env (both default to empty ⇒
  * the feature stays OFF and skill tools refuse truthfully). Never throws — a
  * malformed value degrades to empty rather than aborting boot.
@@ -747,6 +760,16 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       squadsEnabled: config.agentOs.squadsEnabled,
       squadAutopilotEnabled:
         config.agentOs.squadsEnabled && bootEnv.RECODER_SQUAD_AUTOPILOT === '1',
+      // Unattended-run kill-switch (recoder-4keq): opt-in lifetime dispatch
+      // budget + consecutive-failure cap. Unset/invalid ⇒ null ⇒ unbounded,
+      // byte-identical to prior behavior — these are safety rails an operator
+      // turns on, never a forced default.
+      squadAutopilotMaxTotalDispatches: parsePositiveIntEnv(
+        bootEnv.RECODER_SQUAD_AUTOPILOT_MAX_TOTAL_DISPATCHES,
+      ),
+      squadAutopilotMaxConsecutiveFailures: parsePositiveIntEnv(
+        bootEnv.RECODER_SQUAD_AUTOPILOT_MAX_CONSECUTIVE_FAILURES,
+      ),
       // The squad the autopilot routes every dispatch through (leader-first /
       // weighted via multica's SquadService). Unset ⇒ null ⇒ flat default
       // dispatch (degrade-truthful; the loop still runs, just un-routed).

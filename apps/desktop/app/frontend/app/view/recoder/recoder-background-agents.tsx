@@ -24,6 +24,12 @@ type StaleIssue = {
     status?: string;
 };
 
+type KillSwitchState = {
+    tripped: boolean;
+    reason?: string;
+    at?: string;
+};
+
 type AutopilotView = {
     running: boolean;
     intervalMs: number;
@@ -49,6 +55,10 @@ type AutopilotView = {
     } | null;
     entries: AutopilotEntry[];
     staleIssues: StaleIssue[];
+    killSwitch: KillSwitchState;
+    totalDispatched: number;
+    maxTotalDispatches: number | null;
+    maxConsecutiveFailures: number | null;
 };
 
 type BackgroundBoard = {
@@ -98,6 +108,20 @@ function parseStaleIssues(value: unknown): StaleIssue[] {
             ...(typeof row.status == "string" ? { status: row.status } : {}),
         }];
     });
+}
+
+function parseKillSwitch(value: unknown): KillSwitchState {
+    const row = record(value);
+    if (!row) return { tripped: false };
+    return {
+        tripped: row.tripped === true,
+        ...(typeof row.reason == "string" ? { reason: row.reason } : {}),
+        ...(typeof row.at == "string" ? { at: row.at } : {}),
+    };
+}
+
+function nullableNumber(value: unknown): number | null {
+    return typeof value == "number" && Number.isFinite(value) ? value : null;
 }
 
 function parseAutopilot(value: unknown): AutopilotView | null {
@@ -154,6 +178,10 @@ function parseAutopilot(value: unknown): AutopilotView | null {
             : null,
         entries: parseEntries(row.entries),
         staleIssues: parseStaleIssues(row.staleIssues),
+        killSwitch: parseKillSwitch(row.killSwitch),
+        totalDispatched: number(row.totalDispatched),
+        maxTotalDispatches: nullableNumber(row.maxTotalDispatches),
+        maxConsecutiveFailures: nullableNumber(row.maxConsecutiveFailures),
     };
 }
 
@@ -411,7 +439,27 @@ export function RecoderBackgroundAgents({
                     {error != "" && <div className="border-l-2 border-white/25 bg-white/[0.04] px-2 py-1 text-sm text-secondary">{error}</div>}
                     {!error && board && !board.enabled && <div className={META}>{board.reason ?? "Squads are disabled."}</div>}
                     {!error && board?.enabled && autopilot == null && <div className={META}>{board.reason ?? "Background agents are unavailable."}</div>}
-                    {autopilot?.lastTick?.status == "degraded" && (
+                    {autopilot?.killSwitch.tripped && (
+                        <div className="border-l-2 border-accent bg-accent/[0.08] px-2 py-1.5 text-sm text-primary">
+                            <div>Kill-switch tripped — unattended run stopped automatically.</div>
+                            <div className={`${META} mt-0.5`}>
+                                {autopilot.killSwitch.reason ?? "An unattended-run safety cap was reached."} Click
+                                &ldquo;Start background agents&rdquo; to resume with a fresh budget.
+                            </div>
+                        </div>
+                    )}
+                    {autopilot && !autopilot.killSwitch.tripped && (autopilot.maxTotalDispatches != null || autopilot.maxConsecutiveFailures != null) && (
+                        <div className={META}>
+                            {autopilot.maxTotalDispatches != null
+                                ? `Budget: ${autopilot.totalDispatched}/${autopilot.maxTotalDispatches} dispatches this run`
+                                : null}
+                            {autopilot.maxTotalDispatches != null && autopilot.maxConsecutiveFailures != null ? " · " : null}
+                            {autopilot.maxConsecutiveFailures != null
+                                ? `stops after ${autopilot.maxConsecutiveFailures} failures in a row`
+                                : null}
+                        </div>
+                    )}
+                    {autopilot?.lastTick?.status == "degraded" && !autopilot.killSwitch.tripped && (
                         <div className="border-l-2 border-white/25 bg-white/[0.04] px-2 py-1 text-sm text-secondary">
                             {autopilot.lastTick.reason ?? "The last scan was degraded."}
                         </div>

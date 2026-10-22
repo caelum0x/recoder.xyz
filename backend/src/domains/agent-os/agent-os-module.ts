@@ -230,6 +230,8 @@ export class AgentOsComposer implements AgentOsModule {
             logger: this.log,
             intervalMs: cfg.squadAutopilotIntervalMs,
             maxDispatchesPerTick: cfg.squadAutopilotMaxPerTick,
+            maxTotalDispatches: cfg.squadAutopilotMaxTotalDispatches,
+            maxConsecutiveFailures: cfg.squadAutopilotMaxConsecutiveFailures,
             state: deps.automationState ?? null,
           })
         : null;

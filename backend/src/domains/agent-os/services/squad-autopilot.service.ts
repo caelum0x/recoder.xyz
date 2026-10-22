@@ -18,6 +18,24 @@
  * The board read model is the audit surface: every dispatch / failure / skip
  * is recorded per issue, and already-dispatched issues are never re-launched.
  *
+ * KILL-SWITCH (recoder-4keq "harden squad-autopilot for unattended run"):
+ * an unattended loop with no human watching it had no upper bound on spend —
+ * `maxDispatchesPerTick` only shaped a single tick's burst, not the lifetime
+ * total, and a broken repo/agent/profile combo could fail the same dispatch
+ * forever, burning a real conductor launch (tokens + compute) every tick. Two
+ * independent, opt-in caps trip the SAME kill-switch: `maxTotalDispatches`
+ * (a lifetime dispatch budget for this running process) and
+ * `maxConsecutiveFailures` (stop after N dispatch failures in a row, before a
+ * success resets the streak). Either cap tripping auto-`stop()`s the interval
+ * driver, persists `running:false`, and leaves a truthful reason on the board
+ * (`killSwitch`) — a human must explicitly `start` again to resume, which
+ * clears the trip and resets both counters (a fresh, consciously-chosen
+ * budget window). Both caps default to `null` (unbounded, byte-identical to
+ * prior behavior) — operators opt in per the product-control surface or
+ * bootstrap override. The trip state is process-lifetime only, like the rest
+ * of this service's in-memory counters; it does not survive a backend
+ * restart (a restart is itself a human-initiated checkpoint).
+ *
  * Interval driver mirrors `OutboxDrainService`: idempotent start/stop, unref'd
  * timer, overlapping passes skipped.
  */
@@ -91,6 +109,18 @@ export interface AutopilotTickResult {
   readonly at: string;
 }
 
+/**
+ * Truthful kill-switch state (board surface). `tripped:false` is the default,
+ * byte-identical posture — nothing changes for operators who never configure
+ * a cap. Once tripped, `reason` names which cap fired and the interval driver
+ * is already stopped; only an explicit `start` clears it.
+ */
+export interface AutopilotKillSwitchState {
+  readonly tripped: boolean;
+  readonly reason?: string;
+  readonly at?: string;
+}
+
 /** The board read model (`GET /api/agent-os/squads/board`). */
 export interface AutopilotBoardView {
   readonly running: boolean;
@@ -112,6 +142,13 @@ export interface AutopilotBoardView {
    * unattached or down (the `beads` section carries the truthful reason).
    */
   readonly staleIssues: readonly SquadStaleIssue[];
+  /** The unattended-run safety rail (lifetime budget + failure-streak cap). */
+  readonly killSwitch: AutopilotKillSwitchState;
+  /** Dispatches launched since the process started or since the last explicit `start`. */
+  readonly totalDispatched: number;
+  /** Configured caps (`null` ⇒ unbounded, the default). */
+  readonly maxTotalDispatches: number | null;
+  readonly maxConsecutiveFailures: number | null;
 }
 
 export interface SquadAutopilotDeps {
@@ -133,6 +170,20 @@ export interface SquadAutopilotDeps {
   readonly initialProfile?: SquadAutopilotLaunchProfile | null;
   readonly state?: Pick<AgentAutomationStatePort, 'loadBackgroundAgents' | 'saveBackgroundAgents' | 'isDurable'> | null;
   readonly now?: () => string;
+  /**
+   * Lifetime dispatch budget for an unattended run. `null`/unset (default) ⇒
+   * unbounded, byte-identical to prior behavior. A positive value trips the
+   * kill-switch once that many dispatches have launched since the process
+   * started (or since the last explicit `start`).
+   */
+  readonly maxTotalDispatches?: number | null;
+  /**
+   * Trip the kill-switch after this many CONSECUTIVE dispatch failures (any
+   * success resets the streak to 0). `null`/unset (default) ⇒ unbounded,
+   * byte-identical to prior behavior. Guards against a broken repo/agent/
+   * profile combo retrying the same failing dispatch forever.
+   */
+  readonly maxConsecutiveFailures?: number | null;
 }
 
 /** Board retention: oldest entries evicted beyond this many issues. */
@@ -150,6 +201,11 @@ export class SquadAutopilotService {
   private readonly now: () => string;
   private readonly stateStore: SquadAutopilotDeps['state'];
   private persistenceReason: string | null = null;
+  private readonly maxTotalDispatches: number | null;
+  private readonly maxConsecutiveFailures: number | null;
+  private totalDispatched = 0;
+  private consecutiveFailures = 0;
+  private killSwitch: AutopilotKillSwitchState = { tripped: false };
 
   /** Latest board entry per issue id (insertion-ordered for bounded eviction). */
   private readonly entries = new Map<string, AutopilotBoardEntry>();
@@ -170,6 +226,8 @@ export class SquadAutopilotService {
       : null;
     this.now = deps.now ?? (() => new Date().toISOString());
     this.stateStore = deps.state ?? null;
+    this.maxTotalDispatches = positiveCapOrNull(deps.maxTotalDispatches);
+    this.maxConsecutiveFailures = positiveCapOrNull(deps.maxConsecutiveFailures);
   }
 
   /** Late-bind the conductor seam (bootstrap builds the conductor after agent-os). */
@@ -184,6 +242,20 @@ export class SquadAutopilotService {
 
   /** Run one autopilot pass. Never throws — every fault is a truthful result. */
   async tickOnce(): Promise<AutopilotTickResult> {
+    if (this.killSwitch.tripped) {
+      // Defensive: the interval driver is already stopped once tripped, but a
+      // manual `scan` control action bypasses the scheduler — never let it
+      // sneak a dispatch past a tripped budget/failure-streak cap.
+      return this.finish({
+        status: 'degraded',
+        reason: `kill-switch tripped: ${this.killSwitch.reason ?? 'unattended-run cap reached'} — start again to resume`,
+        ready: 0,
+        dispatched: 0,
+        failed: 0,
+        skipped: 0,
+      });
+    }
+
     const missing: string[] = [];
     if (!this.issueGraph) missing.push('issue-graph seam not attached');
     if (!this.conductor) missing.push('conductor dispatch seam not wired');
@@ -206,6 +278,7 @@ export class SquadAutopilotService {
 
     for (const issue of issues) {
       if (dispatched >= this.maxDispatchesPerTick) break; // rest waits for the next tick
+      if (this.killSwitch.tripped) break; // tripped mid-tick — stop dispatching immediately
       if (this.entries.get(issue.id)?.status === 'dispatched' || this.entries.get(issue.id)?.status === 'existing') {
         skipped += 1; // already launched — never re-dispatch a live workspace
         continue;
@@ -234,6 +307,8 @@ export class SquadAutopilotService {
           continue;
         }
         dispatched += 1;
+        this.totalDispatched += 1;
+        this.consecutiveFailures = 0; // a success resets the failure streak
         this.record({
           issueId: issue.id,
           title: issue.title,
@@ -243,8 +318,14 @@ export class SquadAutopilotService {
           ...(routed.agentId ? { routedAgentId: routed.agentId } : {}),
           at: this.now(),
         });
+        if (this.maxTotalDispatches !== null && this.totalDispatched >= this.maxTotalDispatches) {
+          this.tripKillSwitch(
+            `lifetime dispatch budget reached (${this.totalDispatched}/${this.maxTotalDispatches})`,
+          );
+        }
       } else {
         failed += 1;
+        this.consecutiveFailures += 1;
         this.record({
           issueId: issue.id,
           title: issue.title,
@@ -254,10 +335,34 @@ export class SquadAutopilotService {
           at: this.now(),
         });
         this.logger.warn({ issueId: issue.id, reason: outcome.reason }, 'squad-autopilot: dispatch failed (left for retry)');
+        if (
+          this.maxConsecutiveFailures !== null &&
+          this.consecutiveFailures >= this.maxConsecutiveFailures
+        ) {
+          this.tripKillSwitch(
+            `${this.consecutiveFailures} consecutive dispatch failures (cap ${this.maxConsecutiveFailures}); last reason: ${outcome.reason ?? 'conductor refused the dispatch'}`,
+          );
+        }
       }
     }
 
     return this.finish({ status: 'ok', ready: issues.length, dispatched, failed, skipped });
+  }
+
+  /**
+   * Trip the unattended-run kill-switch: stop the interval driver, persist
+   * `running:false`, and leave a truthful reason on the board. Idempotent —
+   * a second trip while already tripped is a no-op (keeps the FIRST reason).
+   */
+  private tripKillSwitch(reason: string): void {
+    if (this.killSwitch.tripped) return;
+    this.killSwitch = { tripped: true, reason, at: this.now() };
+    this.stop();
+    void this.persistControlState(); // never throws; logs its own failure
+    this.logger.warn(
+      { reason },
+      'squad-autopilot: kill-switch tripped — unattended loop stopped automatically, start again to resume',
+    );
   }
 
   /**
@@ -329,6 +434,10 @@ export class SquadAutopilotService {
       lastTick: this.lastTick,
       entries: [...this.entries.values()].reverse(), // newest first
       staleIssues,
+      killSwitch: this.killSwitch,
+      totalDispatched: this.totalDispatched,
+      maxTotalDispatches: this.maxTotalDispatches,
+      maxConsecutiveFailures: this.maxConsecutiveFailures,
     };
   }
 
@@ -364,10 +473,22 @@ export class SquadAutopilotService {
     }
   }
 
-  /** User-owned run posture. Unlike `stop()`, pause is persisted across backend restarts. */
+  /**
+   * User-owned run posture. Unlike `stop()`, pause is persisted across backend
+   * restarts. An explicit `running:true` is also the ONLY way to clear a
+   * tripped kill-switch — resuming is a conscious human decision, so it opens
+   * a fresh lifetime-dispatch budget and failure-streak window rather than
+   * silently staying tripped forever.
+   */
   async setRunning(running: boolean): Promise<void> {
-    if (running) this.start();
-    else this.stop();
+    if (running) {
+      this.killSwitch = { tripped: false };
+      this.totalDispatched = 0;
+      this.consecutiveFailures = 0;
+      this.start();
+    } else {
+      this.stop();
+    }
     await this.persistControlState();
   }
 
@@ -523,6 +644,17 @@ export class SquadAutopilotService {
     }
     return result;
   }
+}
+
+/**
+ * Normalize a kill-switch cap: a finite positive integer wins, anything else
+ * (unset, `null`, `0`, negative, `NaN`, non-integer) degrades to `null`
+ * (unbounded — the default, byte-identical posture). Never throws — an
+ * operator-misconfigured cap disables that cap instead of crashing the loop.
+ */
+function positiveCapOrNull(value: number | null | undefined): number | null {
+  if (value == null) return null;
+  return Number.isInteger(value) && value > 0 ? value : null;
 }
 
 /** Validate + normalize the operator-selected unattended launch contract. */

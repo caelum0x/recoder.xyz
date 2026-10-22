@@ -101,6 +101,18 @@ export const agentOsConfigSchema = z.object({
   /** Max conductor dispatches per autopilot tick (bounds burst launches). */
   squadAutopilotMaxPerTick: z.number().int().positive(),
   /**
+   * Lifetime dispatch budget for an unattended autopilot run (the
+   * unattended-run kill-switch). `null` (default) ⇒ unbounded,
+   * byte-identical to prior behavior — this is an opt-in safety rail, not a
+   * forced default.
+   */
+  squadAutopilotMaxTotalDispatches: z.number().int().positive().nullable(),
+  /**
+   * Trip the same kill-switch after this many CONSECUTIVE dispatch failures.
+   * `null` (default) ⇒ unbounded, byte-identical to prior behavior.
+   */
+  squadAutopilotMaxConsecutiveFailures: z.number().int().positive().nullable(),
+  /**
    * Solo/desktop mode (bootstrap-injected from `RECODER_SOLO_MODE`): a single
    * local owner with no sign-in plane. The `/api/agent-os` space edges fail OPEN
    * for tenant scoping so the embedded desktop single-user is never locked out.
@@ -127,6 +139,8 @@ export interface AgentOsConfigOverrides {
   readonly squadAutopilotEnabled?: boolean;
   readonly squadAutopilotIntervalMs?: number;
   readonly squadAutopilotMaxPerTick?: number;
+  readonly squadAutopilotMaxTotalDispatches?: number | null;
+  readonly squadAutopilotMaxConsecutiveFailures?: number | null;
   readonly squadId?: string | null;
   /** Opt-in squad seed (bootstrap parses it from env; agent-os applies it). */
   readonly squadSeed?: SquadSeed | null;
@@ -185,6 +199,9 @@ export function sliceAgentOsConfig(
       overrides.squadAutopilotIntervalMs ?? DEFAULT_SQUAD_AUTOPILOT_INTERVAL_MS,
     squadAutopilotMaxPerTick:
       overrides.squadAutopilotMaxPerTick ?? DEFAULT_SQUAD_AUTOPILOT_MAX_PER_TICK,
+    squadAutopilotMaxTotalDispatches: overrides.squadAutopilotMaxTotalDispatches ?? null,
+    squadAutopilotMaxConsecutiveFailures:
+      overrides.squadAutopilotMaxConsecutiveFailures ?? null,
     squadId: overrides.squadId ?? null,
     squadSeed: overrides.squadSeed ?? null,
     soloMode: app.runtime.soloMode === true,
