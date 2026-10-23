@@ -88,6 +88,21 @@ const CLAUDE_SQUAD: ToolRef = {
   kind: "Terminal multi-agent manager (tmux-based)",
   license: "AGPL-3.0 · free, open source",
 };
+const NIMBALYST: ToolRef = {
+  name: "Nimbalyst",
+  kind: "Visual workspace + shared agent wiki",
+  license: "Proprietary app · free wiki plugin (open source) · paid Wiki Teams",
+};
+const AMUX: ToolRef = {
+  name: "amux",
+  kind: "Agent fleet control plane (kanban + mobile control)",
+  license: "MIT with Commons Clause · free local install · paid cloud plans",
+};
+const FACTORY_AI: ToolRef = {
+  name: "Factory (Droid)",
+  kind: "Agent-native software delivery platform",
+  license: "Proprietary · paid plans, no free tier",
+};
 
 export const COMPARISONS: Comparison[] = [
   {
@@ -175,7 +190,7 @@ export const COMPARISONS: Comparison[] = [
         a: "Recoder's Enterprise tier includes the option to run the entire control plane inside your own infrastructure. Conductor's site doesn't mention a self-hosting option.",
       },
     ],
-    related: ["recoder-vs-cursor"],
+    related: ["recoder-vs-cursor", "recoder-vs-factory-ai"],
   },
 
   {
@@ -260,7 +275,7 @@ export const COMPARISONS: Comparison[] = [
         a: "No. Recoder is bring-your-own-keys on the Free and Pro tiers: your agents use your own provider keys, and you pay providers directly for inference. Recoder charges for orchestration, not tokens.",
       },
     ],
-    related: ["recoder-vs-conductor", "recoder-vs-vibe-kanban"],
+    related: ["recoder-vs-conductor", "recoder-vs-vibe-kanban", "recoder-vs-nimbalyst"],
   },
 
   {
@@ -348,7 +363,7 @@ export const COMPARISONS: Comparison[] = [
         a: "Per its pricing page: free for 1 user; Pro is $30/user/month for teams of 2-49; Enterprise is custom pricing for 50+ users with SSO/SAML.",
       },
     ],
-    related: ["recoder-vs-conductor", "recoder-vs-claude-squad"],
+    related: ["recoder-vs-conductor", "recoder-vs-claude-squad", "recoder-vs-amux"],
   },
 
   {
@@ -435,6 +450,255 @@ export const COMPARISONS: Comparison[] = [
       },
     ],
     related: ["recoder-vs-vibe-kanban", "recoder-vs-conductor"],
+  },
+
+  {
+    // Verified live 2026-10-23 against nimbalyst.com.
+    slug: "recoder-vs-nimbalyst",
+    a: RECODER,
+    b: NIMBALYST,
+    title: "Recoder vs Nimbalyst",
+    metaTitle: "Recoder vs Nimbalyst: parallel-and-converge orchestrator vs agent wiki",
+    description:
+      "Recoder vs Nimbalyst: Nimbalyst is a shared wiki and visual workspace for Claude Code/Codex context; Recoder runs agents in parallel and governs the merge.",
+    keywords: [
+      "nimbalyst alternative",
+      "recoder vs nimbalyst",
+      "nimbalyst vs recoder",
+      "ai agent wiki alternative",
+      "claude code codex visual workspace",
+    ],
+    tagline: "A shared memory layer for your agents, versus a parallel-run-and-converge console.",
+    intro: [
+      "Nimbalyst's own site frames it as \"a wiki your coding agents write for you, and a visual workspace for working with Claude Code, Codex and other agents\" — the product's center of gravity is capturing the decisions and open questions agents surface while they work, then sharing that context across a team through a free, open-source local wiki plugin plus a paid Wiki Teams tier (in beta, free as of this writing).",
+      "Recoder solves a different problem: instead of recording what one agent decided, it runs several agents — Claude Code, Codex, Cursor, opencode — on the SAME task at once, each in its own isolated git worktree, then helps you compare their divergent diffs and converge on one governed, audited merge. Nimbalyst's wiki is complementary context capture; Recoder's convergence step and fail-closed approval gate don't appear as features on Nimbalyst's site.",
+    ],
+    table: {
+      head: ["Dimension", "Recoder", "Nimbalyst"],
+      rows: [
+        ["Agents named on the product's own site", "Claude Code, Codex, Cursor, opencode", "Claude Code, Codex, Cursor, VS Code, any MCP agent"],
+        ["Core workflow", "One task → N agents in parallel → converge to one merge", "Visual workspace + a wiki agents write decisions/questions into"],
+        ["Isolation model", "Git worktree per agent, same task", "Not described as a worktree-isolation product"],
+        ["Convergence of parallel runs on one task", "Pick or synthesize diffs into one branch", "Not its model — one shared wiki, not a cross-agent diff comparison"],
+        ["Approval gate / audit trail", "Fail-closed approvals; SHA-256 Merkle-chained audit trail", "Decision history (\"who made them\") in the wiki, not a governance gate"],
+        ["Self-hosting", "Enterprise: run the control plane on your own infra", "Wiki plugin is free, local, open source today"],
+        ["Platform today", "macOS (Apple Silicon); Windows & Linux planned", "macOS, Windows, Linux; Wiki Teams is browser-based"],
+        ["Pricing", "Free, local use, forever; Pro $29/mo; Team $99/mo", "Free individual wiki + desktop app; Wiki Teams free during beta (no stated price yet)"],
+      ],
+    },
+    prosA: [
+      "Converges several agents' attempts at the same task into one governed merge — not Nimbalyst's model.",
+      "A fail-closed approval gate and a SHA-256 Merkle-chained audit trail over governed decisions.",
+      "BYOK and local-first: agents run on your machine with your own keys.",
+    ],
+    consA: [
+      "No shared wiki / knowledge-base layer for agent decisions and open questions — Recoder's audit trail is about merges, not team-wide context capture.",
+      "macOS (Apple Silicon) only today; Nimbalyst's desktop app already supports Windows and Linux.",
+    ],
+    prosB: [
+      "Cross-platform desktop app today (macOS, Windows, Linux) — no platform gap.",
+      "The wiki plugin is free, local, and open source, and works with any MCP-speaking agent, not just four named ones.",
+      "Purpose-built for a problem Recoder doesn't address: durable, team-visible context about decisions agents made and questions still open.",
+    ],
+    consB: [
+      "No described convergence step for running multiple agents on the same task and merging the best diff.",
+      "No fail-closed approval gate or tamper-evident audit trail over merges described on its site.",
+      "Wiki Teams pricing is unpublished (free-during-beta) rather than a stated, stable tier.",
+    ],
+    whenA:
+      "Choose Recoder when the job is running several agents on one task in parallel and landing a single governed, audited merge.",
+    whenB:
+      "Choose Nimbalyst when the job is keeping a durable, team-shared record of what your agents decided and still need answered, across whichever MCP-speaking agent or editor you use.",
+    recoderFit: [
+      "These products are more adjacent than competing: Nimbalyst's wiki is about durable team memory across many small agent sessions; Recoder's audit trail is about one governed merge decision at a time, with per-file convergence provenance Nimbalyst's site doesn't describe.",
+      "A team could reasonably run both — Nimbalyst to keep institutional knowledge agents surface, Recoder to run the actual parallel task-to-merge workflow with an approval gate.",
+    ],
+    faq: [
+      {
+        q: "Is Nimbalyst a multi-agent orchestrator like Recoder?",
+        a: "Not based on its own site. Nimbalyst is described as a visual workspace plus a wiki agents write decisions and open questions into — it doesn't describe running several agents on the same task in parallel and converging their diffs, which is Recoder's core workflow.",
+      },
+      {
+        q: "Is Nimbalyst free?",
+        a: "The individual wiki plugin and desktop app are free (the wiki plugin is open source). Wiki Teams, the shared/team tier, is free during its beta with no published price yet.",
+      },
+      {
+        q: "Does Nimbalyst have an approval gate or audit trail like Recoder's?",
+        a: "Its site describes a decision history inside the wiki (open questions, decisions made, and who made them) — that's team-visible context, not a fail-closed approval gate or a SHA-256 Merkle-chained audit trail over merges.",
+      },
+      {
+        q: "Does Nimbalyst run on Windows and Linux?",
+        a: "Yes, per its own site — macOS (Apple Silicon and Intel), Windows, and Linux, plus a browser-based Wiki Teams. Recoder is macOS (Apple Silicon) only today, with Windows and Linux planned.",
+      },
+    ],
+    related: ["recoder-vs-amux", "recoder-vs-conductor"],
+  },
+
+  {
+    // Verified live 2026-10-23 against amux.io.
+    slug: "recoder-vs-amux",
+    a: RECODER,
+    b: AMUX,
+    title: "Recoder vs amux",
+    metaTitle: "Recoder vs amux: converge-and-govern vs always-on agent fleet",
+    description:
+      "Recoder vs amux: amux runs a kanban-coordinated fleet of agents that ships while you sleep; Recoder runs agents in parallel on one task and governs the merge.",
+    keywords: [
+      "amux alternative",
+      "recoder vs amux",
+      "amux vs recoder",
+      "ai agent fleet control plane alternative",
+      "autonomous coding agent orchestrator",
+    ],
+    tagline: "An always-on agent fleet with mobile control, versus a parallel-run-and-converge console.",
+    intro: [
+      "amux positions itself as a control plane for a FLEET of agents working a shared backlog unattended — its own site describes atomic task claiming so agents don't duplicate work, origin-stamped inter-agent messaging, self-healing recovery from crashes, and phone-based monitoring and steering so the fleet can \"keep shipping while you sleep.\" It's a single Rust binary, free to self-host (MIT with Commons Clause), with optional paid cloud plans ($39–$129/mo) that add Factory-run compute instead of your own machine.",
+      "Recoder's workflow is narrower and more deliberate: one task, several agents (Claude Code, Codex, Cursor, opencode) racing it in parallel in isolated git worktrees, then a side-by-side convergence step and a fail-closed, audited approval gate before anything merges. amux optimizes for autonomous throughput across many tasks with human-in-the-loop alerts; Recoder optimizes for picking the best of several attempts at one task and proving the merge was authorized.",
+    ],
+    table: {
+      head: ["Dimension", "Recoder", "amux"],
+      rows: [
+        ["Agents named on the product's own site", "Claude Code, Codex, Cursor, opencode", "Claude Code, Codex CLI, Gemini CLI, OpenCode, Ollama (local models)"],
+        ["Core workflow", "One task → N agents in parallel → converge to one merge", "Shared kanban backlog → fleet of agents claim + ship tasks unattended"],
+        ["Isolation model", "Git worktree per agent, same task", "Each worker gets its own repo, memory, and lane"],
+        ["Convergence of parallel runs on one task", "Pick or synthesize diffs into one branch", "Not its model — one worker per claimed task, not several racing the same one"],
+        ["Approval gate / audit trail", "Fail-closed approvals; SHA-256 Merkle-chained audit trail", "Message review lanes + owner alerts + one-tap approval prompts; no tamper-evident audit chain described"],
+        ["Self-hosting", "Enterprise: run the control plane on your own infra", "Free, default — single binary, local install, full feature set"],
+        ["Mobile control", "Not described on Recoder's site", "iOS app + PWA for monitoring and steering from a phone"],
+        ["Platform today", "macOS (Apple Silicon); Windows & Linux planned", "Local install (any OS the Rust binary targets) + optional cloud plans"],
+        ["Pricing", "Free, local use, forever; Pro $29/mo; Team $99/mo", "Free self-hosted; cloud plans $39/mo (Solo) to $129/mo (Max)"],
+      ],
+    },
+    prosA: [
+      "Converges several agents' different attempts at the SAME task into one governed merge — amux's model is one worker per task, not several racing one task.",
+      "A SHA-256 Merkle-chained, tamper-evident audit trail — amux describes approval prompts and alerts, not a sealed chain.",
+      "BYOK and local-first by default on every paid tier, not just the free one.",
+    ],
+    consA: [
+      "No fleet-scale backlog coordination (atomic task claiming across many unattended agents) — Recoder is scoped to one task at a time across agents.",
+      "No native mobile app for monitoring or steering runs remotely; amux ships an iOS app and PWA for this today.",
+      "macOS (Apple Silicon) only today; amux's single-binary install is less platform-constrained.",
+    ],
+    prosB: [
+      "Built for unattended, fleet-scale throughput across a shared backlog — self-healing recovery from crashes and atomic task claiming aren't things Recoder's site describes.",
+      "Free and full-featured self-hosted by default (MIT with Commons Clause), with paid tiers only for amux's own managed cloud compute.",
+      "Native mobile app (iOS + PWA) for remote monitoring and one-tap approvals — a real gap in Recoder's current surface.",
+    ],
+    consB: [
+      "No described step for running several agents on the SAME task and converging their diffs into one reviewed merge — the model is one worker per claimed task.",
+      "No tamper-evident, cryptographically sealed audit trail described — governance is message review lanes, owner alerts, and approval prompts.",
+      "Commons Clause on top of MIT restricts selling a hosted version of amux itself, which matters for anyone considering building on it commercially.",
+    ],
+    whenA:
+      "Choose Recoder when you want several agents to race the SAME task in parallel and you need a governed, cryptographically audited record of which diff got merged and why.",
+    whenB:
+      "Choose amux when you want a self-hosted, always-on fleet that claims and ships tasks from a shared backlog unattended, with phone-based monitoring and one-tap approvals.",
+    recoderFit: [
+      "amux is the more autonomous, fleet-throughput-oriented tool — it's built to keep shipping across a backlog while a human only steps in via phone alerts. Recoder is the more deliberate, per-task tool — it's built so you can see what N agents each did with the SAME task and prove, with a sealed hash chain, which one won and who authorized it.",
+      "If the priority is unattended scale across many tasks, amux's fleet model is the better fit. If the priority is trusting ONE merge decision enough to show an auditor, Recoder's convergence-plus-audit-trail is what amux's site doesn't claim to offer.",
+    ],
+    faq: [
+      {
+        q: "Does amux run several agents on the same task like Recoder does?",
+        a: "Not based on its own site. amux's model is a shared backlog where agents atomically claim distinct tasks so they don't duplicate work — not several agents racing the SAME task so you can compare and converge their diffs, which is Recoder's core workflow.",
+      },
+      {
+        q: "Is amux free?",
+        a: "Yes, self-hosted — a single binary installed locally with the full feature set, under MIT with Commons Clause. Paid cloud plans ($39–$129/mo) add amux-managed compute instead of your own machine.",
+      },
+      {
+        q: "Does amux have an audit trail like Recoder's Merkle chain?",
+        a: "Its site describes message review lanes, owner alerts, and one-tap approval prompts for human-in-the-loop moments — not a cryptographically sealed, tamper-evident audit chain over merges.",
+      },
+      {
+        q: "Can I monitor amux or Recoder from my phone?",
+        a: "amux ships a native iOS app and a PWA for monitoring and steering the fleet remotely. Recoder's site does not describe a mobile app today.",
+      },
+    ],
+    related: ["recoder-vs-nimbalyst", "recoder-vs-vibe-kanban"],
+  },
+
+  {
+    // Verified live 2026-10-23 against factory.com and factory.com/pricing.
+    slug: "recoder-vs-factory-ai",
+    a: RECODER,
+    b: FACTORY_AI,
+    title: "Recoder vs Factory",
+    metaTitle: "Recoder vs Factory (Droid): local orchestrator vs enterprise agent platform",
+    description:
+      "Recoder vs Factory: Factory is a paid, enterprise agent platform with SSO/SAML/SCIM; Recoder is a free local console that converges parallel agent runs.",
+    keywords: [
+      "factory ai alternative",
+      "factory droid alternative",
+      "recoder vs factory",
+      "recoder vs factory.ai",
+      "enterprise ai coding agent platform comparison",
+    ],
+    tagline: "An enterprise agent-delivery platform with SSO baked in, versus a free local console built around convergence.",
+    intro: [
+      "Factory (branded \"Droid\") describes itself as \"an agent-native software development platform for planning, building, reviewing, testing, and shipping production software,\" reachable from CLI, desktop, web, mobile, and team chat. It has no free tier — Pro starts at $20/month — and its Business ($/custom) and Enterprise (custom) tiers are where the enterprise-trust checklist lives: Single Sign-On, SAML/SCIM provisioning, audit logging and activity trails, admin controls over autonomy levels and network policies, on-premises deployment, and dedicated account management.",
+      "Recoder's shape is the opposite end of the spectrum: free forever for local use, no account required to run it, and its edge is a specific workflow Factory's site doesn't describe — running several agents (Claude Code, Codex, Cursor, opencode) on the SAME task in parallel git worktrees and converging their diffs into one governed merge with a cryptographically sealed audit trail. Factory's governance is enterprise identity and admin controls at the Business/Enterprise price points; Recoder's governance is a fail-closed approval gate and a Merkle-chained audit trail, today, without requiring a custom-priced contract — though Recoder does not yet offer SSO/SAML/SCIM, which Factory does.",
+    ],
+    table: {
+      head: ["Dimension", "Recoder", "Factory (Droid)"],
+      rows: [
+        ["Agents named on the product's own site", "Claude Code, Codex, Cursor, opencode", "Multiple model providers (not individually named on the marketing site)"],
+        ["Core workflow", "One task → N agents in parallel → converge to one merge", "Delegate planning/build/review/test/ship work to Droids across CLI/desktop/web/mobile/chat"],
+        ["Convergence of parallel runs on one task", "Pick or synthesize diffs into one branch", "Not described as a feature — human approval checkpoints exist, not cross-agent diff convergence"],
+        ["Approval gate / audit trail", "Fail-closed approvals; SHA-256 Merkle-chained audit trail", "Audit logging and activity trails — on the custom-priced Business tier and above"],
+        ["SSO / SAML / SCIM", "Not offered today", "SSO + SAML/SCIM — on the custom-priced Business tier and above"],
+        ["Self-hosting / on-prem", "Enterprise: run the control plane on your own infra", "On-premises deployment — on the custom-priced Enterprise tier"],
+        ["Entry price", "Free, local use, forever", "No free tier — Pro starts at $20/mo"],
+        ["Team pricing", "Team $99/mo (flat)", "Teams: $60/mo per team + $40/mo per seat"],
+      ],
+    },
+    prosA: [
+      "Free, local use forever — no account, no seat price, no usage allowance to run the core product.",
+      "Converges several agents' attempts at the SAME task into one governed merge — not a workflow Factory's site describes.",
+      "A fail-closed approval gate and a SHA-256 Merkle-chained audit trail available without a custom-priced contract.",
+    ],
+    consA: [
+      "No SSO, SAML, or SCIM today — a real gap against Factory's Business/Enterprise tier for a buyer whose procurement requires it.",
+      "No mobile app or team-chat integration surface, which Factory offers across CLI/desktop/web/mobile/chat.",
+      "macOS (Apple Silicon) only today; Factory is reachable from more surfaces generally.",
+    ],
+    prosB: [
+      "Enterprise identity and governance checklist already built: SSO, SAML/SCIM, audit logging, admin autonomy/network-policy controls, on-premises deployment — exactly what a regulated buyer's security review asks for.",
+      "Reachable from CLI, desktop, web, mobile, and team communication tools — broader surface area than Recoder's local desktop app.",
+      "Dedicated onboarding, account management, and SLAs at the Business/Enterprise tiers.",
+    ],
+    consB: [
+      "No free tier at all — the cheapest way to use it is $20/mo (Pro), with the enterprise-trust features gated behind custom-priced Business/Enterprise contracts.",
+      "No described workflow for running multiple agents on the SAME task and converging their diffs into one merge — delegation is to Droids working tasks, not several agents racing one task.",
+      "No publicly stated per-control evidence mapping (e.g., SOC 2 / EU AI Act / DORA) on its marketing site — the audit logging feature is described, not mapped to a specific compliance framework.",
+    ],
+    whenA:
+      "Choose Recoder when you want a free, local-first console for running several agents on one task in parallel and a governed, audit-sealed merge — and you don't yet need SSO/SAML/SCIM.",
+    whenB:
+      "Choose Factory when your buyer's security review requires SSO/SAML/SCIM, audit logging, and on-premises deployment today, and you're fine paying enterprise pricing to get them.",
+    recoderFit: [
+      "Factory is the more enterprise-complete platform on paper: identity federation, provisioning, audit trails, and on-prem deployment are already shipped at its higher tiers. Recoder is more complete on the specific workflow its thesis is built around — running N agents on the SAME task and proving, with a sealed hash chain, which diff was merged and under what authority.",
+      "This is the honest gap to name out loud: a 30-300 person company selling into regulated enterprise customers may need Factory's SSO/SAML/SCIM checkbox sooner than Recoder can offer it. Recoder's own roadmap treats identity federation as the next enterprise-trust item to close, not a solved problem.",
+    ],
+    faq: [
+      {
+        q: "Does Factory have a free tier?",
+        a: "No. Per its own pricing page, Pro starts at $20/month with no free tier; Recoder's base product is free for local use indefinitely.",
+      },
+      {
+        q: "Does Recoder support SSO or SAML like Factory does?",
+        a: "Not today. Factory's Business tier and above bundle SSO and SAML/SCIM provisioning. Recoder does not yet offer SSO/SAML/SCIM — this is an honest, named gap against Factory for enterprise buyers who require it.",
+      },
+      {
+        q: "Can Factory run several agents on the same task and converge their diffs, like Recoder?",
+        a: "Its site describes delegating planning/build/review/test/ship work to Droids and human approval checkpoints, not a described workflow for racing several agents on the SAME task and converging their diffs into one merge — which is Recoder's core workflow.",
+      },
+      {
+        q: "What does Factory's audit logging cost?",
+        a: "Per its pricing page, audit logging and activity trails are part of the custom-priced Business tier and above, alongside SSO/SAML/SCIM and admin controls — not included in the $20/mo Pro tier.",
+      },
+    ],
+    related: ["recoder-vs-amux", "recoder-vs-conductor"],
   },
 ];
 
