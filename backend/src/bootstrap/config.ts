@@ -132,6 +132,12 @@ const envSchema = z.object({
   PADDLE_WEBHOOK_SECRET: z.string().optional(),
   DODO_API_KEY: z.string().optional(),
   DODO_WEBHOOK_SECRET: z.string().optional(),
+  // Railyard Mint — usage-sink edge adapter (NOT a MoR; see
+  // billing/ports/usage-sink.port.ts). Absent ⇒ metering flushes to the MoR
+  // provider only, byte-identical to before this adapter existed.
+  RAILYARD_MINT_BASE_URL: z.string().optional(),
+  RAILYARD_MINT_API_KEY: z.string().optional(),
+  RAILYARD_MINT_PRODUCT_ID: z.string().optional(),
 
   // --- Cloud (off-box substrate) slice ---
   DAYTONA_API_KEY: z.string().optional(),
@@ -366,6 +372,11 @@ function buildBillingOverrides(env: ParsedEnv): BillingConfigOverrides {
     dodo: {
       apiKey: opt(env.DODO_API_KEY) ?? null,
       webhookSecret: opt(env.DODO_WEBHOOK_SECRET) ?? null,
+    },
+    railyardMint: {
+      baseUrl: opt(env.RAILYARD_MINT_BASE_URL) ?? null,
+      apiKey: opt(env.RAILYARD_MINT_API_KEY) ?? null,
+      productId: opt(env.RAILYARD_MINT_PRODUCT_ID) ?? null,
     },
   };
 }

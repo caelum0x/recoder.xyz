@@ -15,6 +15,10 @@
  *     batches (`emitUsage` → `markFlushed`). DEGRADE-SAFE: with no provider, an
  *     unconfigured provider, or a push error, nothing is marked flushed — the
  *     events wait for the next tick (fail-safe law §37: never a faked flush).
+ *     The SAME drained batch is also fanned out to any configured
+ *     {@link UsageSinkPort}s (e.g. Railyard Mint) — a purely additional,
+ *     best-effort emit target. A sink failure is logged and NEVER affects the
+ *     primary provider's flush/mark-flushed decision (see `forwardToSinks`).
  *
  * Fail-safe law: every counter/flush side effect is wrapped so a metering hiccup
  * NEVER throws into the caller's hot path — the durable event write is the only
@@ -28,6 +32,7 @@ import {
   type ComponentHealth,
 } from '../../../shared/health-types.js';
 import type { BillingProviderPort } from '../ports/billing-provider.port.js';
+import type { UsageSinkPort } from '../ports/usage-sink.port.js';
 import type { IdempotentWrite, MeteringRepository, UsageReservation } from '../ports/metering-repo.port.js';
 import type { MeterEvent, UsageKind } from '../types.js';
 
@@ -93,6 +98,15 @@ export interface MeteringServiceDeps {
    * absent ⇒ flushing is a no-op (events accumulate durably, never lost).
    */
   readonly provider?: BillingProviderPort;
+  /**
+   * Additional, best-effort usage-forwarding targets (e.g. Railyard Mint) that
+   * receive the SAME drained batch as `provider.emitUsage`, fanned out in
+   * parallel. A sink error is logged and never affects the primary provider's
+   * flush/mark-flushed decision, and never blocks or slows the other sinks —
+   * see `forwardToSinks`. Empty/absent ⇒ byte-identical behavior to before
+   * this seam existed.
+   */
+  readonly extraSinks?: readonly UsageSinkPort[];
   /** Flush cadence (ms). `0` (default) disables the periodic loop. */
   readonly flushIntervalMs?: number;
   /** Events drained per flush tick. */
@@ -111,6 +125,7 @@ function positiveQuantity(q: number | undefined): number {
 
 export function createMeteringService(deps: MeteringServiceDeps): MeteringService {
   const { repo, provider } = deps;
+  const extraSinks = deps.extraSinks ?? [];
   const clock = deps.now ?? (() => new Date());
   const intervalMs = deps.flushIntervalMs ?? 0;
   const batchSize = deps.flushBatchSize ?? DEFAULT_FLUSH_BATCH;
@@ -131,6 +146,27 @@ export function createMeteringService(deps: MeteringServiceDeps): MeteringServic
         { error, subjectId: input.subjectId, kind: input.kind },
         'metering: counter increment skipped (non-fatal)',
       );
+    }
+  }
+
+  /**
+   * Fan a flushed batch out to every configured {@link UsageSinkPort} in
+   * parallel. Each sink's failure is caught and logged independently — one
+   * slow/broken sink can never delay or fail another, and never throws back
+   * into `flushOnce`'s hot path (fail-safe law §37: a secondary rollup target
+   * degrading is observability, not an outage).
+   */
+  async function forwardToSinks(events: readonly MeterEvent[]): Promise<void> {
+    if (extraSinks.length === 0 || events.length === 0) return;
+    const results = await Promise.allSettled(extraSinks.map((sink) => sink.emitUsage(events)));
+    for (let i = 0; i < results.length; i += 1) {
+      const result = results[i];
+      if (result && result.status === 'rejected') {
+        deps.logger?.warn?.(
+          { error: result.reason, sink: extraSinks[i]?.name, count: events.length },
+          'metering: extra sink emitUsage failed (non-fatal — primary provider flush unaffected)',
+        );
+      }
     }
   }
 
@@ -214,6 +250,13 @@ export function createMeteringService(deps: MeteringServiceDeps): MeteringServic
       idempotencyKey: u.idempotencyKey,
       timestamp: u.occurredAt,
     }));
+
+    // Best-effort fan-out to any additional sinks (e.g. Railyard Mint), run
+    // alongside the primary provider push. Deliberately NOT awaited-and-gated
+    // on the primary's outcome below: a sink is a separate rollup target, not
+    // part of the mark-flushed contract, so its failure/latency must never
+    // change whether THIS batch gets marked flushed against the primary MoR.
+    void forwardToSinks(events);
 
     try {
       await provider.emitUsage(events);

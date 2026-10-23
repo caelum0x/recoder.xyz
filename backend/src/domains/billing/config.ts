@@ -37,6 +37,21 @@ export const providerCredentialSchema = z.object({
 
 export type ProviderCredential = z.infer<typeof providerCredentialSchema>;
 
+/**
+ * The Railyard Mint usage-sink credential slice — deliberately NOT a
+ * {@link providerCredentialSchema} MoR credential (no webhook secret, no
+ * checkout participation; see `ports/usage-sink.port.ts`).
+ */
+export const railyardMintConfigSchema = z.object({
+  baseUrl: z.string().nullable(),
+  apiKey: z.string().nullable(),
+  present: z.boolean(),
+  /** Logical product id Mint attributes this instance's usage to, when set. */
+  productId: z.string().nullable(),
+});
+
+export type RailyardMintConfig = z.infer<typeof railyardMintConfigSchema>;
+
 /** Per-provider → per-tier product/price id map (config, never a hardcoded secret). */
 export const planProductMapSchema = z.record(
   z.enum(PLAN_TIERS as unknown as [PlanTier, ...PlanTier[]]),
@@ -61,6 +76,8 @@ export const billingConfigSchema = z.object({
   ),
   /** Meter batch flush cadence (ms). `0` disables the flush loop (local only). */
   meterFlushIntervalMs: z.number().int().nonnegative(),
+  /** Railyard Mint usage-sink slice (edge adapter, see `providers/railyard-mint/`). */
+  railyardMint: railyardMintConfigSchema,
   /** Solo/desktop mode — quota fails open when metering is unreachable (see `RuntimeConfig.soloMode`). */
   soloMode: z.boolean(),
   isProduction: z.boolean(),
@@ -85,6 +102,11 @@ export interface BillingConfigOverrides {
   readonly dodo?: ProviderCredentialOverrides;
   readonly planProducts?: Partial<Record<BillingProviderName, Partial<Record<PlanTier, string>>>>;
   readonly meterFlushIntervalMs?: number;
+  readonly railyardMint?: {
+    readonly baseUrl?: string | null;
+    readonly apiKey?: string | null;
+    readonly productId?: string | null;
+  };
 }
 
 function credential(o: ProviderCredentialOverrides | undefined): ProviderCredential {
@@ -114,6 +136,12 @@ export function sliceBillingConfig(app: AppConfig, overrides: BillingConfigOverr
     dodo: credential(overrides.dodo),
     planProducts: overrides.planProducts ?? {},
     meterFlushIntervalMs: overrides.meterFlushIntervalMs ?? (app.runtime.isProduction ? 30_000 : 0),
+    railyardMint: {
+      baseUrl: overrides.railyardMint?.baseUrl ?? null,
+      apiKey: overrides.railyardMint?.apiKey ?? null,
+      present: Boolean(overrides.railyardMint?.apiKey && overrides.railyardMint.apiKey.length > 0),
+      productId: overrides.railyardMint?.productId ?? null,
+    },
     soloMode: app.runtime.soloMode === true,
     isProduction: app.runtime.isProduction,
   });

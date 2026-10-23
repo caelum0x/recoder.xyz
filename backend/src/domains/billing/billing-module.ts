@@ -43,6 +43,7 @@ import { createQuotaService, type QuotaService } from './services/quota.service.
 import { createWebhookService, type WebhookService } from './services/webhook.service.js';
 import { createInvoiceService, type InvoiceService } from './invoice.service.js';
 import { createProviderRegistry, type ProviderRegistry } from './provider-registry.js';
+import { createRailyardMintSink } from './providers/railyard-mint/railyard-mint.sink.js';
 import { buildBillingRouter } from './routes/billing.routes.js';
 import { buildBillingWebhooksRouter } from './routes/billing-webhooks.routes.js';
 import { buildInternalBillingRouter } from './routes/internal-billing.routes.js';
@@ -109,9 +110,25 @@ export class BillingComposer implements BillingModule {
     });
 
     // Usage ledger + provider flush loop (degrade-safe without a DB/provider).
+    // extraSinks: additional, best-effort usage-forwarding targets (Railyard
+    // Mint today) fanned out alongside the active MoR provider's own
+    // `emitUsage` — see `providers/railyard-mint/railyard-mint.sink.ts`. Absent
+    // config ⇒ an empty array ⇒ byte-identical behavior to before this seam
+    // existed (no change to the existing MoR checkout path).
+    const railyardMintSink = cfg.railyardMint.present
+      ? createRailyardMintSink({
+          config: {
+            baseUrl: cfg.railyardMint.baseUrl,
+            apiKey: cfg.railyardMint.apiKey,
+            ...(cfg.railyardMint.productId ? { productId: cfg.railyardMint.productId } : {}),
+          },
+          logger: this.log,
+        })
+      : null;
     this.meteringService = createMeteringService({
       repo: this.repo,
       provider: this.registry.active(),
+      ...(railyardMintSink ? { extraSinks: [railyardMintSink] } : {}),
       flushIntervalMs: cfg.meterFlushIntervalMs,
       logger: this.log,
     });
