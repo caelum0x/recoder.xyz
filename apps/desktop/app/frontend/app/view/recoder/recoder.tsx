@@ -64,6 +64,7 @@ import {
     type RecoderDiffSummary,
     type RecoderEnvironment,
     type RecoderCrystalCandidate,
+    type RecoderVibeKanbanCandidate,
     type RecoderRowActionId,
     type RecoderWorkspace,
 } from "./recoder-model";
@@ -612,6 +613,116 @@ function RecoderCrystalImportModal({
 
 RecoderCrystalImportModal.displayName = "RecoderCrystalImportModal";
 
+function RecoderVibeKanbanImportModal({
+    model,
+    candidates,
+    onClose,
+}: {
+    model: RecoderViewModel;
+    candidates: RecoderVibeKanbanCandidate[];
+    onClose: () => void;
+}) {
+    const importing = useAtomValue(model.vibeKanbanImportingAtom);
+    const status = useAtomValue(model.vibeKanbanImportStatusAtom);
+    const available = candidates.filter((candidate) => candidate.importable && !candidate.imported);
+    const [selected, setSelected] = useState<Set<string>>(
+        () => new Set(available.map((candidate) => candidate.workspaceId))
+    );
+    const toggle = (workspaceId: string) => {
+        setSelected((prior) => {
+            const next = new Set(prior);
+            if (next.has(workspaceId)) next.delete(workspaceId);
+            else next.add(workspaceId);
+            return next;
+        });
+    };
+    const importSelected = async () => {
+        const ok = await model.importVibeKanbanSessions([...selected]);
+        if (ok) onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-[var(--zindex-typeahead-modal)]">
+            <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+            <div
+                className="absolute left-1/2 top-[10%] flex max-h-[80vh] w-[620px] max-w-[92vw] -translate-x-1/2 flex-col gap-3 overflow-hidden rounded-md border border-white/8 bg-modalbg p-4 shadow-lg recoder-enter"
+                onKeyDown={(event) => {
+                    if (event.key == "Escape" && !importing) onClose();
+                }}
+            >
+                <div className="flex items-start gap-3">
+                    <div className="flex flex-col gap-1">
+                        <h2 className={SECTION_TITLE}>Bring Vibe Kanban tasks into Recoder</h2>
+                        <div className={META}>
+                            Keep the existing worktrees. Recoder takes over review, follow-up runs, and merge.
+                        </div>
+                    </div>
+                    <div className="flex-1" />
+                    <button className={QUIET_BTN} disabled={importing} onClick={onClose}>Close</button>
+                </div>
+
+                <div className="min-h-0 overflow-y-auto rounded border border-white/8 divide-y divide-white/8">
+                    {candidates.map((candidate) => {
+                        const enabled = candidate.importable && !candidate.imported;
+                        return (
+                            <label
+                                key={candidate.workspaceId}
+                                className={cn(
+                                    "flex items-start gap-3 p-3",
+                                    enabled ? "cursor-pointer hover:bg-white/[0.025]" : "opacity-55"
+                                )}
+                            >
+                                <input
+                                    type="checkbox"
+                                    className="mt-0.5 cursor-pointer"
+                                    disabled={!enabled || importing}
+                                    checked={selected.has(candidate.workspaceId)}
+                                    onChange={() => toggle(candidate.workspaceId)}
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className={ROW_TITLE}>{candidate.title}</span>
+                                        <span className={CHIP}>{agentLabel(candidate.runtimeId)}</span>
+                                        <span className={CHIP}>{candidate.status}</span>
+                                        {candidate.imported && <span className={CHIP}>Imported</span>}
+                                    </div>
+                                    <div className={`${META} truncate`} title={candidate.repoPath}>
+                                        {candidate.projectName} · {candidate.branch || candidate.repoPath}
+                                    </div>
+                                    {candidate.description != "" && (
+                                        <div className="mt-1 text-xs text-secondary line-clamp-2">{candidate.description}</div>
+                                    )}
+                                    {!enabled && candidate.reason && <div className={`${META} mt-1`}>{candidate.reason}</div>}
+                                </div>
+                            </label>
+                        );
+                    })}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        className={PRIMARY_BTN}
+                        disabled={selected.size == 0 || importing}
+                        onClick={importSelected}
+                    >
+                        {importing ? "Importing…" : `Import ${selected.size} selected`}
+                    </button>
+                    <button
+                        className={QUIET_BTN}
+                        disabled={importing}
+                        onClick={() => setSelected(new Set(available.map((candidate) => candidate.workspaceId)))}
+                    >
+                        Select all available
+                    </button>
+                    {status?.kind == "error" && <span className={ERROR_ROW}>{status.message}</span>}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+RecoderVibeKanbanImportModal.displayName = "RecoderVibeKanbanImportModal";
+
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const allWorkspaces = useAtomValue(model.combinedWorkspacesAtom);
@@ -671,6 +782,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const environment = useAtomValue(model.environmentAtom);
     const crystalMigration = useAtomValue(model.crystalMigrationAtom);
     const crystalImportStatus = useAtomValue(model.crystalImportStatusAtom);
+    const vibeKanbanMigration = useAtomValue(model.vibeKanbanMigrationAtom);
+    const vibeKanbanImportStatus = useAtomValue(model.vibeKanbanImportStatusAtom);
     const githubStatus = useAtomValue(model.githubStatusAtom);
     const githubRepos = useAtomValue(model.githubReposAtom);
     const cloning = useAtomValue(model.cloningAtom);
@@ -683,6 +796,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     // setup panel even when some agents are already detected.
     const [agentSetupOpen, setAgentSetupOpen] = useState(false);
     const [crystalOpen, setCrystalOpen] = useState(false);
+    const [vibeKanbanOpen, setVibeKanbanOpen] = useState(false);
     // taskGroups whose calm converge nudge the user dismissed this session. The
     // Compare & Converge action stays reachable from the header afterward — dismiss
     // only stands the banner down, it never hides the payoff.
@@ -988,6 +1102,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const firstRunChips = firstRunAgentChips(environment, setup.agents, agentAuth, githubStatus);
     const crystalCandidates = crystalMigration?.candidates ?? [];
     const crystalImportableCount = crystalMigration?.importableCount ?? 0;
+    const vibeKanbanCandidates = vibeKanbanMigration?.candidates ?? [];
+    const vibeKanbanImportableCount = vibeKanbanMigration?.importableCount ?? 0;
     // The first-run HERO: with 2+ agents the parallel run is the star (preselect +
     // open ready); with one, honest "install a second"; with none, the setup panel.
     const hero = firstRunHero(setup.agents, recentRepos);
@@ -1076,6 +1192,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             ...(crystalImportableCount > 0
                 ? [{ id: "import-crystal", title: `Import ${crystalImportableCount} Crystal session${crystalImportableCount == 1 ? "" : "s"}`, run: () => setCrystalOpen(true) }]
                 : []),
+            ...(vibeKanbanImportableCount > 0
+                ? [{ id: "import-vibe-kanban", title: `Import ${vibeKanbanImportableCount} Vibe Kanban task${vibeKanbanImportableCount == 1 ? "" : "s"}`, run: () => setVibeKanbanOpen(true) }]
+                : []),
             { id: "review", title: "Review workspace diff", run: openReview },
             { id: "shortcuts", title: "Show keyboard shortcuts", shortcut: "⌘/", run: () => setShortcutsOpen(true) },
             {
@@ -1154,6 +1273,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         setShortcutsOpen,
         setCloneOpen,
         crystalImportableCount,
+        vibeKanbanImportableCount,
     ]);
 
     return (
@@ -1173,6 +1293,12 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     <button className={QUIET_BTN} onClick={() => setCrystalOpen(true)}>
                         Import Crystal
                         <span className="ml-1.5 text-xs text-meta font-mono">{crystalImportableCount}</span>
+                    </button>
+                )}
+                {vibeKanbanImportableCount > 0 && (
+                    <button className={QUIET_BTN} onClick={() => setVibeKanbanOpen(true)}>
+                        Import Vibe Kanban
+                        <span className="ml-1.5 text-xs text-meta font-mono">{vibeKanbanImportableCount}</span>
                     </button>
                 )}
                 <RecoderIdentityAffordance onOpenSettings={() => openView("recoder-settings")} />
@@ -1200,6 +1326,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 <div className="flex items-center gap-2 text-sm text-secondary">
                     <span>{crystalImportStatus.message}</span>
                     <button className={QUIET_BTN_XS} onClick={() => globalStore.set(model.crystalImportStatusAtom, null)}>
+                        Dismiss
+                    </button>
+                </div>
+            )}
+            {vibeKanbanImportStatus?.kind == "success" && (
+                <div className="flex items-center gap-2 text-sm text-secondary">
+                    <span>{vibeKanbanImportStatus.message}</span>
+                    <button className={QUIET_BTN_XS} onClick={() => globalStore.set(model.vibeKanbanImportStatusAtom, null)}>
                         Dismiss
                     </button>
                 </div>
@@ -2081,6 +2215,13 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     model={model}
                     candidates={crystalCandidates}
                     onClose={() => setCrystalOpen(false)}
+                />
+            )}
+            {vibeKanbanOpen && (
+                <RecoderVibeKanbanImportModal
+                    model={model}
+                    candidates={vibeKanbanCandidates}
+                    onClose={() => setVibeKanbanOpen(false)}
                 />
             )}
             {paletteOpen && (

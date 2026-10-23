@@ -146,6 +146,31 @@ type RecoderCrystalMigration = {
 
 type RecoderCrystalImportStatus = { kind: "success" | "error"; message: string };
 
+type RecoderVibeKanbanCandidate = {
+    workspaceId: string;
+    projectName: string;
+    repoPath: string;
+    title: string;
+    description: string;
+    status: string;
+    branch: string;
+    runtimeId: string;
+    archived: boolean;
+    importable: boolean;
+    imported: boolean;
+    reason?: string;
+};
+
+type RecoderVibeKanbanMigration = {
+    available: boolean;
+    candidates: RecoderVibeKanbanCandidate[];
+    importableCount: number;
+    importedCount: number;
+    reason?: string;
+};
+
+type RecoderVibeKanbanImportStatus = { kind: "success" | "error"; message: string };
+
 type RecoderIssueCreateStatus =
     | { kind: "success"; message: string; issueId: string }
     | { kind: "error"; message: string };
@@ -200,6 +225,41 @@ function parseCrystalMigration(data: unknown): RecoderCrystalMigration {
                   branch: typeof row.branch == "string" ? row.branch : "",
                   runtimeId: typeof row.runtimeId == "string" ? row.runtimeId : "claude_code",
                   originalStatus: typeof row.originalStatus == "string" ? row.originalStatus : "unknown",
+                  archived: Boolean(row.archived),
+                  importable: Boolean(row.importable),
+                  imported: Boolean(row.imported),
+                  ...(typeof row.reason == "string" ? { reason: row.reason } : {}),
+              }];
+          })
+        : [];
+    return {
+        available: Boolean(d.available),
+        candidates,
+        importableCount: typeof d.importableCount == "number" ? d.importableCount : candidates.filter((c) => c.importable && !c.imported).length,
+        importedCount: typeof d.importedCount == "number" ? d.importedCount : candidates.filter((c) => c.imported).length,
+        ...(typeof d.reason == "string" ? { reason: d.reason } : {}),
+    };
+}
+
+function parseVibeKanbanMigration(data: unknown): RecoderVibeKanbanMigration {
+    if (data == null || typeof data != "object") {
+        return { available: false, candidates: [], importableCount: 0, importedCount: 0 };
+    }
+    const d = data as Record<string, unknown>;
+    const candidates = Array.isArray(d.candidates)
+        ? d.candidates.flatMap((value): RecoderVibeKanbanCandidate[] => {
+              if (value == null || typeof value != "object") return [];
+              const row = value as Record<string, unknown>;
+              if (typeof row.workspaceId != "string") return [];
+              return [{
+                  workspaceId: row.workspaceId,
+                  projectName: typeof row.projectName == "string" ? row.projectName : "Vibe Kanban project",
+                  repoPath: typeof row.repoPath == "string" ? row.repoPath : "",
+                  title: typeof row.title == "string" ? row.title : "Imported Vibe Kanban task",
+                  description: typeof row.description == "string" ? row.description : "",
+                  status: typeof row.status == "string" ? row.status : "todo",
+                  branch: typeof row.branch == "string" ? row.branch : "",
+                  runtimeId: typeof row.runtimeId == "string" ? row.runtimeId : "claude_code",
                   archived: Boolean(row.archived),
                   importable: Boolean(row.importable),
                   imported: Boolean(row.imported),
@@ -424,6 +484,10 @@ class RecoderViewModel implements ViewModel {
     crystalMigrationAtom: PrimitiveAtom<RecoderCrystalMigration>;
     crystalImportingAtom: PrimitiveAtom<boolean>;
     crystalImportStatusAtom: PrimitiveAtom<RecoderCrystalImportStatus>;
+    // Vibe Kanban donor adoption: discovered local tasks plus explicit import UI state.
+    vibeKanbanMigrationAtom: PrimitiveAtom<RecoderVibeKanbanMigration>;
+    vibeKanbanImportingAtom: PrimitiveAtom<boolean>;
+    vibeKanbanImportStatusAtom: PrimitiveAtom<RecoderVibeKanbanImportStatus>;
     // Detected GitHub identity (token-free GET /github/status); null until a
     // successful probe — "unknown", never a fabricated not-connected.
     githubStatusAtom: PrimitiveAtom<RecoderGithubStatus>;
@@ -436,6 +500,7 @@ class RecoderViewModel implements ViewModel {
     // failed/unreachable probe leaves this false so the next poll retries.
     githubLoaded: boolean;
     crystalLoaded: boolean;
+    vibeKanbanLoaded: boolean;
     diffSummariesAtom: PrimitiveAtom<Record<string, RecoderDiffSummary>>;
     // Per-workspace PR chip from GET /workspaces/:id/pr-status (gh-backed). A
     // missing entry means gh couldn't be consulted, the branch has no PR, or the
@@ -625,10 +690,14 @@ class RecoderViewModel implements ViewModel {
         this.crystalMigrationAtom = atom(null) as PrimitiveAtom<RecoderCrystalMigration>;
         this.crystalImportingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.crystalImportStatusAtom = atom(null) as PrimitiveAtom<RecoderCrystalImportStatus>;
+        this.vibeKanbanMigrationAtom = atom(null) as PrimitiveAtom<RecoderVibeKanbanMigration>;
+        this.vibeKanbanImportingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.vibeKanbanImportStatusAtom = atom(null) as PrimitiveAtom<RecoderVibeKanbanImportStatus>;
         this.githubStatusAtom = atom(null) as PrimitiveAtom<RecoderGithubStatus>;
         this.githubReposAtom = atom([]) as PrimitiveAtom<RecoderGithubRepo[]>;
         this.githubLoaded = false;
         this.crystalLoaded = false;
+        this.vibeKanbanLoaded = false;
         this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
         this.prStatusAtom = atom({}) as PrimitiveAtom<Record<string, RecoderPrChip>>;
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
@@ -789,6 +858,7 @@ class RecoderViewModel implements ViewModel {
         this.refreshEnvironment();
         this.refreshGithub();
         this.refreshCrystalMigration();
+        this.refreshVibeKanbanMigration();
     }
 
     // GET /github/status + /github/repos → the GitHub half of the zero-config
@@ -942,6 +1012,67 @@ class RecoderViewModel implements ViewModel {
             return false;
         } finally {
             globalStore.set(this.crystalImportingAtom, false);
+        }
+    }
+
+    // Read Vibe Kanban's local task/worktree catalogue once per app session.
+    // Import forces a refresh so adopted rows disappear from the available
+    // count immediately.
+    async refreshVibeKanbanMigration(force = false) {
+        if (this.vibeKanbanLoaded && !force) return;
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/imports/vibe-kanban`);
+            const body = await res.json();
+            if (!res.ok) return;
+            globalStore.set(this.vibeKanbanMigrationAtom, parseVibeKanbanMigration(body?.data));
+            this.vibeKanbanLoaded = true;
+        } catch {
+            // The board remains fully usable when Vibe Kanban is not installed.
+        }
+    }
+
+    async importVibeKanbanSessions(workspaceIds: readonly string[]): Promise<boolean> {
+        const selected = [...new Set(workspaceIds.map((id) => id.trim()).filter(Boolean))];
+        if (selected.length == 0) return false;
+        globalStore.set(this.vibeKanbanImportingAtom, true);
+        globalStore.set(this.vibeKanbanImportStatusAtom, null);
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/imports/vibe-kanban`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ workspaceIds: selected }),
+            });
+            const body = await res.json().catch(() => null);
+            if (!res.ok || !body?.success) {
+                const reason = readErrorReason(body) || `Vibe Kanban import failed (HTTP ${res.status}).`;
+                globalStore.set(this.vibeKanbanImportStatusAtom, { kind: "error", message: reason });
+                return false;
+            }
+            const imported = Array.isArray(body?.data?.migration?.imported)
+                ? body.data.migration.imported.length
+                : 0;
+            const skipped = Array.isArray(body?.data?.migration?.skipped)
+                ? body.data.migration.skipped.length
+                : 0;
+            const message = imported > 0
+                ? `Imported ${imported} Vibe Kanban task${imported == 1 ? "" : "s"} into Workspaces.`
+                : skipped > 0
+                  ? "Those Vibe Kanban tasks are already imported or no longer available."
+                  : "No Vibe Kanban tasks were imported.";
+            globalStore.set(this.vibeKanbanImportStatusAtom, {
+                kind: imported > 0 ? "success" : "error",
+                message,
+            });
+            await Promise.all([this.refresh(), this.refreshVibeKanbanMigration(true)]);
+            return imported > 0;
+        } catch {
+            globalStore.set(this.vibeKanbanImportStatusAtom, {
+                kind: "error",
+                message: "Vibe Kanban import unavailable — Recoder isn’t reachable.",
+            });
+            return false;
+        } finally {
+            globalStore.set(this.vibeKanbanImportingAtom, false);
         }
     }
 
@@ -2331,11 +2462,14 @@ export {
     RecoderViewModel,
     parseEnvironmentImport,
     parseCrystalMigration,
+    parseVibeKanbanMigration,
     parseReadyIssues,
     type RecoderSetup,
     type RecoderEnvironment,
     type RecoderCrystalCandidate,
     type RecoderCrystalMigration,
+    type RecoderVibeKanbanCandidate,
+    type RecoderVibeKanbanMigration,
     type RecoderReadyIssue,
     type RecoderLaunchResult,
 };

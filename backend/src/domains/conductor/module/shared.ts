@@ -52,6 +52,7 @@ import type { MergeabilityService } from '../services/mergeability.service.js';
 import type { WorktreeStatusService } from '../services/worktree-status.service.js';
 import type { EnvironmentImportService } from '../services/environment-import.js';
 import type { CrystalMigrationService } from '../services/crystal-migration.service.js';
+import type { VibeKanbanMigrationService } from '../services/vibe-kanban-migration.service.js';
 import type { SessionTranscriptService } from '../services/session-transcript.service.js';
 import type { LspDiagnosticsService } from '../services/lsp-diagnostics.service.js';
 import type { ReadinessView } from '../services/readiness.service.js';
@@ -182,6 +183,7 @@ export interface ConductorContext {
   readonly worktreeStatus: WorktreeStatusService;
   readonly environmentImportService: EnvironmentImportService;
   readonly crystalMigrationService: CrystalMigrationService;
+  readonly vibeKanbanMigrationService: VibeKanbanMigrationService;
   readonly sessionTranscriptService: SessionTranscriptService;
   readonly lspDiagnostics: LspDiagnosticsService;
   readonly brain?: ConductorBrainMemory;

@@ -157,6 +157,10 @@ import type {
   CrystalMigrationView,
   CrystalImportResult,
 } from './services/crystal-migration.service.js';
+import type {
+  VibeKanbanMigrationView,
+  VibeKanbanImportResult,
+} from './services/vibe-kanban-migration.service.js';
 import type { TranscriptSearchView, WorkspaceTranscriptView } from './services/session-transcript.service.js';
 import type {
   WorkspaceDiffView,
@@ -741,6 +745,13 @@ export interface ConductorModule {
     sessionIds: readonly string[],
     principal: Principal,
   ): Promise<ConductorWriteResult<CrystalImportResult>>;
+  /** Existing Vibe Kanban tasks/worktrees that can be adopted as native Recoder workspaces. */
+  vibeKanbanMigration(): Promise<VibeKanbanMigrationView>;
+  /** Adopt selected Vibe Kanban worktrees into the canonical Recoder board (GATED). */
+  importVibeKanbanSessions(
+    workspaceIds: readonly string[],
+    principal: Principal,
+  ): Promise<ConductorWriteResult<VibeKanbanImportResult>>;
   /** Bounded search over Claude session transcripts (~/.claude/projects) by message content. */
   searchTranscripts(query: string): Promise<TranscriptSearchView>;
   /**

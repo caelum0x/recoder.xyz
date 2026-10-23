@@ -27,6 +27,8 @@
  *   GET    /api/conductor/environment  first-run import: git identity, agent configs, gh, shell
  *   GET    /api/conductor/imports/crystal  discover adoptable Crystal sessions
  *   POST   /api/conductor/imports/crystal  adopt Crystal worktrees into Recoder (GATED)
+ *   GET    /api/conductor/imports/vibe-kanban  discover adoptable Vibe Kanban tasks/worktrees
+ *   POST   /api/conductor/imports/vibe-kanban  adopt Vibe Kanban worktrees into Recoder (GATED)
  *   GET    /api/conductor/transcript/search?q=  search Claude session transcripts by content
  *   GET    /api/conductor/workspaces/:id/transcript  hydrate this workspace's Claude transcript (available:false when none)
  *   GET    /api/conductor/workspaces/:id/preview-verification  last preview verification summary (404 when unverified)
@@ -736,6 +738,14 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   );
 
   router.get(
+    '/imports/vibe-kanban',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, await module.vibeKanbanMigration());
+    }),
+  );
+
+  router.get(
     '/transcript/search',
     middleware.authenticate,
     asyncHandler(async (req, res) => {
@@ -1266,6 +1276,28 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
         throw createError(ErrorCode.VALIDATION_ERROR, '`sessionIds` must contain a Crystal session id');
       }
       const result = await module.importCrystalSessions(sessionIds, req.principal!);
+      finishWrite(res, result, { statusCode: 201, key: 'migration' });
+    }),
+  );
+
+  router.post(
+    '/imports/vibe-kanban',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const workspaceIds = Array.isArray(body.workspaceIds)
+        ? [...new Set(body.workspaceIds
+            .filter((value): value is string => typeof value === 'string')
+            .map(value => value.trim())
+            .filter(Boolean))]
+        : [];
+      if (workspaceIds.length === 0) {
+        throw createError(
+          ErrorCode.VALIDATION_ERROR,
+          '`workspaceIds` must contain a Vibe Kanban workspace id',
+        );
+      }
+      const result = await module.importVibeKanbanSessions(workspaceIds, req.principal!);
       finishWrite(res, result, { statusCode: 201, key: 'migration' });
     }),
   );

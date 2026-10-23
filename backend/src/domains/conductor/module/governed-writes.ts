@@ -78,6 +78,7 @@ import { attachPullRequestEvidence } from '../services/pr-delivery-evidence.serv
 import { computeWorkspacePort } from '../services/workspace-port.js';
 import type { ReadinessView } from '../services/readiness.service.js';
 import type { CrystalImportResult } from '../services/crystal-migration.service.js';
+import type { VibeKanbanImportResult } from '../services/vibe-kanban-migration.service.js';
 import type { CheckRemediationResult } from '../services/check-run.service.js';
 import { taskGroupOf } from '../services/compare.service.js';
 import type {
@@ -197,6 +198,49 @@ export class ConductorGovernedWrites {
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'Crystal import failed';
       this.ctx.log.error({ err }, 'conductor Crystal import failed');
+      return { ok: false, verdict, reason };
+    }
+  }
+
+  /**
+   * Bring selected Vibe Kanban worktrees under Recoder ownership. Same governance
+   * shape as `importCrystalSessions`: gated as workspace creation, launches no
+   * process, mutates neither Vibe Kanban's SQLite database (opened read-only) nor
+   * its worktrees.
+   */
+  async importVibeKanbanSessions(
+    workspaceIds: readonly string[],
+    principal: Principal,
+  ): Promise<ConductorWriteResult<VibeKanbanImportResult>> {
+    const action = 'workspace.create';
+    const { allowed, verdict } = await guardConductorWrite(
+      this.ctx.gate,
+      action,
+      principal,
+      {
+        target: conductorTarget('global', 'vibe-kanban-import'),
+        metadata: { source: 'vibe_kanban', workspaceCount: workspaceIds.length },
+      },
+    );
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+
+    try {
+      const result = await this.ctx.vibeKanbanMigrationService.importSessions(
+        workspaceIds,
+        principal.userId,
+      );
+      await recordConductorAudit(
+        this.ctx.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          source: 'vibe_kanban',
+          importedWorkspaceIds: result.imported.map(workspace => workspace.workspaceId),
+          skippedCount: result.skipped.length,
+        }),
+      );
+      return { ok: true, verdict, value: result };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'Vibe Kanban import failed';
+      this.ctx.log.error({ err }, 'conductor Vibe Kanban import failed');
       return { ok: false, verdict, reason };
     }
   }

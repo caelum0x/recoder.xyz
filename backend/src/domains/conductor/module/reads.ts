@@ -41,6 +41,7 @@ import { readWorkspacePanes } from '../services/workspace-panes.js';
 import { readRepoConfigFile } from '../services/repo-config-file.js';
 import type { EnvironmentImportView } from '../services/environment-import.js';
 import type { CrystalMigrationView } from '../services/crystal-migration.service.js';
+import type { VibeKanbanMigrationView } from '../services/vibe-kanban-migration.service.js';
 import type {
   TranscriptSearchView,
   WorkspaceTranscriptView,
@@ -513,6 +514,11 @@ export class ConductorReads {
   /** Discover adoptable Crystal worktrees without starting Crystal itself. */
   async crystalMigration(): Promise<CrystalMigrationView> {
     return this.ctx.crystalMigrationService.scan();
+  }
+
+  /** Discover adoptable Vibe Kanban tasks/worktrees without starting Vibe Kanban itself. */
+  async vibeKanbanMigration(): Promise<VibeKanbanMigrationView> {
+    return this.ctx.vibeKanbanMigrationService.scan();
   }
 
   /**

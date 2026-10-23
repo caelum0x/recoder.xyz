@@ -190,6 +190,11 @@ import {
   type CrystalImportResult,
 } from './services/crystal-migration.service.js';
 import {
+  VibeKanbanMigrationService,
+  type VibeKanbanMigrationView,
+  type VibeKanbanImportResult,
+} from './services/vibe-kanban-migration.service.js';
+import {
   SessionTranscriptService,
   type TranscriptSearchView,
   type WorkspaceTranscriptView,
@@ -483,6 +488,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly environmentImportService: EnvironmentImportService;
   /** Read-only Crystal discovery + explicit adoption into native Recoder workspaces. */
   private readonly crystalMigrationService: CrystalMigrationService;
+  /** Read-only Vibe Kanban discovery + explicit adoption into native Recoder workspaces. */
+  private readonly vibeKanbanMigrationService: VibeKanbanMigrationService;
   /** Read-only bounded search over Claude session transcripts (~/.claude/projects). */
   private readonly sessionTranscriptService: SessionTranscriptService;
   private readonly lspDiagnostics: LspDiagnosticsService;
@@ -673,6 +680,10 @@ export class ConductorComposer implements ConductorModule {
     });
     this.deliveryEvidence = deps.deliveryEvidence;
     this.crystalMigrationService = new CrystalMigrationService({
+      repository: this.repository,
+      logger: this.log,
+    });
+    this.vibeKanbanMigrationService = new VibeKanbanMigrationService({
       repository: this.repository,
       logger: this.log,
     });
@@ -949,6 +960,9 @@ export class ConductorComposer implements ConductorModule {
       },
       get crystalMigrationService() {
         return self.crystalMigrationService;
+      },
+      get vibeKanbanMigrationService() {
+        return self.vibeKanbanMigrationService;
       },
       get sessionTranscriptService() {
         return self.sessionTranscriptService;
@@ -1761,6 +1775,17 @@ export class ConductorComposer implements ConductorModule {
     principal: Principal,
   ): Promise<ConductorWriteResult<CrystalImportResult>> {
     return this.writes.importCrystalSessions(sessionIds, principal);
+  }
+
+  async vibeKanbanMigration(): Promise<VibeKanbanMigrationView> {
+    return this.reads.vibeKanbanMigration();
+  }
+
+  async importVibeKanbanSessions(
+    workspaceIds: readonly string[],
+    principal: Principal,
+  ): Promise<ConductorWriteResult<VibeKanbanImportResult>> {
+    return this.writes.importVibeKanbanSessions(workspaceIds, principal);
   }
 
   async searchTranscripts(query: string): Promise<TranscriptSearchView> {
