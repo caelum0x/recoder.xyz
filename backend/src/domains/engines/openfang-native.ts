@@ -51,7 +51,11 @@ export interface OpenfangEngineInstance {
   sessionUsageCost(agentId: string): string;
   listAgentSessions(agentId: string): string;
   // agent lifecycle (writes)
-  runAgent(agentId: string, message: string): string;
+  // `runAgent` runs one real agent-loop turn (seconds to minutes against a live
+  // LLM) — it is a genuine napi `async fn` on the Rust side, so it returns a
+  // real JS Promise. The native addon's own tokio/napi worker pool runs the
+  // turn; THIS Promise does not hold the Node event loop while pending.
+  runAgent(agentId: string, message: string): Promise<string>;
   activateAgent(agentId: string): string;
   stopAgentRun(agentId: string): string;
   killAgent(agentId: string): string;
@@ -71,20 +75,24 @@ export interface OpenfangEngineInstance {
   // sessions + agent config
   createSession(agentId: string, label?: string | null): string;
   switchSession(agentId: string, sessionId: string): string;
-  compactSession(agentId: string): string;
+  // Genuine napi async fn — a context-compaction LLM call, not held on the
+  // Node event loop (see `runAgent` above).
+  compactSession(agentId: string): Promise<string>;
   contextReport(agentId: string): string;
   setAgentMcpServers(agentId: string, servers: string[]): string;
   setAgentToolFilters(agentId: string, allowlist?: string[] | null, blocklist?: string[] | null): string;
   // spawn / verify / extensions / workflows
   spawnAgent(manifestJson: string): string;
   verifySignedManifest(signedJson: string): string;
-  reloadExtensionMcps(): string;
-  reconnectExtensionMcp(id: string): string;
-  loadWorkflowsFromDir(dir: string): string;
+  // Genuine napi async fns below — real network I/O (MCP reconnects) and
+  // potentially multi-turn workflow runs, none of them held on the event loop.
+  reloadExtensionMcps(): Promise<string>;
+  reconnectExtensionMcp(id: string): Promise<string>;
+  loadWorkflowsFromDir(dir: string): Promise<string>;
   // workflows + events + trigger registration (typed inputs as JSON)
-  registerWorkflow(workflowJson: string): string;
-  runWorkflow(workflowId: string, input: string): string;
-  publishEvent(eventJson: string): string;
+  registerWorkflow(workflowJson: string): Promise<string>;
+  runWorkflow(workflowId: string, input: string): Promise<string>;
+  publishEvent(eventJson: string): Promise<string>;
   registerTrigger(agentId: string, patternJson: string, promptTemplate: string, maxFires: number): string;
   // openfang's own per-agent KV memory (NOT Recoder's canonical memory-of-record)
   memoryGet(agentId: string, key: string): string;

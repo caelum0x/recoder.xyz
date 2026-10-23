@@ -80,8 +80,15 @@ const KERNEL_DOWN =
  * The full engine-method dispatch table (the ~51 `#[napi]` methods). `op` is the
  * engine-local method name; each entry coerces the loose `input` into the
  * positional args the native method expects and returns the engine's JSON reply.
+ *
+ * A handful of entries (`runAgent`, `compactSession`, the extension/workflow/event
+ * ops) call genuine napi `async fn`s on the Rust side and so return a `Promise<string>`
+ * instead of a plain `string` — `invoke()` below awaits every entry uniformly so
+ * callers never need to know which ops are async.
  */
-const ENGINE_OPS: Readonly<Record<string, (engine: OpenfangEngineInstance, args: NapiArgs) => string>> = {
+const ENGINE_OPS: Readonly<
+  Record<string, (engine: OpenfangEngineInstance, args: NapiArgs) => string | Promise<string>>
+> = {
   // ---- reads
   health: (e) => e.health(),
   listAgents: (e) => e.listAgents(),
@@ -239,7 +246,9 @@ export class OpenfangNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
     const engine = this.ensureEngine();
     if (!engine) return fail(KERNEL_DOWN, 'ENGINE_DOWN');
     try {
-      return ok(parseJson(fn(engine, input)));
+      // `fn` may be a genuine async napi call (see ENGINE_OPS doc) — `await`
+      // on a plain `string` is a no-op, so this stays correct for every op.
+      return ok(parseJson(await fn(engine, input)));
     } catch (err) {
       // The napi boundary can throw (not just return {ok:false}); fold it into a
       // truthful failure, never propagate across the seam.

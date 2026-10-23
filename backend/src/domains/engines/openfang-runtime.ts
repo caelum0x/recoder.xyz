@@ -15,10 +15,13 @@
  *      minimal manifest (openfang's AgentManifest is fully serde-defaulted;
  *      `workspace` is pointed at the conductor worktree so the agent's file
  *      tools operate inside the isolated worktree).
- *   3. runAgent(agentId, prompt) for the turn. CAVEAT: the napi call is
- *      SYNCHRONOUS AND BLOCKING (Rust `block_on`) — it holds the Node event
- *      loop for the full agent turn. This matches the accepted precedent in
- *      openfang-daemon.ts (runAgent on the Express thread).
+ *   3. runAgent(agentId, prompt) for the turn. `runAgent` is a genuine napi
+ *      `async fn` on the Rust side (openfang-napi/src/lib.rs) — the call
+ *      returns a real Promise and the agent-loop turn runs on the addon's
+ *      own worker pool, so it does NOT hold the Node event loop for the
+ *      full turn. (Previously this used a synchronous `Runtime::block_on`
+ *      that stalled every other `#[napi]` call on this engine handle for
+ *      the turn's whole duration — fixed 2026-10-24.)
  *   4. Emit honest started / log(response) / completed (or failed) RunEvents
  *      through the SAME sink of record the run-tailer uses:
  *      agentOsContainer.repository.appendEvent(withFriendlyMessage(event)).
@@ -429,8 +432,9 @@ export async function launchOpenfangRun(
       agentId = spawned.agent_id;
     }
 
-    // ---- One agent-loop turn. NOTE: synchronous, blocks the event loop (see header).
-    const result = parseEngineJson(engine.runAgent(agentId, input.prompt));
+    // ---- One agent-loop turn. Awaited: the napi call is a genuine async fn
+    // (see header) — it does not block the event loop while the turn runs.
+    const result = parseEngineJson(await engine.runAgent(agentId, input.prompt));
     if (result.ok !== true) {
       const error = typeof result.error === 'string' ? result.error : 'runAgent failed';
       await emit('failed', `openfang runAgent failed: ${error}`, {

@@ -20,9 +20,11 @@
  * a napi throw is folded into the same shape. Callers can always trust the result
  * union, so an unbuilt addon never blocks a control-plane flow.
  *
- * NOTE: the napi calls are SYNCHRONOUS + BLOCKING (Rust `block_on`) exactly like
- * `runAgent` — a `run_workflow` that drives agent turns holds the event loop for
- * its duration. This matches the accepted precedent in openfang-runtime.ts.
+ * `register_workflow`/`run_workflow` are genuine napi `async fn`s (same fix as
+ * `runAgent` in openfang-runtime.ts, 2026-10-24) — a `run_workflow` that drives
+ * several agent turns in sequence runs on the addon's own worker pool and does
+ * NOT hold the Node event loop for its duration. `register`/`run`/`registerAndRun`
+ * below are therefore `async` and must be awaited by callers.
  */
 import { createLogger } from '../../shared/logger.js';
 import { getOpenfangEngine, type OpenfangEngineInstance } from './openfang-native.js';
@@ -55,11 +57,11 @@ export interface OpenfangWorkflowDriver {
   /** Truthful engine readiness (never throws; a boot failure ⇒ false). */
   available(): boolean;
   /** Register a native openfang `Workflow` (JSON). Degrade-safe result union. */
-  register(workflowJson: string): OpenfangWorkflowRegisterResult;
+  register(workflowJson: string): Promise<OpenfangWorkflowRegisterResult>;
   /** Run a registered workflow end-to-end. Degrade-safe result union. */
-  run(workflowId: string, input: string): OpenfangWorkflowRunResult;
+  run(workflowId: string, input: string): Promise<OpenfangWorkflowRunResult>;
   /** One-shot: register then run. Register failure short-circuits (no run attempt). */
-  registerAndRun(workflowJson: string, input: string): OpenfangWorkflowRunResult;
+  registerAndRun(workflowJson: string, input: string): Promise<OpenfangWorkflowRunResult>;
 }
 
 const ENGINE_ABSENT =
@@ -92,14 +94,14 @@ export function createOpenfangWorkflowDriver(
 ): OpenfangWorkflowDriver {
   const resolveEngine = deps.engine ?? getOpenfangEngine;
 
-  function register(workflowJson: string): OpenfangWorkflowRegisterResult {
+  async function register(workflowJson: string): Promise<OpenfangWorkflowRegisterResult> {
     const engine = resolveEngine();
     if (!engine) return { available: false, reason: ENGINE_ABSENT };
     if (typeof engine.registerWorkflow !== 'function') {
       return { available: true, ok: false, error: 'engine lacks registerWorkflow' };
     }
     try {
-      const parsed = parseEngineJson(engine.registerWorkflow(workflowJson));
+      const parsed = parseEngineJson(await engine.registerWorkflow(workflowJson));
       if (parsed.ok === true && typeof parsed.workflow_id === 'string') {
         return { available: true, ok: true, workflowId: parsed.workflow_id };
       }
@@ -110,14 +112,14 @@ export function createOpenfangWorkflowDriver(
     }
   }
 
-  function run(workflowId: string, input: string): OpenfangWorkflowRunResult {
+  async function run(workflowId: string, input: string): Promise<OpenfangWorkflowRunResult> {
     const engine = resolveEngine();
     if (!engine) return { available: false, reason: ENGINE_ABSENT };
     if (typeof engine.runWorkflow !== 'function') {
       return { available: true, ok: false, error: 'engine lacks runWorkflow' };
     }
     try {
-      const parsed = parseEngineJson(engine.runWorkflow(workflowId, input));
+      const parsed = parseEngineJson(await engine.runWorkflow(workflowId, input));
       if (parsed.ok === true && typeof parsed.run_id === 'string') {
         const output = typeof parsed.output === 'string' ? parsed.output : '';
         return { available: true, ok: true, runId: parsed.run_id, output };
@@ -142,8 +144,8 @@ export function createOpenfangWorkflowDriver(
     register,
     run,
 
-    registerAndRun(workflowJson: string, input: string): OpenfangWorkflowRunResult {
-      const registered = register(workflowJson);
+    async registerAndRun(workflowJson: string, input: string): Promise<OpenfangWorkflowRunResult> {
+      const registered = await register(workflowJson);
       if (registered.available === false) return registered;
       if (registered.ok === false) return { available: true, ok: false, error: registered.error };
       return run(registered.workflowId, input);

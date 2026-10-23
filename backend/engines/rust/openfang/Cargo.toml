@@ -35,7 +35,7 @@ rust-version = "1.75"
 
 [workspace.dependencies]
 # NAPI binding (Recoder in-process fusion)
-napi = { version = "3", features = ["napi4"] }
+napi = { version = "3", features = ["napi4", "async"] }
 napi-derive = "3"
 
 # Async runtime

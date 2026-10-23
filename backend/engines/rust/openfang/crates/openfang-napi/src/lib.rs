@@ -107,7 +107,6 @@ fn parse_agent_id(s: &str) -> AgentId {
 #[napi]
 pub struct OpenfangEngine {
     kernel: Arc<OpenFangKernel>,
-    rt: tokio::runtime::Runtime,
 }
 
 #[napi]
@@ -118,11 +117,7 @@ impl OpenfangEngine {
         let path = config_path.map(PathBuf::from);
         let kernel = OpenFangKernel::boot(path.as_deref())
             .map_err(|e| Error::from_reason(format!("openfang kernel boot failed: {e}")))?;
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .map_err(|e| Error::from_reason(format!("tokio runtime init failed: {e}")))?;
-        Ok(OpenfangEngine { kernel: Arc::new(kernel), rt })
+        Ok(OpenfangEngine { kernel: Arc::new(kernel) })
     }
 
     // ---- Health / inventory (reads) ---------------------------------------
@@ -228,11 +223,22 @@ impl OpenfangEngine {
 
     // ---- Agent lifecycle (writes) -----------------------------------------
 
-    /// Send a message to an agent and run one real agent-loop turn (async, blocked on).
+    /// Send a message to an agent and run one real agent-loop turn.
+    ///
+    /// Genuinely async: this is a napi `async fn`, so the call returns a JS
+    /// `Promise` immediately and the agent-loop turn (which can run for
+    /// seconds to minutes against a real LLM) executes on napi's own worker
+    /// pool. The Node.js event loop stays free to service every other IPC
+    /// call — health checks, other agents' reads/writes, UI requests — for
+    /// the whole duration of the run. Previously this blocked the libuv
+    /// thread running this call via a synchronous `Runtime::block_on`, which
+    /// stalled the ENTIRE native-addon boundary (every other `#[napi]`
+    /// method on this engine handle) until the agent turn finished.
     #[napi]
-    pub fn run_agent(&self, agent_id: String, message: String) -> String {
+    pub async fn run_agent(&self, agent_id: String, message: String) -> String {
+        let kernel = self.kernel.clone();
         let aid = parse_agent_id(&agent_id);
-        match self.rt.block_on(self.kernel.send_message(aid, &message)) {
+        match kernel.send_message(aid, &message).await {
             Ok(r) => json!({
                 "ok": true,
                 "agent_id": agent_id,
@@ -384,10 +390,13 @@ impl OpenfangEngine {
         }
     }
 
-    /// Compact an agent's session history (async — blocked on). Returns a summary.
+    /// Compact an agent's session history. A genuine napi `async fn` — the
+    /// summarization LLM call runs off the event loop and returns a real
+    /// JS `Promise`, instead of blocking the whole addon.
     #[napi]
-    pub fn compact_session(&self, agent_id: String) -> String {
-        match self.rt.block_on(self.kernel.compact_agent_session(parse_agent_id(&agent_id))) {
+    pub async fn compact_session(&self, agent_id: String) -> String {
+        let kernel = self.kernel.clone();
+        match kernel.compact_agent_session(parse_agent_id(&agent_id)).await {
             Ok(summary) => json!({ "ok": true, "summary": summary }).to_string(),
             Err(e) => err_json(e),
         }
@@ -448,28 +457,35 @@ impl OpenfangEngine {
 
     // ---- Extensions / MCP reload / workflows ------------------------------
 
-    /// Reload extension MCP servers (async). Returns the count reconnected.
+    /// Reload extension MCP servers. Returns the count reconnected.
+    ///
+    /// Genuine napi `async fn` (see `run_agent` above for why this matters):
+    /// reconnecting MCP servers does real network I/O and must not stall the
+    /// event loop or any other `#[napi]` call on this engine handle.
     #[napi]
-    pub fn reload_extension_mcps(&self) -> String {
-        match self.rt.block_on(self.kernel.reload_extension_mcps()) {
+    pub async fn reload_extension_mcps(&self) -> String {
+        let kernel = self.kernel.clone();
+        match kernel.reload_extension_mcps().await {
             Ok(count) => json!({ "ok": true, "reconnected": count }).to_string(),
             Err(e) => err_json(e),
         }
     }
 
-    /// Reconnect a single extension's MCP server by id (async). Returns the tool count.
+    /// Reconnect a single extension's MCP server by id. Returns the tool count.
     #[napi]
-    pub fn reconnect_extension_mcp(&self, id: String) -> String {
-        match self.rt.block_on(self.kernel.reconnect_extension_mcp(&id)) {
+    pub async fn reconnect_extension_mcp(&self, id: String) -> String {
+        let kernel = self.kernel.clone();
+        match kernel.reconnect_extension_mcp(&id).await {
             Ok(count) => json!({ "ok": true, "tools": count }).to_string(),
             Err(e) => err_json(e),
         }
     }
 
-    /// Load workflow definitions from a directory (async). Returns the count loaded.
+    /// Load workflow definitions from a directory. Returns the count loaded.
     #[napi]
-    pub fn load_workflows_from_dir(&self, dir: String) -> String {
-        let count = self.rt.block_on(self.kernel.load_workflows_from_dir(std::path::Path::new(&dir)));
+    pub async fn load_workflows_from_dir(&self, dir: String) -> String {
+        let kernel = self.kernel.clone();
+        let count = kernel.load_workflows_from_dir(std::path::Path::new(&dir)).await;
         json!({ "ok": true, "loaded": count }).to_string()
     }
 
@@ -477,23 +493,29 @@ impl OpenfangEngine {
 
     /// Register a workflow (JSON matching openfang's Workflow). Returns its id.
     #[napi]
-    pub fn register_workflow(&self, workflow_json: String) -> String {
+    pub async fn register_workflow(&self, workflow_json: String) -> String {
         let workflow: openfang_kernel::workflow::Workflow = match serde_json::from_str(&workflow_json) {
             Ok(w) => w,
             Err(e) => return err_json(format!("invalid workflow json: {e}")),
         };
-        let id = self.rt.block_on(self.kernel.register_workflow(workflow));
+        let kernel = self.kernel.clone();
+        let id = kernel.register_workflow(workflow).await;
         json!({ "ok": true, "workflow_id": id.0.to_string() }).to_string()
     }
 
-    /// Run a registered workflow end-to-end (async). Returns `{ run_id, output }`.
+    /// Run a registered workflow end-to-end. Returns `{ run_id, output }`.
+    ///
+    /// A workflow run can chain several agent-loop turns, so this is exactly
+    /// the kind of long-running call that must not block the addon's event
+    /// loop — hence a genuine napi `async fn`, not `block_on`.
     #[napi]
-    pub fn run_workflow(&self, workflow_id: String, input: String) -> String {
+    pub async fn run_workflow(&self, workflow_id: String, input: String) -> String {
         let wid = match parse_uuid(&workflow_id) {
             Ok(u) => openfang_kernel::workflow::WorkflowId(u),
             Err(e) => return err_json(e),
         };
-        match self.rt.block_on(self.kernel.run_workflow(wid, input)) {
+        let kernel = self.kernel.clone();
+        match kernel.run_workflow(wid, input).await {
             Ok((run_id, output)) => {
                 json!({ "ok": true, "run_id": run_id.0.to_string(), "output": output }).to_string()
             }
@@ -501,15 +523,16 @@ impl OpenfangEngine {
         }
     }
 
-    /// Publish an event (JSON matching openfang's Event) onto the bus (async).
+    /// Publish an event (JSON matching openfang's Event) onto the bus.
     /// Returns the agents whose triggers fired: `[{ agent_id, message }]`.
     #[napi]
-    pub fn publish_event(&self, event_json: String) -> String {
+    pub async fn publish_event(&self, event_json: String) -> String {
         let event: openfang_types::event::Event = match serde_json::from_str(&event_json) {
             Ok(ev) => ev,
             Err(e) => return err_json(format!("invalid event json: {e}")),
         };
-        let dispatched = self.rt.block_on(self.kernel.publish_event(event));
+        let kernel = self.kernel.clone();
+        let dispatched = kernel.publish_event(event).await;
         let fired: Vec<Value> = dispatched
             .into_iter()
             .map(|(agent_id, message)| json!({ "agent_id": agent_id.to_string(), "message": message }))
