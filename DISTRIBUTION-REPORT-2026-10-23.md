@@ -5,7 +5,7 @@ _Generated 2026-10-23_
 Launch tracking started 0 day(s) ago.
 
 ## Directories
-- 2/24 submitted or live, 22 not started.
+- 3/24 submitted or live, 21 not started.
 
 ## Checklist
 - 1/10 of the 10-step playbook done.
@@ -35,13 +35,28 @@ pitch -- the homepage is NOT the problem; distribution is.
 - GitHub awesome-lists, real open PRs from caelum0x (not yet merged):
   - https://github.com/devtoolsd/awesome-devtools/pull/450 (AI Coding Tools)
   - https://github.com/e2b-dev/awesome-ai-agents/pull/1789 (commercial AI agents list)
+- **SaaSHub (saashub.com/services/submit): a real, complete, free submission.**
+  A follow-up session fixed the headless Chromium install (a stale Playwright
+  lockfile from the earlier stalled download) and drove the actual page with a
+  real browser: filled the URL, let it auto-crawl name/tagline, selected 3
+  categories (AI Coding Assistant, AI Developer Tools, Productivity Tools)
+  through the live React category picker, added 3 real competitors (OpenGUI,
+  CodeMote, Jackalope) and 6 relevant categories, and submitted on the Free
+  tier. Confirmed via the site's own success page: "Recoder was submitted
+  successfully" at https://www.saashub.com/recoder/added. Pending moderator
+  approval; claiming/managing the listing needs an owner login (same pattern
+  as Uneed).
 
 **Investigated and genuinely blocked (not faked):**
-- SaaSHub (saashub.com/submit): same product applies across all 4 products in
-  this wave -- the real submission flow needs a client-side React category
-  picker (confirmed its backing API, `/api/autocomplete/categories`) that a
-  plain HTTP POST cannot drive without executing page JS. A local headless
-  Chromium install was attempted this session and the download stalled.
+- SaaSHub for the other 3 products in this wave (VCPeer, Menivor, Scribase):
+  SaaSHub enforces a real anti-abuse limit -- "Please register to submit more
+  than one product" -- confirmed live by attempting a second anonymous
+  submission from the same session, which the site genuinely blocks (no
+  crawl, no form, stuck on the rules page). Recoder used the one free
+  anonymous slot available per session; the other 3 need an owner SaaSHub
+  account to submit further products. This is a real product limit, not a
+  technical gap -- the category picker itself is provably drivable by a real
+  browser now.
 - Reddit pain-point search (`launchmaxxing pain-points`): Reddit's
   search.json endpoints returned HTTP 403 "Blocked" to every request from
   this machine's network -- a network-level block, not a tool bug. No
