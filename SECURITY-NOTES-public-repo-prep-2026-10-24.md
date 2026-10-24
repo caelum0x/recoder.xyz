@@ -20,18 +20,20 @@ repo's history.**
 
 Real-shaped secrets found in the original commit (`303b90738f:UNIFIED_AUTH_CONFIG.env`):
 
-| Variable | Value (truncated) | Risk |
+| Variable | Value (redacted — full value found in git history, not reproduced here) | Risk |
 |---|---|---|
-| `NEXTAUTH_SECRET` | `fb43a832342cc76463...` (64-char hex) | Session/JWT signing — anyone with this can forge auth sessions |
-| `UNIFIED_AUTH_SECRET` | `85ef1e2666dd48066531...` (64-char hex) | Cross-platform auth signing |
-| `JWT_SECRET` | `ba959c3136d45da50e8e...` (64-char hex) | JWT signing (also reused as `API_ENCRYPTION_KEY` — see below) |
-| `SESSION_SYNC_SECRET` | `c9e4a7b8d2f5e3c1a6b9...` (64-char hex) | Cross-platform session sync |
-| `GOOGLE_CLIENT_SECRET` | `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` | Real Google OAuth client secret format (`GOCSPX-` prefix). Paired with `GOOGLE_CLIENT_ID=716966330476-q7khujpttocjrgl3qils6b5aegef93jj.apps.googleusercontent.com` |
-| `GITHUB_SECRET` | `b2d4c3f82e4a9b7a6d5e8f9c1a2b3d4e5f6a7b8c` | GitHub OAuth App secret, paired with `GITHUB_ID="Ov23liaX8cGXq7VGX3bP"` |
-| `DATABASE_URL` / `DIRECT_URL` / `POSTGRES_URL` | `postgresql://neondb_owner:npg_LDgwo1PRFh2J@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?...` | Full Neon Postgres connection string with real-shaped password (`npg_` prefix is Neon's real password format) |
-| `DODO_PAYMENTS_API_KEY` | `walGG6HxdNDTWvKX.Ib9syRwCL1NFzXZyM2leDRKHQC_9Ra35DKHu1mMAFqX8l` | Real-shaped Dodo Payments API key |
-| `API_ENCRYPTION_KEY` | same hex as `JWT_SECRET` above | API auth |
-| `RECODER_API_KEY` | `recoder_sk_live_9f8e7d6c5b4a3928374655647382910` | Internal API key, `_live_` in the name |
+| `NEXTAUTH_SECRET` | `[REDACTED, 64-char hex]` | Session/JWT signing — anyone with this can forge auth sessions |
+| `UNIFIED_AUTH_SECRET` | `[REDACTED, 64-char hex]` | Cross-platform auth signing |
+| `JWT_SECRET` | `[REDACTED, 64-char hex]` | JWT signing (also reused as `API_ENCRYPTION_KEY` — see below) |
+| `SESSION_SYNC_SECRET` | `[REDACTED, 64-char hex]` | Cross-platform session sync |
+| `GOOGLE_CLIENT_SECRET` | `GOCSPX-[REDACTED]` | Real Google OAuth client secret format (`GOCSPX-` prefix). Paired with client ID `716966330476-q7kh...apps.googleusercontent.com` (client IDs are not secret) |
+| `GITHUB_SECRET` | `[REDACTED, 40-char hex]` | GitHub OAuth App secret, paired with `GITHUB_ID="Ov23liaX8cGXq7VGX3bP"` (app IDs are not secret) |
+| `DATABASE_URL` / `DIRECT_URL` / `POSTGRES_URL` | `postgresql://neondb_owner:npg_[REDACTED]@ep-rapid-queen-abgrjesz-pooler.eu-west-2.aws.neon.tech/neondb?...` | Full Neon Postgres connection string with real-shaped password (`npg_` prefix is Neon's real password format) |
+| `DODO_PAYMENTS_API_KEY` | `[REDACTED]` | Real-shaped Dodo Payments API key |
+| `API_ENCRYPTION_KEY` | same value as `JWT_SECRET` above, redacted | API auth |
+| `RECODER_API_KEY` | `recoder_sk_live_[REDACTED]` | Internal API key, `_live_` in the name |
+
+**Redaction note (2026-10-24, later pass):** the first version of this file reproduced several of the above values in full (not actually truncated despite the column header), which handed GitGuardian a *fresh, current, easily-scraped* copy of live-shaped secrets in HEAD — worse than the original problem of them being buried in old deleted-file history. This revision strips the actual values. The original full values are still recoverable from this file's own git history (`303b90738f` etc. for the original leak, and this file's first commit `43ee0b62b3` for the re-exposure) — rotation is the only real fix, not redaction after the fact.
 
 **Why I believe this may still be live, not just historical noise:** `plans/recoder.md`
 (line 9, dated 2026-10-21) independently documents that the live production box
