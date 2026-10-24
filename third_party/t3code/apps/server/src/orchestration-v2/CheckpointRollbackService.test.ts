@@ -26,17 +26,37 @@ import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import type { ProviderAdapterV2RollbackThreadInput } from "./ProviderAdapter.ts";
 import * as ProviderSessionManager from "./ProviderSessionManager.ts";
+import * as RecoderWriteGate from "./RecoderWriteGate.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
 
 // A root that does not exist never overlaps, so other owners decide isolation.
 const unrelatedProject = Option.some({
   workspaceRoot: "/nonexistent/t3-rollback-project",
 } as never);
+
+/**
+ * This file tests rollback execution, not the Recoder write gate itself
+ * (RecoderWriteGate.ts owns that contract) — an always-allow decider keeps
+ * every pre-existing "does the rollback actually run" assertion below from
+ * making a real loopback HTTP call to an unrunning backend, same pattern
+ * `git/linkCreatedPullRequest.test.ts` already uses for the `pr.link` gate.
+ */
+const alwaysAllowWriteGate: Layer.Layer<never> = Layer.succeed(
+  RecoderWriteGate.RecoderWriteGateDeciderRef,
+  () => Effect.succeed({ allowed: true, reason: "test-allow", tier: undefined, degraded: false }),
+);
 const layerCheckpointRollbackService = CheckpointRollbackService.layer.pipe(
-  Layer.provide(
+  // `provideMerge`, not `provide`: the write-gate override must still be
+  // present in the context the later `execute()` call resolves
+  // `RecoderWriteGateDeciderRef` from (a plain `provide` would satisfy the
+  // layer's own build-time deps with it and then drop it, since the
+  // `CheckpointRollbackServiceV2` service type itself never declares the
+  // Reference as part of its `R`).
+  Layer.provideMerge(
     Layer.mergeAll(
       NodeServices.layer,
       Layer.mock(ProjectStore.ProjectStoreV2)({ get: () => Effect.succeed(unrelatedProject) }),
+      alwaysAllowWriteGate,
     ),
   ),
 );
@@ -468,6 +488,101 @@ it.effect.each([
     );
   }).pipe(Effect.provide(layerTest));
 });
+
+it.effect(
+  "denies a checkpoint rollback when the Recoder write gate rejects it, before any session or file side effect",
+  () => {
+    const threadId = ThreadId.make("thread:rollback-write-gate-denied");
+    const providerThreadId = ProviderThreadId.make("provider-thread:rollback-write-gate-denied");
+    const providerSessionId = ProviderSessionId.make("provider-session:rollback-write-gate-denied");
+    const checkpointId = CheckpointId.make("checkpoint:rollback-write-gate-denied");
+    const scopeId = CheckpointScopeId.make("checkpoint-scope:rollback-write-gate-denied");
+    const providerInstanceId = ProviderInstanceId.make("provider_rollback_write_gate_denied");
+    const restore = vi.fn(() =>
+      Effect.die("checkpoint restore must not run when the write gate denies"),
+    );
+    const open = vi.fn(() =>
+      Effect.die("provider session open must not run when the write gate denies"),
+    );
+    const resolveRuntimePolicy = vi.fn(() =>
+      Effect.die("runtime policy resolution must not run when the write gate denies"),
+    );
+    const projection = {
+      thread: {
+        worktreePath: process.cwd(),
+        activeProviderThreadId: providerThreadId,
+        modelSelection: { instanceId: providerInstanceId, model: "test-model" },
+      },
+      providerThreads: [{ id: providerThreadId, providerSessionId, providerInstanceId }],
+      checkpoints: [{ id: checkpointId, scopeId, status: "ready", appRunOrdinal: 0 }],
+      checkpointScopes: [{ id: scopeId, cwd: process.cwd() }],
+      runs: [],
+    } as unknown as OrchestrationV2ThreadProjection;
+    const denyWriteGate: Layer.Layer<never> = Layer.succeed(
+      RecoderWriteGate.RecoderWriteGateDeciderRef,
+      () =>
+        Effect.succeed({
+          allowed: false,
+          reason: "checkpoint reverts require a human on this project",
+          tier: "high",
+          degraded: false,
+        }),
+    );
+    // Same `provideMerge` requirement as `layerCheckpointRollbackService`
+    // above: a plain `provide` would satisfy the layer's build-time deps
+    // with the deny decider and then drop it before `execute()` ever runs.
+    const layerWriteGateDenied = CheckpointRollbackService.layer.pipe(
+      Layer.provideMerge(
+        Layer.mergeAll(
+          NodeServices.layer,
+          Layer.mock(ProjectStore.ProjectStoreV2)({ get: () => Effect.succeed(unrelatedProject) }),
+          denyWriteGate,
+        ),
+      ),
+    );
+    const layerTest = layerWriteGateDenied.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(CheckpointService.CheckpointServiceV2)({ restore }),
+          Layer.mock(EventSink.EventSinkV2)({}),
+          IdAllocator.layer,
+          Layer.mock(ProjectionStore.ProjectionStoreV2)({
+            getThreadRecords: () => Effect.succeed(projection),
+            getShellSnapshot: () =>
+              Effect.succeed({
+                schemaVersion: 1,
+                snapshotSequence: 0,
+                threads: [],
+                archivedThreads: [],
+              }),
+          }),
+          Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({ open }),
+          Layer.mock(RuntimePolicy.RuntimePolicyV2)({ resolve: resolveRuntimePolicy }),
+        ),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const service = yield* CheckpointRollbackService.CheckpointRollbackServiceV2;
+      const error = yield* service
+        .execute({ threadId, providerThreadId, checkpointId, scopeId, restoreFiles: false })
+        .pipe(Effect.flip);
+
+      assert.equal(error.reason, "write-gate-denied");
+      assert.equal(
+        error.message,
+        `Checkpoint rollback to ${checkpointId} on thread ${threadId} was denied by the Recoder write gate.`,
+      );
+      assert.equal(
+        (error.cause as RecoderWriteGate.RecoderWriteGateDeniedError).reason,
+        "checkpoint reverts require a human on this project",
+      );
+      assert.equal(resolveRuntimePolicy.mock.calls.length, 0);
+      assert.equal(open.mock.calls.length, 0);
+      assert.equal(restore.mock.calls.length, 0);
+    }).pipe(Effect.provide(layerTest));
+  },
+);
 
 it.effect.skipIf(!symlinksSupported)(
   "rejects an archived thread sharing a worktree through a symlink",

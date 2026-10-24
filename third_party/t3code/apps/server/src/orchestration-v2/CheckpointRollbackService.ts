@@ -25,6 +25,7 @@ import { ProjectionStoreV2 } from "./ProjectionStore.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import type { ProviderAdapterV2RollbackTarget } from "./ProviderAdapter.ts";
 import { ProviderSessionManagerV2 } from "./ProviderSessionManager.ts";
+import * as RecoderWriteGate from "./RecoderWriteGate.ts";
 import { RuntimePolicyV2 } from "./RuntimePolicy.ts";
 
 export const ROLLBACK_FAILED_MESSAGE =
@@ -39,6 +40,7 @@ export class CheckpointRollbackExecutionError extends Schema.TaggedError<Checkpo
       "provider-turn-unavailable",
       "unexpected-failure",
       "shared-workspace",
+      "write-gate-denied",
     ]),
     threadId: ThreadId,
     providerThreadId: ProviderThreadId,
@@ -56,6 +58,8 @@ export class CheckpointRollbackExecutionError extends Schema.TaggedError<Checkpo
         return `Provider turn for rollback target ${this.checkpointId} is unavailable on provider thread ${this.providerThreadId}.`;
       case "shared-workspace":
         return SHARED_WORKSPACE_RESTORE_MESSAGE;
+      case "write-gate-denied":
+        return `Checkpoint rollback to ${this.checkpointId} on thread ${this.threadId} was denied by the Recoder write gate.`;
       case "unexpected-failure":
         return ROLLBACK_FAILED_MESSAGE;
     }
@@ -171,6 +175,33 @@ export const layer: Layer.Layer<
           checkpointId: input.checkpointId,
         });
       }
+
+      // Governance seam (docs/T3CODE-FORK.md patch-queue #2): a checkpoint
+      // revert rewinds the provider conversation and (unless restoreFiles is
+      // explicitly false) the worktree's files — it is a real write/undo on
+      // the write-capable surface apps/server owns, so it must clear the
+      // Recoder backend's write gate over loopback BEFORE either the
+      // provider rollback or the file restore runs. Same fail-closed
+      // contract as every other gate in this repo; see RecoderWriteGate.ts.
+      yield* RecoderWriteGate.requireRecoderWriteApproval({
+        actorId: `t3-thread-${input.threadId}`,
+        action: "checkpoint.revert",
+        target: `checkpoint:${checkpoint.id} scope:${scope.id}${
+          input.restoreFiles === false ? " (conversation only)" : " (restores files)"
+        }`,
+        taskId: input.threadId,
+      }).pipe(
+        Effect.mapError(
+          (denial) =>
+            new CheckpointRollbackExecutionError({
+              reason: "write-gate-denied",
+              threadId: input.threadId,
+              providerThreadId: input.providerThreadId,
+              checkpointId: input.checkpointId,
+              cause: denial,
+            }),
+        ),
+      );
 
       const modelSelection = projection.thread.modelSelection;
       const resolvedRuntimePolicy = yield* runtimePolicy.resolve({
