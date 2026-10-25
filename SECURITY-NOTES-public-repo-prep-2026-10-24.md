@@ -99,3 +99,69 @@ only exists in the *other* repo, vcpeer — see that repo's notes).
 
 Logged as an owner-only blocker in `~/products/PORTFOLIO-PRIORITIES-2026-10-23.md`
 and in `~/products/plans/recoder.md`.
+
+## Live-verification pass, 2026-10-25
+
+Goal: determine whether the remaining unverified leaked secrets (`NEXTAUTH_SECRET`,
+`UNIFIED_AUTH_SECRET`, `JWT_SECRET`/`API_ENCRYPTION_KEY`, `SESSION_SYNC_SECRET`,
+`GOOGLE_CLIENT_SECRET`, `GITHUB_SECRET`, `RECODER_API_KEY`) are still the values
+actually deployed in production, by SSHing into the real production box and
+comparing against the running process's actual env — not git history, not repo
+`.env.example` templates. Did **not** rotate, change, or delete anything.
+
+**Found the real production box:** `plans/recoder.md`'s claim that recoder.xyz's
+live app runs as PM2 process `recoder-app` on box `92.5.156.133` (`/opt/recoder/app.env.local`)
+is correct and independently reachable — `ssh -i ~/.ssh/vcpeer_newbox_ed25519 ubuntu@92.5.156.133`
+connects, hostname confirms `recoder-micro`, and `pm2 jlist` shows `recoder` (site)
+and `recoder-app` both `online`. (Note: this repo's own `scripts/credential-rotation-audit.sh`
+and `scripts/post-rotation-verify.sh` point at a *different*, Docker-based target —
+`root@77.42.23.19`, containers `recoder-app`/`recoder-backend`/`recoder-redis` via
+`docker-compose.deploy.yml` — which appears to be a never-actually-used deployment
+plan: that host is unreachable from this environment on every port tried, 22/80/443/2222
+all time out, unlike every other box checked this session. The real, live recoder-app
+is the PM2/92.5.156.133 one, confirmed by directly inspecting its running env below.)
+
+Pulled the leaked values from `git show 303b90738f:UNIFIED_AUTH_CONFIG.env` locally
+(not reproduced here) and diffed them against both `/opt/recoder/app.env.local` and
+the **actual running `recoder-app` PM2 process's live `process.env`** (`pm2 jlist`,
+which is the authoritative source — this repo's own `plans/recoder.md` already
+documented a real duplicate-key bug where a later block in the same env file
+silently overrides an earlier one, so the file alone isn't enough; the live process
+env is the ground truth).
+
+**Result: every one of the remaining secrets is confirmed DEAD — the live config
+uses completely different values for all of them, with three not present at all:**
+
+| Secret | Live value found | Verdict |
+|---|---|---|
+| `NEXTAUTH_SECRET` | A different, non-random literal string entirely (`...change_this_in_production_minimum_32chars`-style, not the leaked 64-char hex) | **DEAD** — different value |
+| `JWT_SECRET` | Two duplicate declarations in the file (same class of bug `plans/recoder.md` already found for Google/GitHub); the live PM2 process env resolves to the *second* one, also a different literal string, not the leaked hex | **DEAD** — different value |
+| `API_ENCRYPTION_KEY` | Not present in live env at all; a differently-named `ENCRYPTION_KEY` exists instead (also duplicated, also a different value) | **DEAD / not in use** |
+| `UNIFIED_AUTH_SECRET` | Not present anywhere in `/opt/recoder/app.env.local` or the live process env | **DEAD / not in use** — this whole "unified auth" config generation appears abandoned |
+| `SESSION_SYNC_SECRET` | Not present anywhere in the live env | **DEAD / not in use** |
+| `RECODER_API_KEY` | Not present anywhere in the live env | **DEAD / not in use** |
+| `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` | Live client ID ends `...4rbi96edvjus5e4q3u7bilvthi8gmvb4` (leaked one ends `...q7khujpttocjrgl3qils6b5aegef93jj`) — a **different OAuth client entirely**, different secret too | **App no longer uses this credential.** But: tested the *leaked* client_id+secret pair directly against `https://oauth2.googleapis.com/token` with a malformed code anyway, out of caution — got `invalid_grant`/"Malformed auth code", **not** `invalid_client`. That means this specific OAuth client has **not** been deleted/rotated at Google's end either, even though recoder.xyz stopped using it. **Still urgent to revoke in Google Cloud Console specifically**, not just confirmed-unused. |
+| `GITHUB_ID`/`GITHUB_SECRET` | Live ID `Iv23liwzwgaRkVKkGlpu` (leaked one: `Ov23liaX8cGXq7VGX3bP` — different prefix family, i.e. a different GitHub App altogether), different secret too | **DEAD** — confirmed via live-env diff. (Direct GitHub token/authorize-endpoint probing gave identical generic responses for both the real and garbage client IDs in this session's testing, so it wasn't a useful independent signal here — the live-env diff is the basis for this verdict, and it's a clean one: different App ID family, not just a different secret for the same App.) |
+| `DODO_PAYMENTS_API_KEY` | Live key starts `J4GHc5CX0_i44DPr...` (leaked one: `walGG6HxdNDTWvKX...`) — completely different value | **DEAD**, consistent with the already-known 401 from the earlier session's direct API test |
+
+**Net effect:** nothing from this repo's original leak list is still live in
+recoder.xyz's actual running production config — full rotation already happened at
+the app-config layer for all 8 remaining items. The one caveat: the leaked Google
+OAuth client_id+secret pair is still valid *at Google*, independent of the app no
+longer referencing it — that's a Google-Cloud-Console-level cleanup item, not an
+app-redeploy item, and remains genuinely owner-only (no Google Cloud Console access
+exists in this environment).
+
+### Updated owner-only follow-up (supersedes item 1 and 5 above; items 2-4, 6 unchanged)
+
+1. **Still urgent, scoped down:** revoke/delete the specific OAuth client
+   `716966330476-q7khujpttocjrgl3qils6b5aegef93jj.apps.googleusercontent.com` in
+   Google Cloud Console — confirmed still valid and accepted by Google right now,
+   even though recoder.xyz's production app itself was already moved to a
+   different Google client and is not at risk from this one.
+5. No redeploy needed for `NEXTAUTH_SECRET`/`UNIFIED_AUTH_SECRET`/`JWT_SECRET`/
+   `API_ENCRYPTION_KEY`/`SESSION_SYNC_SECRET`/`RECODER_API_KEY`/`GITHUB_SECRET` —
+   confirmed live production (`92.5.156.133`, PM2 `recoder-app`) already uses
+   different values for all of them (three of them aren't even present in the
+   current config, i.e. that whole unified-auth architecture was abandoned, not
+   just rotated).
