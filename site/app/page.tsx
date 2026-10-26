@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Nav, Footer, DownloadButton } from "@/components/site";
+import {
+  Nav,
+  Footer,
+  DownloadButton,
+  SecondaryButton,
+  PUBLIC_GITHUB_URL,
+} from "@/components/site";
 import { CliCommand } from "@/components/cli-command";
 import {
   readPublicProofSummary,
@@ -53,8 +59,15 @@ function Hero() {
             next decade of coding happens in the terminal — Recoder is the IDE
             for it.
           </p>
-          <div className="mt-8 flex items-center justify-center gap-5">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <DownloadButton className="px-6 py-3 text-[15px]" />
+            {PUBLIC_GITHUB_URL && (
+              <SecondaryButton
+                href={PUBLIC_GITHUB_URL}
+                label="View on GitHub"
+                className="px-6 py-3 text-[15px]"
+              />
+            )}
             <Link
               href="/#how"
               className="text-sm text-muted transition-colors hover:text-fg"

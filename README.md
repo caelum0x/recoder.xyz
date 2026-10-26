@@ -58,16 +58,22 @@ npx recoder-code@latest parallel-finish                  # finish parallel mode 
 
 Every command above is verified against the live, published package (`npx recoder-code@latest --help`); see **[recoder.xyz/docs/cli](https://recoder.xyz/docs/cli)** for the full, current command reference.
 
-## Plans
+## Pricing
 
-| Plan | Price | For |
-|---|---|---|
-| **Free** | $0 | Try the full loop with a capped monthly allowance |
-| **Pro** | $29 / month ($290 / year) | Higher quotas, hosted model access, per-developer |
-| **Team** | $99 / month | Team features on top of Pro |
-| **Enterprise** | custom | Negotiated — SSO, isolation, support |
+Recoder is **free, with no paid tiers**. Download it, point it at your own model keys (BYOK) or local models, and run the full parallel-agent → converge → governed-merge loop with no account, no quota, and no checkout.
 
-Billing runs through **Dodo Payments** (Merchant of Record). See **[recoder.xyz/pricing](https://recoder.xyz/pricing)** for current tiers.
+## Build it yourself
+
+Everything here is real, buildable source — not a teaser for a hosted product.
+
+```bash
+git clone https://github.com/caelum0x/recoder.xyz.git
+cd recoder.xyz
+pnpm install
+pnpm run build:recoder:desktop:app   # builds the Electron desktop app (apps/desktop/app)
+```
+
+For the full native-engine build (Rust/Go/Python pieces, Loom, tmux, the embedded backend) see `pnpm run build:recoder:product` and **[docs/SELF-HOST.md](docs/SELF-HOST.md)** for running the whole control plane (Postgres, governance, memory) on your own box with one `docker compose` command.
 
 ## Documentation
 
@@ -89,7 +95,7 @@ Recoder is a real, actively-developed product: the full run → converge → gov
 
 ## License & attribution
 
-© 2026 Recoder. All rights reserved. Recoder builds on excellent open-source projects (including a fork of Wave Terminal and other vendored engines); their upstream licenses and attributions are retained in-tree.
+MIT — see [LICENSE](LICENSE). Recoder builds on excellent open-source projects (including a fork of Wave Terminal and other vendored engines); their upstream licenses and attributions are retained in-tree and recorded in [NOTICE](NOTICE).
 
 ---
 

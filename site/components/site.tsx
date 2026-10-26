@@ -3,15 +3,13 @@ import Image from "next/image";
 import { releasesArePublic } from "@/lib/releases";
 
 /**
- * Public GitHub URL. The main desktop-app source repo is private today, so
- * this defaults to the public recoder-code CLI companion repo (verified live
- * at github.com/recoderxyz/recoder-code) rather than a repo that would 404.
- * Override with NEXT_PUBLIC_GITHUB_URL once the main repo (or a fuller public
- * mirror) opens.
+ * Public GitHub URL — the main monorepo (caelum0x/recoder.xyz), made public
+ * 2026-10-27. Override with NEXT_PUBLIC_GITHUB_URL if a fuller public mirror
+ * ever replaces this as the canonical link.
  */
 export const PUBLIC_GITHUB_URL =
   process.env.NEXT_PUBLIC_GITHUB_URL?.trim() ||
-  "https://github.com/recoderxyz/recoder-code";
+  "https://github.com/caelum0x/recoder.xyz";
 
 /** Public X/Twitter profile — verified live at x.com/recoderxyz. */
 export const PUBLIC_X_URL =
@@ -173,6 +171,13 @@ export function Nav() {
         </div>
         <div className="flex items-center gap-3">
           <MoreMenu />
+          {PUBLIC_GITHUB_URL && (
+            <SecondaryButton
+              href={PUBLIC_GITHUB_URL}
+              label="GitHub"
+              className="hidden sm:inline-flex"
+            />
+          )}
           <DownloadButton />
         </div>
       </nav>
