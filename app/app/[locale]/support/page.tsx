@@ -75,11 +75,11 @@ export default function SupportPage() {
     },
     {
       question: 'How does billing work?',
-      answer: 'We offer a free tier with 6 requests/day. Pro plan ($29/month) includes unlimited requests. Enterprise plans start at $99/month with custom features.'
+      answer: 'Recoder is free — there are no paid plans. Every account gets unlimited requests.'
     },
     {
       question: 'Can I use my own API keys?',
-      answer: 'Yes! Pro and Enterprise users can bring their own OpenRouter API keys for unlimited usage without going through our quota system.'
+      answer: 'Yes! Bring your own OpenRouter (or any provider) API keys for unlimited usage without going through our quota system — available to everyone, not just a paid tier.'
     },
     {
       question: 'Is my code and data secure?',

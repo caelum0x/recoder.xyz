@@ -149,10 +149,14 @@ export function isActiveSubscriptionStatus(status: string | null | undefined): b
  * enforcement gate — plan-limits, usage, sessions — degrades a cancelled/lapsed
  * customer to free instead of trusting a stale paid plan field. (recoder-5ypw)
  */
-export function effectivePlanForLimits(user: EntitlementUserLike | null | undefined): string {
-  return isActiveSubscriptionStatus(user?.subscriptionStatus)
-    ? user?.subscriptionPlan ?? 'free'
-    : 'free';
+export function effectivePlanForLimits(_user: EntitlementUserLike | null | undefined): string {
+  // Owner decision 2026-10-27: Recoder's hosted paid tiers are retired — the
+  // product is completely free. Every caller of this function (plan-limits,
+  // usage-service, session-management) now resolves to 'enterprise' so every
+  // quota/limit table treats every user as already on the top tier, instead
+  // of degrading a cancelled/absent subscription to 'free'. See
+  // resolveEntitlements below for the matching change.
+  return 'enterprise';
 }
 
 /**
@@ -167,17 +171,22 @@ export function resolveEntitlements(
 ): ResolvedEntitlements {
   const plan = normalizePlanId(subscription?.planId ?? user?.subscriptionPlan);
 
-  // Fail-safe: an absent/blank status must NOT be treated as active — that would
-  // grant a stale paid `subscriptionPlan` its features with no proven active
-  // subscription. Default to 'inactive' so grantedPlan degrades to free unless a
-  // real active/trialing status is present. (recoder-y8gb)
   const rawStatus = subscription?.status ?? user?.subscriptionStatus;
   const status =
     typeof rawStatus === 'string' && rawStatus.trim() !== ''
       ? rawStatus.trim().toLowerCase()
       : 'inactive';
 
-  const grantedPlan: PlanId = ACTIVE_STATUSES.has(status) ? plan : 'free';
+  // Owner decision 2026-10-27: Recoder's hosted paid tiers are retired — the
+  // product is completely free. Every subject is always granted the top
+  // tier's feature set ('enterprise': unlimited parallel agents, shared team
+  // memory, etc. — see PLAN_ENTITLEMENTS above), regardless of subscription
+  // plan/status. `plan`/`status` are still reported truthfully (so the UI can
+  // show what a user is nominally on) — only the GRANTED features are always
+  // the top tier now. Previously: `grantedPlan` degraded to 'free' unless
+  // `status` was active/trialing (recoder-y8gb's fail-safe, no longer needed
+  // now that there is nothing paid to fail safe against).
+  const grantedPlan: PlanId = 'enterprise';
 
   return {
     plan,

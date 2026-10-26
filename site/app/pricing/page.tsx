@@ -5,41 +5,25 @@ import { Nav, Footer } from "@/components/site";
 export const metadata: Metadata = {
   title: "Recoder pricing",
   description:
-    "Compare Recoder's Free, Pro ($29/month), Team ($99/month), and Enterprise plans for local and shared AI coding-agent orchestration.",
+    "Recoder is free — the desktop console for running Claude Code, Codex, pi, open-agents, and opencode in parallel. No paid tiers.",
   alternates: { canonical: "https://recoder.xyz/pricing" },
 };
 
 /**
- * Subscribe CTA targets. Paid checkout is fulfilled by Dodo Payments, the
- * Merchant of Record (legal seller, tax + invoicing) — see
- * plans/recoder-connect.md ("Dodo only going forward; no Creem left"). The
- * exact hosted-checkout URLs are environment-driven; when unset the CTA
- * routes through the account signup + subscribe flow on recoder.xyz/auth —
- * never a dead or fake button.
+ * Owner decision 2026-10-27: Recoder's hosted paid tiers (Pro $29/mo, Team
+ * $99/mo, Enterprise custom — all sold via Dodo Payments) are retired. The
+ * product is completely free. This page used to render a 4-tier comparison
+ * grid with Dodo-checkout CTAs; it is now a single free tier. See git
+ * history (pre-2026-10-27) for the removed Pro/Team/Enterprise tiers and
+ * Dodo checkout-URL wiring.
  */
-// Paid checkout is fulfilled by Dodo Payments, the Merchant of Record. When a
-// Dodo hosted-checkout URL is configured we link straight to it; otherwise the
-// CTA is a real "Get <plan>" that routes through the account signup + subscribe
-// flow on recoder.xyz/auth (never a dead button, never a bare waitlist).
-const DODO_PRO_CHECKOUT = process.env.NEXT_PUBLIC_DODO_PRO_CHECKOUT_URL?.trim();
-const DODO_TEAM_CHECKOUT = process.env.NEXT_PUBLIC_DODO_TEAM_CHECKOUT_URL?.trim();
-const isUrl = (v?: string) => Boolean(v && /^https?:\/\//.test(v));
-const PRO_CTA_HREF = isUrl(DODO_PRO_CHECKOUT)
-  ? (DODO_PRO_CHECKOUT as string)
-  : "/auth/signup?plan=pro";
-const TEAM_CTA_HREF = isUrl(DODO_TEAM_CHECKOUT)
-  ? (DODO_TEAM_CHECKOUT as string)
-  : "/auth/signup?plan=team";
-
 interface Tier {
   name: string;
   price: string;
   priceNote: string;
   blurb: string;
   features: string[];
-  cta: { label: string; href: string; external?: boolean };
-  featured?: boolean;
-  badge?: string;
+  cta: { label: string; href: string };
   footnote?: string;
 }
 
@@ -47,77 +31,19 @@ const TIERS: Tier[] = [
   {
     name: "Free",
     price: "$0",
-    priceNote: "for individuals, forever",
+    priceNote: "for everyone, forever",
     blurb:
-      "The local desktop console. Run your own agents in parallel on one machine.",
+      "The full desktop console. Run your own agents in parallel, govern their writes, review and merge — no paid tiers, no limits.",
     features: [
       "Desktop app for macOS (Apple Silicon) — Windows & Linux planned",
       "Run Claude Code, Codex, pi, open-agents, and opencode in parallel",
-      "Isolated git worktree per agent (tmux)",
+      "Isolated git worktree per agent",
       "Review diffs, run a terminal, merge or open a PR",
-      "One shared brain on your own machine",
+      "Unlimited parallel agents, shared team memory, full retention",
       "Governance gates risky writes",
     ],
     cta: { label: "Download", href: "/download" },
     footnote: "No account required. Your agents, your keys.",
-  },
-  {
-    name: "Pro",
-    price: "$29",
-    priceNote: "per developer / month · billed via Dodo Payments",
-    blurb: "For solo devs running many agents who want more headroom.",
-    features: [
-      "Everything in Free",
-      "More parallel agents per console",
-      "Longer run history and retention",
-      "Context reuse across runs (repo intel)",
-      "Persistent shared brain across your own machines",
-      "Priority changelog and early builds",
-    ],
-    cta: {
-      label: "Get Pro",
-      href: PRO_CTA_HREF,
-      external: isUrl(DODO_PRO_CHECKOUT),
-    },
-    featured: true,
-    badge: "Most popular",
-    footnote:
-      "$290/year (2 months free). Checkout is handled by Dodo Payments, the Merchant of Record.",
-  },
-  {
-    name: "Team",
-    price: "$99",
-    priceNote: "per month · billed via Dodo Payments",
-    blurb: "For teams sharing an audited agent fleet across machines.",
-    features: [
-      "Everything in Pro",
-      "Shared workspaces + audit across machines",
-      "Shared approvals on agent merges",
-      "Cross-machine fleet mesh (zero-trust Envoy)",
-      "Per-seat management and team-wide retention",
-    ],
-    cta: {
-      label: "Get Team",
-      href: TEAM_CTA_HREF,
-      external: isUrl(DODO_TEAM_CHECKOUT),
-    },
-    footnote: "Checkout is handled by Dodo Payments, the Merchant of Record.",
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    priceNote: "talk to us",
-    blurb: "Governed, audited, and self-hostable across your whole org.",
-    features: [
-      "Everything in Team",
-      "SSO / OIDC and centralized seat management",
-      "Device recognition + approval and remote revoke",
-      "XDR security telemetry sealed into a tamper-evident audit chain",
-      "Self-host the control plane (AMI / compose) in your VPC",
-      "Direct support from the team",
-    ],
-    cta: { label: "Contact sales", href: "/enterprise#contact" },
-    footnote: "See the Enterprise page for what each capability maps to.",
   },
 ];
 
@@ -128,40 +54,23 @@ export default function Pricing() {
       <main className="mx-auto max-w-6xl px-6 py-20">
         <div className="text-center">
           <h1 className="text-balance text-4xl font-semibold tracking-tight md:text-5xl">
-            Pay for orchestration, never for tokens.
+            Recoder is free.
           </h1>
           <p className="text-balance mx-auto mt-4 max-w-2xl text-muted">
             Recoder is the desktop console for your coding agents. You bring your
             own agents and keys — we don&apos;t proxy models or resell tokens.
-            You pay for the console, seats, retention, and governance.
+            Every feature is unlocked, for everyone, at no cost.
           </p>
         </div>
 
-        <div className="mt-14 grid gap-5 lg:grid-cols-4 md:grid-cols-2">
+        <div className="mt-14 grid gap-5 mx-auto max-w-sm">
           {TIERS.map((t) => (
             <div
               key={t.name}
-              className={
-                "flex flex-col rounded-xl border p-6 " +
-                (t.featured
-                  ? "border-border-strong bg-bg-soft ring-1 ring-accent/30"
-                  : "border-border bg-bg")
-              }
+              className="flex flex-col rounded-xl border border-border-strong bg-bg-soft p-6 ring-1 ring-accent/30"
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted">{t.name}</span>
-                {t.badge && (
-                  <span
-                    className={
-                      "rounded-full px-2 py-0.5 text-[11px] " +
-                      (t.featured
-                        ? "border border-accent/40 text-accent"
-                        : "border border-border text-faint")
-                    }
-                  >
-                    {t.badge}
-                  </span>
-                )}
               </div>
               <div className="mt-3 text-2xl font-semibold tracking-tight">
                 {t.price}
@@ -177,21 +86,9 @@ export default function Pricing() {
                 ))}
               </ul>
 
-              {t.cta.external ? (
-                <a
-                  href={t.cta.href}
-                  className={ctaClass(t.featured)}
-                  {...(t.cta.href.startsWith("http")
-                    ? { target: "_blank", rel: "noreferrer" }
-                    : {})}
-                >
-                  {t.cta.label}
-                </a>
-              ) : (
-                <Link href={t.cta.href} className={ctaClass(t.featured)}>
-                  {t.cta.label}
-                </Link>
-              )}
+              <Link href={t.cta.href} className={ctaClass(true)}>
+                {t.cta.label}
+              </Link>
 
               {t.footnote && (
                 <p className="mt-3 text-center text-[11px] leading-relaxed text-faint">
@@ -203,28 +100,14 @@ export default function Pricing() {
         </div>
 
         <section className="mx-auto mt-16 max-w-3xl rounded-xl border border-border bg-bg-soft p-7 text-center">
-          <h2 className="text-lg font-medium">Billing &amp; honesty</h2>
+          <h2 className="text-lg font-medium">No billing, no catch</h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted">
-            Paid plans are sold through{" "}
-            <a
-              href="https://dodopayments.com"
-              target="_blank"
-              rel="noreferrer"
-              className="text-fg underline hover:opacity-80"
-            >
-              Dodo Payments
-            </a>{" "}
-            as the Merchant of Record — Dodo is the legal seller and
-            handles tax and invoicing. You always bring your own agents and model
-            keys; Recoder never resells tokens. See our{" "}
-            <Link href="/refund" className="text-fg underline hover:opacity-80">
-              refund &amp; cancellation policy
-            </Link>
-            ,{" "}
+            Recoder has no paid plans. You always bring your own agents and model
+            keys; Recoder never resells tokens or charges for the console. See our{" "}
             <Link href="/terms" className="text-fg underline hover:opacity-80">
               terms
-            </Link>
-            , and{" "}
+            </Link>{" "}
+            and{" "}
             <Link href="/privacy" className="text-fg underline hover:opacity-80">
               privacy policy
             </Link>

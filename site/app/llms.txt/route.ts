@@ -21,10 +21,9 @@ export function GET(): Response {
       absoluteUrl("/download") +
       ". No account required, bring your own provider keys. Windows & Linux are planned.",
     "",
-    "Paid plans add more parallel agents, longer run history, a persistent shared brain across " +
-      "machines, and team/org governance: Pro $29/developer/month ($290/year), Team $99/month " +
-      "(shared workspaces, cross-machine fleet mesh, audited approvals), Enterprise (custom, SSO/OIDC, " +
-      "self-hostable). Checkout is handled by Dodo Payments, the Merchant of Record.",
+    "Recoder is completely free — unlimited parallel agents, full run history, a persistent " +
+      "shared brain across machines, and team/org governance (shared workspaces, audited " +
+      "approvals) are all included. No paid tiers, no checkout.",
     "",
     "## Docs",
     "",

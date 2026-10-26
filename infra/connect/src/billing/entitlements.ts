@@ -42,11 +42,23 @@ export async function getEntitlement(db: ConnectDb, accountId: string): Promise<
   };
 }
 
-/** Does this entitlement satisfy a feature gate that needs at least `need`? */
-const PLAN_RANK: Record<ConnectPlanTier, number> = { free: 0, pro: 1, team: 2 };
-export function satisfiesPlan(entitlement: Entitlement, need: ConnectPlanTier): boolean {
-  if (entitlement.status !== 'active' && entitlement.status !== 'past_due') return need === 'free';
-  return PLAN_RANK[entitlement.plan] >= PLAN_RANK[need];
+/**
+ * Does this entitlement satisfy a feature gate that needs at least `need`?
+ *
+ * Owner decision 2026-10-27: Recoder Connect's hosted paid tiers (Pro/Team
+ * via Dodo) are retired — the product is completely free, so every feature
+ * gate always passes regardless of the stored plan/status. This Worker was
+ * never deployed to production (no Dodo business, no Hyperdrive/Postgres
+ * provisioned — see plans/recoder-connect.md), so this is a dormant-code
+ * change, not a live behavior flip. Old rank-based check kept below,
+ * commented out, in case hosted paid tiers are ever reintroduced.
+ *
+ * Old rank table: `{ free: 0, pro: 1, team: 2 }`, compared via
+ * `PLAN_RANK[entitlement.plan] >= PLAN_RANK[need]` after an active/past_due
+ * status check. See git history (pre-2026-10-27) for the exact prior code.
+ */
+export function satisfiesPlan(_entitlement: Entitlement, _need: ConnectPlanTier): boolean {
+  return true;
 }
 
 /**

@@ -108,7 +108,20 @@ export function createEntitlementService(deps: EntitlementServiceDeps): Entitlem
       : { subjectId: principal.userId, kind: 'user' };
   }
 
-  async function resolvePlan(subject: BillingSubject): Promise<PlanTier> {
+  async function resolvePlan(_subject: BillingSubject): Promise<PlanTier> {
+    // Owner decision 2026-10-27: Recoder's hosted paid tiers are retired —
+    // the product is completely free. Every subject resolves to the top
+    // tier (`enterprise`: unlimited quotas, every feature in
+    // PLAN_CAPABILITIES/PLAN_QUOTAS) instead of the old
+    // `max(webhook-confirmed subscription, recoder.xyz auth plan)`
+    // resolution. This is the single seam every other gate in this file
+    // (`checkFeature`, `checkQuota`, `view`) derives from, so flipping it
+    // here is sufficient to make the whole entitlement gate always-allow
+    // without touching the deny-safe mechanics themselves (they still run,
+    // they just always see the highest tier). Old resolution logic kept
+    // below, commented out, in case hosted paid tiers are ever reintroduced.
+    return 'enterprise';
+    /*
     let webhookPlan: PlanTier | null = null;
     try {
       const sub = await repo.getActiveSubscription(subject.subjectId);
@@ -136,6 +149,7 @@ export function createEntitlementService(deps: EntitlementServiceDeps): Entitlem
     if (webhookPlan) candidates.push(webhookPlan);
     if (authPlan) candidates.push(authPlan);
     return candidates.reduce((best, p) => (catalog.satisfies(p, best) ? p : best), 'free' as PlanTier);
+    */
   }
 
   async function isBYOK(subject: BillingSubject): Promise<boolean> {

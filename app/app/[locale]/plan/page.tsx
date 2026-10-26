@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { Check, ArrowRight, Globe, Code2, Bot, Workflow, Sparkles, Database, Server, Loader2 } from 'lucide-react';
+import { Check, ArrowRight, Globe, Code2, Bot, Workflow, Sparkles, Database, Server } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -17,122 +16,29 @@ const serviceIcons: Record<string, React.ElementType> = {
   agency: Workflow,
 };
 
-const plans = [
-  {
-    name: 'Free',
-    price: '$0',
-    period: 'forever',
-    description: 'Bring your own API key',
-    features: [
-      '6 sessions per day',
-      '40+ AI models via BYOK',
-      'Desktop app + parallel agents',
-      'All platform services',
-      'Community support',
-    ],
-    cta: 'Start Free',
-    ctaLink: '/auth/signup',
-    highlight: false,
-  },
-  {
-    name: 'Pro',
-    planId: 'pro',
-    price: '$29',
-    period: '/month',
-    description: 'Per developer — $290/year billed annually (2 months free)',
-    features: [
-      'More parallel agents per console',
-      'Longer run history and retention',
-      'Context reuse across runs (repo intel)',
-      'Persistent shared brain across your own machines',
-      'Priority changelog and early builds',
-    ],
-    cta: 'Go Pro',
-    ctaLink: '/billing/upgrade',
-    highlight: true,
-  },
-  {
-    name: 'Team',
-    planId: 'team',
-    price: '$99',
-    period: '/month',
-    description: 'For teams sharing an audited agent fleet across machines',
-    features: [
-      'Everything in Pro',
-      'Shared workspaces + audit across machines',
-      'Shared approvals on agent merges',
-      'Cross-machine fleet mesh (zero-trust Envoy)',
-      'Per-seat management and team-wide retention',
-    ],
-    cta: 'Go Team',
-    ctaLink: '/billing/upgrade',
-    highlight: false,
-  },
-  {
-    name: 'Enterprise',
-    price: 'Custom',
-    period: '',
-    description: 'Negotiated — SSO, isolation, support',
-    features: [
-      'Unlimited everything',
-      'On-premise / self-host deployment',
-      'SLA guarantees + security audit',
-      'Dedicated support',
-    ],
-    cta: 'Talk to Us',
-    ctaLink: '/enterprise',
-    highlight: false,
-  },
-];
-
-// Dodo is the Merchant of Record going forward; Paddle remains a configured
-// fallback. Creem removed from this try-order (owner directive 2026-10-16) —
-// the server also fails Creem checkout creation closed regardless of this
-// list. This mirrors the onboarding checkout flow (POST /api/billing/create-checkout).
-const CHECKOUT_PROVIDERS = ['dodo', 'paddle'] as const;
+// Owner decision 2026-10-27: Recoder's hosted paid tiers (Pro/Team/Enterprise)
+// are retired — the product is completely free. There is now exactly one
+// plan. See git history (pre-2026-10-27) for the removed Pro/Team/Enterprise
+// tiers + Dodo/Paddle checkout logic that used to live on this page.
+const plan = {
+  name: 'Free',
+  price: '$0',
+  period: 'forever',
+  description: 'Bring your own API key — every feature included',
+  features: [
+    'Unlimited parallel agents',
+    '40+ AI models via BYOK',
+    'Desktop app + parallel agents',
+    'All platform services',
+    'Full team collaboration, no member cap',
+    'Shared team memory and unlimited evidence retention',
+  ],
+  cta: 'Start Free',
+  ctaLink: '/auth/signup',
+};
 
 export default function PlanPage() {
-  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const publicServices = RECODER_SERVICES.filter(s => !s.internal);
-
-  const startCheckout = async (planId: string) => {
-    setCheckoutError(null);
-    setPendingPlan(planId);
-    try {
-      for (const paymentMethod of CHECKOUT_PROVIDERS) {
-        const response = await fetch('/api/billing/create-checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ plan: planId, paymentMethod }),
-        });
-
-        // Not signed in → send them to sign in, then back to plans.
-        if (response.status === 401) {
-          window.location.assign(`/auth/signin?next=${encodeURIComponent('/plan')}`);
-          return;
-        }
-
-        // Provider not configured/available → try the next fallback.
-        if (!response.ok) continue;
-
-        const data = (await response.json().catch(() => null)) as
-          | { success?: boolean; checkoutUrl?: string }
-          | null;
-        if (data?.success && data.checkoutUrl) {
-          window.location.assign(data.checkoutUrl);
-          return;
-        }
-      }
-      setCheckoutError(
-        'Checkout is not available right now. Please try again shortly or contact support.',
-      );
-    } catch {
-      setCheckoutError('Something went wrong starting checkout. Please try again.');
-    } finally {
-      setPendingPlan(null);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -186,73 +92,33 @@ export default function PlanPage() {
 
       {/* Pricing */}
       <section className="py-16 px-6 border-t border-white/10">
-        <div className="container mx-auto max-w-6xl">
-          <h2 className="text-3xl font-bold mb-4 text-center">Plans & Pricing</h2>
-          <p className="text-gray-400 text-center mb-12">Start free with BYOK. Upgrade anytime.</p>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {plans.map((plan) => (
-              <div
-                key={plan.name}
-                className={`relative p-6 rounded-xl border ${
-                  plan.highlight
-                    ? 'border-white/30 bg-white/5'
-                    : 'border-white/10 bg-zinc-900'
-                }`}
-              >
-                {plan.highlight && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-white text-black rounded-full text-xs font-medium">
-                    Best Value
-                  </div>
-                )}
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold">{plan.name}</h3>
-                  <p className="text-xs text-gray-500">{plan.description}</p>
-                </div>
-                <div className="mb-6">
-                  <span className="text-4xl font-bold">{plan.price}</span>
-                  <span className="text-gray-500 text-sm">{plan.period}</span>
-                </div>
-                <ul className="space-y-3 mb-6">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start space-x-2 text-sm">
-                      <Check className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                      <span className="text-gray-300">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                {!plan.planId ? (
-                  <Link
-                    href={plan.ctaLink}
-                    className="block text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-zinc-800 hover:bg-zinc-700"
-                  >
-                    {plan.cta}
-                  </Link>
-                ) : (
-                  <button
-                    onClick={() => plan.planId && startCheckout(plan.planId)}
-                    disabled={pendingPlan !== null}
-                    className={`w-full inline-flex items-center justify-center gap-2 text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-60 ${
-                      plan.highlight
-                        ? 'bg-white text-black hover:bg-neutral-200'
-                        : 'bg-zinc-800 hover:bg-zinc-700'
-                    }`}
-                  >
-                    {pendingPlan === plan.planId ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Starting checkout…
-                      </>
-                    ) : (
-                      plan.cta
-                    )}
-                  </button>
-                )}
-              </div>
-            ))}
+        <div className="container mx-auto max-w-md">
+          <h2 className="text-3xl font-bold mb-4 text-center">Pricing</h2>
+          <p className="text-gray-400 text-center mb-12">Recoder is free. Bring your own API key.</p>
+          <div className="relative p-6 rounded-xl border border-white/30 bg-white/5">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold">{plan.name}</h3>
+              <p className="text-xs text-gray-500">{plan.description}</p>
+            </div>
+            <div className="mb-6">
+              <span className="text-4xl font-bold">{plan.price}</span>
+              <span className="text-gray-500 text-sm"> {plan.period}</span>
+            </div>
+            <ul className="space-y-3 mb-6">
+              {plan.features.map((feature) => (
+                <li key={feature} className="flex items-start space-x-2 text-sm">
+                  <Check className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                  <span className="text-gray-300">{feature}</span>
+                </li>
+              ))}
+            </ul>
+            <Link
+              href={plan.ctaLink}
+              className="block text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors bg-white text-black hover:bg-neutral-200"
+            >
+              {plan.cta}
+            </Link>
           </div>
-          {checkoutError ? (
-            <p className="mt-6 text-center text-sm text-amber-300">{checkoutError}</p>
-          ) : null}
         </div>
       </section>
 

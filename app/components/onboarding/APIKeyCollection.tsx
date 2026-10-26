@@ -244,20 +244,20 @@ export function APIKeyCollection({ onComplete, onSkip, canSkip = false }: APIKey
             </div>
           </form>
 
-          {/* Upgrade Option */}
+          {/* Skip option — Recoder is free either way, no plan to upgrade to */}
           <div className="border-t border-gray-200 dark:border-gray-800 pt-6">
             <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4">
               <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
                 Want to skip this step?
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                Upgrade to Pro and use our platform API keys with higher limits and no setup required.
+                You can add or change your API key anytime from Settings — Recoder is free either way.
               </p>
               <a
                 href="/pricing"
                 className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
               >
-                View Pro plans
+                Learn more
                 <ExternalLink className="w-4 h-4" />
               </a>
             </div>

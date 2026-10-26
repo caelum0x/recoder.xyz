@@ -137,8 +137,8 @@ export const COMPARISONS: Comparison[] = [
         ["Self-hosting", "Enterprise: run the control plane on your own infra", "Not mentioned on their site"],
         ["Platform today", "macOS (Apple Silicon); Windows & Linux planned", "macOS only"],
         ["Free tier", "Free, local use, forever", "Free tier, plus paid Cloud tiers"],
-        ["Paid tier (individual)", "Pro $29/mo or $290/yr", "Pro $50/mo"],
-        ["Team tier", "Team $99/mo", "Teams $60/mo per user"],
+        ["Paid tier (individual)", "Free — no paid tiers", "Pro $50/mo"],
+        ["Team tier", "Free — no paid tiers", "Teams $60/mo per user"],
       ],
     },
     prosA: [
@@ -311,7 +311,7 @@ export const COMPARISONS: Comparison[] = [
         ["Self-hosting", "Enterprise: run the control plane on your own infra", "Yes — a documented self-hosting guide (Docker) for its own product today"],
         ["Install", "Native desktop app (macOS)", "`npx vibe-kanban`, runs anywhere Node does"],
         ["Platform today", "macOS (Apple Silicon); Windows & Linux planned", "Cross-platform (Node-based, browser UI)"],
-        ["Pricing", "Free, local use, forever; Pro $29/mo; Team $99/mo", "Free (1 user); Pro $30/user/mo (2-49 users); Enterprise custom"],
+        ["Pricing", "Free, forever — no paid tiers", "Free (1 user); Pro $30/user/mo (2-49 users); Enterprise custom"],
         ["Project status", "Actively developed", "Company product sunsetting; continuing as community open source"],
       ],
     },
@@ -399,7 +399,7 @@ export const COMPARISONS: Comparison[] = [
         ["Auto-accept mode", "Not the default workflow — approvals are fail-closed", "Experimental `--autoyes` flag auto-accepts agent prompts"],
         ["Self-hosting", "Enterprise: run the control plane on your own infra", "N/A — it's a local CLI you already run yourself"],
         ["Platform today", "macOS (Apple Silicon); Windows & Linux planned", "macOS/Linux (tmux + gh required); no native Windows"],
-        ["Price", "Free, local use, forever; Pro $29/mo; Team $99/mo", "Free — fully open source (AGPL-3.0)"],
+        ["Price", "Free, forever — no paid tiers", "Free — fully open source (AGPL-3.0)"],
       ],
     },
     prosA: [
@@ -483,7 +483,7 @@ export const COMPARISONS: Comparison[] = [
         ["Approval gate / audit trail", "Fail-closed approvals; SHA-256 Merkle-chained audit trail", "Decision history (\"who made them\") in the wiki, not a governance gate"],
         ["Self-hosting", "Enterprise: run the control plane on your own infra", "Wiki plugin is free, local, open source today"],
         ["Platform today", "macOS (Apple Silicon); Windows & Linux planned", "macOS, Windows, Linux; Wiki Teams is browser-based"],
-        ["Pricing", "Free, local use, forever; Pro $29/mo; Team $99/mo", "Free individual wiki + desktop app; Wiki Teams free during beta (no stated price yet)"],
+        ["Pricing", "Free, forever — no paid tiers", "Free individual wiki + desktop app; Wiki Teams free during beta (no stated price yet)"],
       ],
     },
     prosA: [
@@ -566,7 +566,7 @@ export const COMPARISONS: Comparison[] = [
         ["Self-hosting", "Enterprise: run the control plane on your own infra", "Free, default — single binary, local install, full feature set"],
         ["Mobile control", "Not described on Recoder's site", "iOS app + PWA for monitoring and steering from a phone"],
         ["Platform today", "macOS (Apple Silicon); Windows & Linux planned", "Local install (any OS the Rust binary targets) + optional cloud plans"],
-        ["Pricing", "Free, local use, forever; Pro $29/mo; Team $99/mo", "Free self-hosted; cloud plans $39/mo (Solo) to $129/mo (Max)"],
+        ["Pricing", "Free, forever — no paid tiers", "Free self-hosted; cloud plans $39/mo (Solo) to $129/mo (Max)"],
       ],
     },
     prosA: [
@@ -649,7 +649,7 @@ export const COMPARISONS: Comparison[] = [
         ["SSO / SAML / SCIM", "Not offered today", "SSO + SAML/SCIM — on the custom-priced Business tier and above"],
         ["Self-hosting / on-prem", "Enterprise: run the control plane on your own infra", "On-premises deployment — on the custom-priced Enterprise tier"],
         ["Entry price", "Free, local use, forever", "No free tier — Pro starts at $20/mo"],
-        ["Team pricing", "Team $99/mo (flat)", "Teams: $60/mo per team + $40/mo per seat"],
+        ["Team pricing", "Free — no paid tiers (flat)", "Teams: $60/mo per team + $40/mo per seat"],
       ],
     },
     prosA: [

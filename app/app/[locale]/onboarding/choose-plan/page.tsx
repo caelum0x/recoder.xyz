@@ -1,6 +1,12 @@
 /**
  * Onboarding - Choose Plan
- * Third step: Plan selection
+ *
+ * Owner decision 2026-10-27: Recoder's hosted paid tiers (Pro/Team) are
+ * retired — the product is completely free, so this step no longer sells
+ * anything. Previously: a 3-plan pricing grid + billing-cycle toggle +
+ * Dodo/Paddle checkout call. Now: a single "you're already on the full
+ * plan" screen, then straight on to API-key setup. See git history
+ * (pre-2026-10-27) for the removed checkout logic.
  */
 
 'use client';
@@ -11,24 +17,21 @@ import { useSession } from '@/lib/session-provider';
 import { SiteHeader } from '@/components/SiteHeader';
 import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
 import Link from 'next/link';
-import {
-  Terminal,
-  Check,
-  ArrowRight,
-  ArrowLeft,
-  Zap,
-  Star,
-  Crown
-} from 'lucide-react';
+import { Check, ArrowRight, ArrowLeft, Zap } from 'lucide-react';
+
+const FREE_FEATURES = [
+  'Use your own OpenRouter API key (BYOK)',
+  'Access to all 50+ AI models',
+  'CLI, Web, and API access',
+  'Unlimited parallel agents',
+  'Full team collaboration, no member cap',
+  'Community support',
+];
 
 export default function ChoosePlanPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const [loading, setLoading] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState('free');
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
-  const [isCreatingCheckout, setIsCreatingCheckout] = useState(false);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session && !isPending) {
@@ -38,124 +41,13 @@ export default function ChoosePlanPage() {
     }
   }, [session, isPending, router]);
 
-  const plans = [
-    {
-      id: 'free',
-      name: 'Free',
-      icon: Zap,
-      price: { monthly: 0, yearly: 0 },
-      description: 'Perfect for getting started',
-      features: [
-        'Use your own OpenRouter API key',
-        'Access to all 50+ AI models',
-        'CLI, Web, and API access',
-        'Basic usage analytics',
-        'Community support',
-      ],
-      cta: 'Start Free',
-      popular: false,
-    },
-    {
-      id: 'pro',
-      name: 'Pro',
-      icon: Star,
-      price: { monthly: 29, yearly: 290 },
-      description: 'For solo devs running many agents who want more headroom',
-      features: [
-        'Everything in Free',
-        'More parallel agents per console',
-        'Longer run history and retention',
-        'Context reuse across runs (repo intel)',
-        'Persistent shared brain across your own machines',
-        'Priority changelog and early builds',
-      ],
-      cta: 'Start Pro',
-      popular: true,
-    },
-    {
-      id: 'team',
-      name: 'Team',
-      icon: Crown,
-      price: { monthly: 99, yearly: 1188 },
-      description: 'For teams sharing an audited agent fleet across machines',
-      features: [
-        'Everything in Pro',
-        'Shared workspaces + audit across machines',
-        'Shared approvals on agent merges',
-        'Cross-machine fleet mesh (zero-trust Envoy)',
-        'Per-seat management and team-wide retention',
-      ],
-      cta: 'Start Team',
-      popular: false,
-    },
-  ];
-
-  const createCheckoutSession = async (plan: string) => {
-    // Dodo is the Merchant of Record going forward; Paddle remains a
-    // configured fallback. Creem removed from this try-order (owner directive
-    // 2026-10-16) — the server also fails Creem checkout creation closed
-    // regardless of this list.
-    const providers = ['dodo', 'paddle'] as const;
-
-    for (const paymentMethod of providers) {
-      const response = await fetch('/api/billing/create-checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ plan, paymentMethod }),
-      });
-
-      // A provider that isn't configured/available → try the next one.
-      if (!response.ok) {
-        continue;
-      }
-
-      const data = (await response.json()) as {
-        success?: boolean;
-        checkoutUrl?: string;
-      };
-
-      if (data.success && data.checkoutUrl) {
-        window.location.assign(data.checkoutUrl);
-        return;
-      }
-    }
-
-    throw new Error(
-      'Checkout is being connected. You can finish onboarding now and subscribe from Settings → Billing.',
-    );
-  };
-
-  const handleContinue = async () => {
-    setCheckoutError(null);
-
-    // Save selected plan to session
-    sessionStorage.setItem('onboarding_plan', selectedPlan);
-
+  const handleContinue = () => {
+    sessionStorage.setItem('onboarding_plan', 'free');
     trackEvent(AnalyticsEvents.ONBOARDING_PLAN_CHOSEN, {
       step: 'choose-plan',
-      plan: selectedPlan,
+      plan: 'free',
     });
-
-    if (selectedPlan === 'free') {
-      router.push('/onboarding/setup-api-key');
-      return;
-    }
-
-    // Paid plan → real hosted checkout (Dodo). If the checkout isn't wired yet,
-    // fall back honestly and let the user finish onboarding + subscribe later —
-    // never a dead end and never "coming soon".
-    try {
-      await createCheckoutSession(selectedPlan);
-    } catch (err) {
-      setCheckoutError(
-        err instanceof Error ? err.message : 'Checkout is being connected — you can subscribe from Settings later.',
-      );
-      setTimeout(() => {
-        router.push('/onboarding/setup-api-key');
-      }, 2500);
-    }
+    router.push('/onboarding/setup-api-key');
   };
 
   if (loading || isPending) {
@@ -182,130 +74,34 @@ export default function ChoosePlanPage() {
       <SiteHeader />
 
       <div className="container mx-auto px-6 py-24 mt-16">
-        <div className="max-w-6xl mx-auto">
-          {/* Title */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold mb-4">Choose your plan</h1>
-            <p className="text-xl text-gray-400 mb-6">Start with free, upgrade anytime</p>
-            
-            {/* Billing Cycle Toggle */}
-            <div className="inline-flex items-center space-x-2 p-1 rounded-lg bg-white/5 border border-white/10">
-              <button
-                onClick={() => setBillingCycle('monthly')}
-                className={`px-4 py-2 rounded-md font-medium transition-all ${
-                  billingCycle === 'monthly'
-                    ? 'bg-white text-black'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setBillingCycle('yearly')}
-                className={`px-4 py-2 rounded-md font-medium transition-all ${
-                  billingCycle === 'yearly'
-                    ? 'bg-white text-black'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Yearly
-                <span className="ml-2 text-xs text-green-400">Save 17%</span>
-              </button>
+        <div className="max-w-2xl mx-auto">
+          <div className="text-center mb-10">
+            <h1 className="text-4xl font-bold mb-4">Recoder is free</h1>
+            <p className="text-xl text-gray-400">
+              Every feature below is already unlocked on your account — nothing to buy.
+            </p>
+          </div>
+
+          <div className="p-6 rounded-2xl border border-white bg-white/5 mb-10">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center">
+                <Zap className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">Full access</h3>
+                <p className="text-gray-400 text-sm">$0, forever</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {FREE_FEATURES.map((feature) => (
+                <div key={feature} className="flex items-start space-x-2">
+                  <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-gray-300">{feature}</span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Plans Grid */}
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
-            {plans.map((plan) => {
-              const Icon = plan.icon;
-              const isSelected = selectedPlan === plan.id;
-              const price = billingCycle === 'monthly' ? plan.price.monthly : plan.price.yearly;
-              const perMonth = billingCycle === 'yearly' ? Math.round(price / 12) : price;
-
-              return (
-                <div
-                  key={plan.id}
-                  className={`relative p-6 rounded-2xl border backdrop-blur-xl transition-all cursor-pointer ${
-                    isSelected
-                      ? 'border-white bg-white/5 scale-105'
-                      : 'border-white/10 bg-white/5 hover:border-white/20'
-                  } ${plan.popular ? 'md:scale-110' : ''}`}
-                  onClick={() => setSelectedPlan(plan.id)}
-                >
-                  {plan.popular && plan.id !== 'free' && (
-                    <div className="absolute -top-4 right-4">
-                      <div className="px-3 py-1 rounded-full bg-white text-black text-xs font-medium">
-                        Most popular
-                      </div>
-                    </div>
-                  )}
-                  {plan.popular && plan.id === 'free' && (
-                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                      <div className="px-4 py-1 rounded-full bg-white text-black text-sm font-medium">
-                        Most Popular
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="text-center mb-6">
-                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 ${
-                      isSelected
-                        ? 'bg-neutral-800 border border-neutral-700'
-                        : 'bg-white/5'
-                    }`}>
-                      <Icon className="w-8 h-8 text-white" />
-                    </div>
-                    <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                    <p className="text-gray-400 text-sm mb-4">{plan.description}</p>
-                    <div className="mb-2">
-                      <span className="text-4xl font-bold">${perMonth}</span>
-                      <span className="text-gray-400">/month</span>
-                    </div>
-                    {billingCycle === 'yearly' && price > 0 && (
-                      <div className="text-sm text-gray-500">
-                        Billed ${price}/year
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-3 mb-6">
-                    {plan.features.map((feature, index) => (
-                      <div key={index} className="flex items-start space-x-2">
-                        <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm text-gray-300">{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button
-                    onClick={() => setSelectedPlan(plan.id)}
-                    className={`w-full py-3 rounded-xl font-medium transition-all ${
-                      isSelected
-                        ? 'bg-white text-black'
-                        : 'bg-white/5 hover:bg-white/10 text-gray-300'
-                    }`}
-                  >
-                    {isSelected ? (
-                      <span className="flex items-center justify-center space-x-2">
-                        <Check className="w-5 h-5" />
-                        <span>Selected</span>
-                      </span>
-                    ) : (
-                      plan.cta
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Additional Info */}
-          <div className="text-center text-sm text-gray-400 mb-8">
-            <p>Free forever with your own API key (BYOK). Pro and Team add higher limits, retention, and team features — billed through Dodo Payments.</p>
-            <p>You always bring your own model keys; Recoder never resells tokens.</p>
-          </div>
-
-          {/* Navigation */}
           <div className="flex justify-between items-center">
             <Link
               href="/onboarding/setup-profile"
@@ -323,9 +119,6 @@ export default function ChoosePlanPage() {
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
-          {checkoutError ? (
-            <p className="mt-4 text-sm text-amber-300">{checkoutError}</p>
-          ) : null}
         </div>
       </div>
     </div>

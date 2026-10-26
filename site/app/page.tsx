@@ -573,11 +573,11 @@ interface PlanPeek {
   note: string;
 }
 
+// Owner decision 2026-10-27: Recoder's hosted paid tiers are retired — the
+// product is completely free. One tier, no checkout. See git history
+// (pre-2026-10-27) for the removed Pro/Team/Enterprise rows.
 const PLAN_PEEK: PlanPeek[] = [
-  { name: "Free", price: "$0", note: "the local desktop console" },
-  { name: "Pro", price: "$29/mo", note: "higher limits + retention" },
-  { name: "Team", price: "$99/mo", note: "seats + shared approvals" },
-  { name: "Enterprise", price: "Custom", note: "SSO, audit, self-host" },
+  { name: "Free", price: "$0", note: "everything unlocked, forever" },
 ];
 
 function PlanTeaser() {
@@ -586,11 +586,11 @@ function PlanTeaser() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="max-w-xl">
           <h2 className="text-balance text-2xl font-semibold tracking-tight md:text-3xl">
-            Pay for orchestration, never for tokens.
+            Free. No paid tiers, ever.
           </h2>
           <p className="mt-3 text-muted">
-            Free to start on one machine. Pro, Team, and Enterprise add limits,
-            retention, seats, and governance — pick a plan and subscribe today.
+            Recoder is free for everyone — unlimited parallel agents, full
+            team collaboration, no checkout required.
           </p>
         </div>
         <Link
@@ -631,7 +631,7 @@ const FAQ: QA[] = [
   },
   {
     q: "How does it pay for Claude Code? (BYOK)",
-    a: "It doesn't. You bring your own agent subscriptions and provider keys. Recoder orchestrates the agents you already pay for and never proxies or resells tokens. You pay Recoder for the console and coordination, not for inference.",
+    a: "It doesn't. You bring your own agent subscriptions and provider keys. Recoder orchestrates the agents you already pay for and never proxies or resells tokens — and Recoder itself is free, so there's nothing to pay it for either.",
   },
   {
     q: "Is my code local?",
@@ -643,7 +643,7 @@ const FAQ: QA[] = [
   },
   {
     q: "How do I get started?",
-    a: "Pick a plan on the pricing page — Free to run locally, or Pro and Team for more headroom, seats, and governance. You create your account, subscribe, and connect the coding agents you already pay for; Recoder is the console that runs them in parallel. The desktop app is macOS-first (Apple Silicon), with Windows and Linux on the way.",
+    a: "Download the desktop app — it's free, no account or subscription required. Connect the coding agents you already pay for (Claude Code, Codex, pi, open-agents, opencode) and Recoder runs them in parallel. The desktop app is macOS-first (Apple Silicon), with Windows and Linux on the way.",
   },
   {
     q: "Do I need my own Postgres database to self-host the backend?",

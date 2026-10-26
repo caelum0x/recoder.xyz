@@ -6,23 +6,16 @@
  * path anywhere in this file.
  */
 import { Hono } from 'hono';
-import { z } from 'zod';
 import type { ConnectEnv } from '../env.js';
 import { dodoCredential, dodoProducts } from '../env.js';
 import { connectDb } from '../db/client.js';
-import { createDodoCheckout, DodoNotConfiguredError, parseDodoEvent, verifyDodoWebhook } from '../billing/dodo.js';
+import { parseDodoEvent, verifyDodoWebhook } from '../billing/dodo.js';
 import { applyDodoEvent, entitlementToken, getEntitlement } from '../billing/entitlements.js';
 import { recordWebhookEvent, markWebhookEventProcessed } from '../billing/webhook-events.js';
 import type { ConnectAuth } from '../auth/connect-auth.js';
 import { requireAccount } from '../auth/require-account.js';
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
-
-const checkoutBodySchema = z.object({
-  plan: z.enum(['pro', 'team']),
-  interval: z.enum(['monthly', 'annual']),
-  successUrl: z.string().url(),
-});
 
 export interface BillingRouteDeps {
   readonly auth: ConnectAuth;
@@ -31,30 +24,20 @@ export interface BillingRouteDeps {
 export function billingRoutes(deps: BillingRouteDeps) {
   const app = new Hono<{ Bindings: ConnectEnv }>();
 
+  // Owner decision 2026-10-27: Recoder Connect's hosted paid tiers (Pro/Team
+  // via Dodo) are retired — the product is completely free, no checkout
+  // needed. This Worker was never deployed to production (no Dodo business,
+  // no Hyperdrive/Postgres provisioned — see plans/recoder-connect.md), so
+  // this is a dormant-code change. Fails closed to a truthful "free"
+  // response instead of creating a real Dodo checkout session. See git
+  // history (pre-2026-10-27) for the removed `createDodoCheckout` call.
   app.post('/checkout', async (c) => {
     const account = await requireAccount(deps.auth, c.req.raw, c.env);
     if (!account) return c.json({ error: 'auth_required' }, 401);
-
-    const parsed = checkoutBodySchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!parsed.success) {
-      return c.json({ error: 'invalid_request', details: parsed.error.issues[0]?.message }, 400);
-    }
-
-    try {
-      const result = await createDodoCheckout(dodoCredential(c.env), dodoProducts(c.env), {
-        plan: parsed.data.plan,
-        interval: parsed.data.interval,
-        customerEmail: account.email,
-        accountId: account.accountId,
-        successUrl: parsed.data.successUrl,
-      });
-      return c.json({ checkoutUrl: result.checkoutUrl }, 201);
-    } catch (error) {
-      if (error instanceof DodoNotConfiguredError) {
-        return c.json({ error: 'billing_not_configured', detail: error.message }, 503);
-      }
-      return c.json({ error: 'checkout_failed', detail: error instanceof Error ? error.message : String(error) }, 502);
-    }
+    return c.json(
+      { free: true, message: 'Recoder is free — every feature is already unlocked, no checkout needed.' },
+      200,
+    );
   });
 
   app.get('/entitlements/me', async (c) => {

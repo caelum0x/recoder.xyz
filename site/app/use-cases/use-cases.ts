@@ -311,7 +311,7 @@ export const USE_CASES: UseCase[] = [
       },
       {
         q: "Is the policy enforced centrally across every teammate's machine today?",
-        a: "The command policy gate, the inline approval, and the append-only audit log run per machine today and are real, not mocked. Centrally aggregating that audit trail across a whole team's machines is a Team-tier capability still in development — see the Team plan on pricing.",
+        a: "The command policy gate, the inline approval, and the append-only audit log run per machine today and are real, not mocked. Centrally aggregating that audit trail across a whole team's machines is still in development — it will ship free, like everything else in Recoder.",
       },
       {
         q: "Can the log be edited after the fact?",
