@@ -1,0 +1,60 @@
+name: Bug report
+description: A desktop, worktree, compare, or merge flow failed.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Recoder is open source and self-hosted. The hosted service at recoder.xyz is retired, so this form is for the app in this repository.
+
+        Remove API keys, tokens, and customer data from anything you paste.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. cd apps/desktop && task dev
+        2. Open a repo and launch two agents
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or app version
+      description: Output of `git rev-parse --short HEAD`, or the version shown in the app.
+      placeholder: abc1234
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+    validations:
+      required: true
+  - type: textarea
+    id: agents
+    attributes:
+      label: Agents involved
+      description: Which CLIs were on PATH (claude, codex, opencode, cursor-agent, …) and which ones you launched.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant lines only. Dev logs for the desktop app go to ~/.waveterm-dev/waveapp.log.
+      render: text
+    validations:
+      required: false
