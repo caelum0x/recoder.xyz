@@ -1,0 +1,37 @@
+name: Feature request
+description: Something the self-hosted app should do.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Recoder is open source and self-hosted. The hosted service at recoder.xyz is retired.
+
+        Describe the job you want done. A maintainer will say whether it fits before a large pull request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you are trying to do with parallel agents, compare, or merge, and where the app stops you.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What the app should do. Include a rough sense of which part of the repo (desktop shell, conductor, docs) you think it touches.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: How to know it works
+      description: The check you would run, or the screen you would look at.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+    validations:
+      required: false

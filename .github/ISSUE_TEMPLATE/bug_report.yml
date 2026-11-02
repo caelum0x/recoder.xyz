@@ -1,0 +1,67 @@
+name: Bug report
+description: A desktop, worktree, compare, or merge flow failed.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Recoder is open source and self-hosted. The hosted service at recoder.xyz is retired, so this form is for the app in this repository.
+
+        Remove API keys, tokens, and customer data from anything you paste.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. cd apps/desktop && task dev
+        2. Open a repo and launch two agents
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or app version
+      description: Output of `git rev-parse --short HEAD`, or the version shown in the app.
+      placeholder: abc1234
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+    validations:
+      required: true
+  - type: textarea
+    id: agents
+    attributes:
+      label: Agents involved
+      description: Which CLIs were on PATH (claude, codex, opencode, cursor-agent, …) and which ones you launched.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Relevant lines only. Desktop logs are `waveapp.log` in the data directory from `getWaveDataDir` (`apps/desktop/app/emain/emain-platform.ts`), written by `apps/desktop/app/emain/emain-log.ts`.
+
+        Unpackaged dev (`task dev`): macOS `~/Library/Application Support/waveterm-dev/waveapp.log`; Linux `~/.local/share/waveterm-dev/waveapp.log`; Windows `%LOCALAPPDATA%\waveterm-dev\Data\waveapp.log`, or `<home>\AppData\Local\waveterm-dev\Data\waveapp.log` when `LOCALAPPDATA` is unset.
+
+        Packaged app: the same paths with `waveterm` instead of `waveterm-dev`.
+
+        That directory is chosen in this order. A legacy directory is used only when it already exists and contains `wave.lock`: `WAVETERM_HOME` when that variable is set, otherwise `<home>/.waveterm-dev` (dev) or `<home>/.waveterm` (packaged). Otherwise `WAVETERM_DATA_HOME`, when set, is the data directory itself. Otherwise, when `XDG_DATA_HOME` is set, the directory is `$XDG_DATA_HOME/waveterm-dev` (dev) or `$XDG_DATA_HOME/waveterm` (packaged). Otherwise the platform path above is used. When `waveapp.log` is larger than 10MB it is rotated to `logs/waveapp.<n>.log` in that same directory.
+      render: text
+    validations:
+      required: false
