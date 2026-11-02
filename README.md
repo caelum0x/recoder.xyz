@@ -34,6 +34,7 @@ Prerequisites, from [`apps/desktop/BUILD.md`](apps/desktop/BUILD.md):
 - Go
 - [Task](https://taskfile.dev/installation/)
 - On Linux, `zip` and [Zig](https://ziglang.org/) (the Go server links CGO with Zig)
+- On Windows, [Zig](https://ziglang.org/). `task dev` builds the server with `zig cc` (`build:server:windows` in [`apps/desktop/Taskfile.yml`](apps/desktop/Taskfile.yml))
 
 ```bash
 git clone https://github.com/caelum0x/recoder.xyz.git
@@ -44,7 +45,7 @@ cd apps/desktop
 task dev
 ```
 
-Put at least one agent CLI on your `PATH` (`claude`, `codex`, `opencode`, or `cursor-agent`). Open a local git repo, describe a task, and launch two or more agents. Compare the diffs, choose the files you want, and merge.
+Parallel runs need at least two different agent CLIs on your `PATH` (for example `claude`, `codex`, `opencode`, or `cursor-agent`). One CLI can launch a single agent in its own worktree. Fan-out rejects fewer than two distinct agent kinds, so the same CLI twice still counts as one. Open a local git repo, describe a task, and launch two or more agents. Compare the diffs, choose the files you want, and merge.
 
 `task package` from `apps/desktop` writes a local install under `apps/desktop/make/`. The full native-engine build from the repo root is `pnpm run build:recoder:product`.
 
